@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import { waLink } from '../lib/whatsapp.js';
 
 // Pino via divIcon (CSS puro): a cor reflete o status do enriquecimento em
 // tempo real E evita o problema clássico dos assets do ícone padrão do
@@ -36,6 +37,7 @@ function FlyToSelected({ lead }) {
 function LeadMarker({ lead, selected, onSelect }) {
   const ref = useRef(null);
   const icon = useMemo(() => pinIcon(lead.enrichmentStatus, selected), [lead.enrichmentStatus, selected]);
+  const wa = waLink(lead.phone, lead.name);
 
   useEffect(() => {
     if (selected) ref.current?.openPopup();
@@ -56,6 +58,14 @@ function LeadMarker({ lead, selected, onSelect }) {
         {lead.rating != null && (
           <>
             <br />⭐ {lead.rating} ({lead.reviewsCount} avaliações)
+          </>
+        )}
+        {wa && (
+          <>
+            <br />
+            <a href={wa} target="_blank" rel="noreferrer">
+              💬 Chamar no WhatsApp
+            </a>
           </>
         )}
       </Popup>

@@ -1,7 +1,10 @@
+import { waLink } from '../lib/whatsapp.js';
+
 const stop = (ev) => ev.stopPropagation();
 
 export default function LeadCard({ lead, selected, onSelect }) {
   const e = lead.enrichment;
+  const wa = waLink(lead.phone, lead.name);
   return (
     <article className={`card ${selected ? 'card--selected' : ''}`} onClick={() => onSelect(lead.id)}>
       <header>
@@ -14,6 +17,12 @@ export default function LeadCard({ lead, selected, onSelect }) {
       </header>
       <p className="muted">{lead.address}</p>
       {lead.phone && <p className="muted">📞 {lead.phone}</p>}
+
+      {wa && (
+        <a className="wa-btn" href={wa} target="_blank" rel="noreferrer" onClick={stop}>
+          💬 Chamar no WhatsApp
+        </a>
+      )}
 
       <footer className="contacts">
         {lead.enrichmentStatus === 'pending' && <span className="chip chip--pending">🔎 buscando contatos…</span>}

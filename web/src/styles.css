@@ -53,9 +53,28 @@ body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1f
 }
 .view-toggle button.active { background: #1f6feb; color: #fff; border-color: #1f6feb; }
 
+/* ── Botão WhatsApp (reutilizado em lista, mapa e kanban) ── */
+.wa-btn {
+  display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+  background: #25d366; color: #fff; font-weight: 600; font-size: 13px;
+  border: 0; border-radius: 8px; padding: 7px 12px; cursor: pointer; margin-top: 8px;
+}
+.wa-btn:hover { background: #1ebe5b; }
+.wa-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.wa-btn--sm { padding: 5px 9px; font-size: 12px; }
+.link-btn { background: none; border: 0; color: #1f6feb; cursor: pointer; font-size: 12px; padding: 0; }
+
 /* ── Kanban (drag-and-drop nativo) ── */
+.kanban-wrap { height: 100%; display: flex; flex-direction: column; }
+.kanban-toolbar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 16px; border-bottom: 1px solid #e2e2e2; background: #fff; font-size: 13px;
+}
+.kanban-toolbar .wa-btn { margin-top: 0; }
+.kanban-toolbar-info { color: #57606a; }
+.kanban-toolbar-hint { color: #8a8f98; font-size: 12px; }
 .kanban {
-  height: 100%; display: flex; gap: 12px; padding: 16px;
+  flex: 1; min-height: 0; display: flex; gap: 12px; padding: 16px;
   overflow-x: auto; background: #f6f7f9;
 }
 .kanban-col {
@@ -70,9 +89,12 @@ body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1f
 .kanban-count { background: #d8dee4; color: #57606a; border-radius: 999px; font-size: 11px; padding: 1px 7px; }
 .kanban-cards { padding: 0 8px 8px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .kanban-card {
+  position: relative;
   background: #fff; border: 1px solid #d8dee4; border-radius: 8px; padding: 9px 10px;
   cursor: grab; font-size: 13px;
 }
+.kanban-check { position: absolute; top: 7px; right: 7px; width: 16px; height: 16px; cursor: pointer; }
+.kanban-card strong { display: block; padding-right: 22px; }
 .kanban-card:active { cursor: grabbing; }
 .kanban-card--sel { border-color: #1f6feb; box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.25); }
 .kanban-card strong { font-size: 13.5px; }
