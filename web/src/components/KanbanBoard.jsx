@@ -88,7 +88,7 @@ export default function KanbanBoard({ leads, selectedId, onSelect, onMove }) {
             </header>
             <div className="kanban-cards">
               {byStage[st.key].map((l) => {
-                const wa = waLink(l.phone, l.name);
+                const wa = waLink(l.phone, l.name, l.niche);
                 const score = leadScore(l);
                 const tier = scoreTier(score);
                 return (
