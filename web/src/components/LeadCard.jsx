@@ -5,7 +5,7 @@ const stop = (ev) => ev.stopPropagation();
 
 export default function LeadCard({ lead, selected, onSelect }) {
   const e = lead.enrichment;
-  const wa = waLink(lead.phone, lead.name);
+  const wa = waLink(lead.phone, lead.name, lead.niche);
   const score = leadScore(lead);
   const tier = scoreTier(score);
   return (

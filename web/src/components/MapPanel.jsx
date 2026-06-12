@@ -37,7 +37,7 @@ function FlyToSelected({ lead }) {
 function LeadMarker({ lead, selected, onSelect }) {
   const ref = useRef(null);
   const icon = useMemo(() => pinIcon(lead.enrichmentStatus, selected), [lead.enrichmentStatus, selected]);
-  const wa = waLink(lead.phone, lead.name);
+  const wa = waLink(lead.phone, lead.name, lead.niche);
 
   useEffect(() => {
     if (selected) ref.current?.openPopup();
