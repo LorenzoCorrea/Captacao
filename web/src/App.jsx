@@ -3,6 +3,7 @@ import SearchBar from './components/SearchBar.jsx';
 import MapPanel from './components/MapPanel.jsx';
 import LeadList from './components/LeadList.jsx';
 import KanbanBoard from './components/KanbanBoard.jsx';
+import { leadScore } from './lib/score.js';
 import { useEnrichmentStream } from './hooks/useEnrichmentStream.js';
 
 const CENTRO_PADRAO = [-30.0427211, -51.1626625]; // Porto Alegre (bairro Bom Jesus)
@@ -13,6 +14,9 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState('map'); // 'map' | 'kanban'
+  const [sortBy, setSortBy] = useState('score'); // 'score' | 'nome'
+  const [filters, setFilters] = useState({ phone: false, instagram: false, email: false });
+  const toggleFilter = (k) => setFilters((f) => ({ ...f, [k]: !f[k] }));
 
   // FASE 1 — busca síncrona: pinos e cards aparecem de imediato
   const runSearch = useCallback(async (params) => {
@@ -77,6 +81,19 @@ export default function App() {
 
   const enriched = useMemo(() => leads.filter((l) => l.enrichmentStatus !== 'pending').length, [leads]);
 
+  // Lista exibida = filtrada + ordenada (vale p/ mapa, lista e Kanban)
+  const visibleLeads = useMemo(() => {
+    const arr = leads.filter((l) => {
+      if (filters.phone && !l.phone) return false;
+      if (filters.instagram && !l.enrichment?.instagram) return false;
+      if (filters.email && !l.enrichment?.email) return false;
+      return true;
+    });
+    if (sortBy === 'score') return [...arr].sort((a, b) => leadScore(b) - leadScore(a));
+    if (sortBy === 'nome') return [...arr].sort((a, b) => a.name.localeCompare(b.name));
+    return arr;
+  }, [leads, filters, sortBy]);
+
   return (
     <div className="app">
       <aside className="sidebar">
@@ -96,27 +113,47 @@ export default function App() {
           {search && (
             <>
               <p className="stats">
-                <strong>{leads.length}</strong> sem site (de {search.stats.found} no raio) ·{' '}
-                <strong>
-                  {enriched}/{leads.length}
-                </strong>{' '}
-                enriquecidos
+                <strong>{visibleLeads.length}</strong>
+                {visibleLeads.length !== leads.length ? ` de ${leads.length}` : ''} sem site (de{' '}
+                {search.stats.found} no raio) · <strong>{enriched}/{leads.length}</strong> enriquecidos
               </p>
               {leads.length > 0 && (
-                <div className="exports">
-                  <span>Exportar:</span>
-                  <a href={`/api/search/${search.searchId}/export?format=csv`} download>
-                    CSV
-                  </a>
-                  <a href={`/api/search/${search.searchId}/export?format=xlsx`} download>
-                    Excel
-                  </a>
-                </div>
+                <>
+                  <div className="exports">
+                    <span>Exportar:</span>
+                    <a href={`/api/search/${search.searchId}/export?format=csv`} download>
+                      CSV
+                    </a>
+                    <a href={`/api/search/${search.searchId}/export?format=xlsx`} download>
+                      Excel
+                    </a>
+                  </div>
+                  <div className="controls">
+                    <label className="sort">
+                      Ordenar
+                      <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+                        <option value="score">Relevância (score)</option>
+                        <option value="nome">Nome</option>
+                      </select>
+                    </label>
+                    <div className="filter-chips">
+                      <button type="button" className={filters.phone ? 'on' : ''} onClick={() => toggleFilter('phone')}>
+                        📞 WhatsApp
+                      </button>
+                      <button type="button" className={filters.instagram ? 'on' : ''} onClick={() => toggleFilter('instagram')}>
+                        📷 Instagram
+                      </button>
+                      <button type="button" className={filters.email ? 'on' : ''} onClick={() => toggleFilter('email')}>
+                        ✉️ E-mail
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
             </>
           )}
         </header>
-        <LeadList leads={leads} selectedId={selectedId} onSelect={selectLead} loading={loading} />
+        <LeadList leads={visibleLeads} selectedId={selectedId} onSelect={selectLead} loading={loading} />
       </aside>
 
       <main className="map-wrap">
@@ -124,13 +161,13 @@ export default function App() {
           <MapPanel
             center={search ? [search.query.lat, search.query.lng] : CENTRO_PADRAO}
             radiusKm={search?.query.radiusKm}
-            leads={leads}
+            leads={visibleLeads}
             selectedId={selectedId}
             onSelect={selectLead}
             searchId={search?.searchId}
           />
         ) : (
-          <KanbanBoard leads={leads} selectedId={selectedId} onSelect={selectLead} onMove={moveLead} />
+          <KanbanBoard leads={visibleLeads} selectedId={selectedId} onSelect={selectLead} onMove={moveLead} />
         )}
       </main>
     </div>
