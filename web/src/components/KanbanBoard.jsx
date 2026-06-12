@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { waLink, WA_LIMIT } from '../lib/whatsapp.js';
+import { leadScore, scoreTier } from '../lib/score.js';
 
 // Estágios do funil (espelham o back-end em enricher.js -> STAGES).
 const STAGES = [
@@ -88,6 +89,8 @@ export default function KanbanBoard({ leads, selectedId, onSelect, onMove }) {
             <div className="kanban-cards">
               {byStage[st.key].map((l) => {
                 const wa = waLink(l.phone, l.name);
+                const score = leadScore(l);
+                const tier = scoreTier(score);
                 return (
                   <article
                     key={l.id}
@@ -107,6 +110,7 @@ export default function KanbanBoard({ leads, selectedId, onSelect, onMove }) {
                       />
                     )}
                     <strong>{l.name}</strong>
+                    <span className={`score score--${tier.key}`} title={`Score ${score}/100`}>{tier.label}</span>
                     {l.phone && <div className="muted">📞 {l.phone}</div>}
                     <div className="kanban-contacts">
                       {l.enrichmentStatus === 'pending' && <span className="dot dot--wait" title="buscando contatos…" />}

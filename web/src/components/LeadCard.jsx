@@ -1,20 +1,24 @@
 import { waLink } from '../lib/whatsapp.js';
+import { leadScore, scoreTier } from '../lib/score.js';
 
 const stop = (ev) => ev.stopPropagation();
 
 export default function LeadCard({ lead, selected, onSelect }) {
   const e = lead.enrichment;
   const wa = waLink(lead.phone, lead.name);
+  const score = leadScore(lead);
+  const tier = scoreTier(score);
   return (
     <article className={`card ${selected ? 'card--selected' : ''}`} onClick={() => onSelect(lead.id)}>
       <header>
         <h3>{lead.name}</h3>
-        {lead.rating != null && (
-          <span className="rating">
-            ⭐ {lead.rating} <small>({lead.reviewsCount})</small>
-          </span>
-        )}
+        <span className={`score score--${tier.key}`} title={`Score de prospecção: ${score}/100`}>
+          {tier.label} · {score}
+        </span>
       </header>
+      {lead.rating != null && (
+        <p className="muted">⭐ {lead.rating} ({lead.reviewsCount} avaliações)</p>
+      )}
       <p className="muted">{lead.address}</p>
       {lead.phone && <p className="muted">📞 {lead.phone}</p>}
 
