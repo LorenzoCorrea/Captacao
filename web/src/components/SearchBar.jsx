@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
 // Cidade inicial para o app já funcionar sem digitar nada.
-const DEFAULT_CITY = { label: 'São Paulo, São Paulo', lat: -23.5505, lng: -46.6333 };
+// Centro deslocado p/ o bairro Bom Jesus (leste de Porto Alegre).
+const DEFAULT_CITY = { label: 'Porto Alegre, Rio Grande do Sul', lat: -30.0427211, lng: -51.1626625 };
 
 export default function SearchBar({ onSearch, loading }) {
   const [niche, setNiche] = useState('salão de estética');
@@ -92,7 +93,7 @@ export default function SearchBar({ onSearch, loading }) {
 
       <label className="radius">
         Raio: <strong>{radiusKm} km</strong>
-        <input type="range" min="1" max="15" value={radiusKm} onChange={(e) => setRadiusKm(+e.target.value)} />
+        <input type="range" min="1" max="30" value={radiusKm} onChange={(e) => setRadiusKm(+e.target.value)} />
       </label>
 
       <button disabled={loading}>{loading ? 'Buscando…' : 'Buscar leads sem site'}</button>

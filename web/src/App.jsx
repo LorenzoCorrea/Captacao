@@ -5,7 +5,7 @@ import LeadList from './components/LeadList.jsx';
 import KanbanBoard from './components/KanbanBoard.jsx';
 import { useEnrichmentStream } from './hooks/useEnrichmentStream.js';
 
-const CENTRO_PADRAO = [-23.5505, -46.6333]; // São Paulo
+const CENTRO_PADRAO = [-30.0427211, -51.1626625]; // Porto Alegre (bairro Bom Jesus)
 
 export default function App() {
   const [search, setSearch] = useState(null); // { searchId, query, stats }
