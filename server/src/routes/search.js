@@ -22,7 +22,7 @@ router.post('/api/search', async (req, res) => {
   if (!niche?.trim()) {
     return res.status(400).json({ error: 'Informe o nicho (ex: "salão de estética").' });
   }
-  const radius = clamp(radiusKm, 0.5, 25);
+  const radius = clamp(radiusKm, 0.5, 30);
   const params = { niche: niche.trim(), city, lat: +lat, lng: +lng, radiusKm: radius };
 
   try {
