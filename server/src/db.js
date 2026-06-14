@@ -132,6 +132,37 @@ export async function loadSearch(searchId) {
   } catch (e) { console.error('[db] loadSearch:', e.message); return null; }
 }
 
+// Estatísticas de conversão (geral + por nicho + por cidade) para o dashboard.
+export async function statsConversao() {
+  if (!pool) return null;
+  const agg = `count(l.*)::int total,
+               count(*) FILTER (WHERE l.stage='ganho')::int ganho,
+               count(*) FILTER (WHERE l.stage='contatado')::int contatado,
+               count(*) FILTER (WHERE l.stage='qualificado')::int qualificado`;
+  try {
+    const geral = await pool.query(
+      `SELECT count(l.*)::int total,
+              count(*) FILTER (WHERE l.stage='ganho')::int ganho,
+              count(*) FILTER (WHERE l.stage='contatado')::int contatado,
+              count(*) FILTER (WHERE l.stage='qualificado')::int qualificado,
+              count(*) FILTER (WHERE l.stage='descartado')::int descartado,
+              count(DISTINCT l.search_id)::int buscas
+       FROM leads l`
+    );
+    const porNicho = await pool.query(
+      `SELECT s.niche AS chave, ${agg}
+       FROM leads l JOIN searches s ON s.id = l.search_id
+       GROUP BY s.niche ORDER BY ganho DESC, total DESC LIMIT 20`
+    );
+    const porCidade = await pool.query(
+      `SELECT s.city AS chave, ${agg}
+       FROM leads l JOIN searches s ON s.id = l.search_id
+       GROUP BY s.city ORDER BY ganho DESC, total DESC LIMIT 20`
+    );
+    return { geral: geral.rows[0], porNicho: porNicho.rows, porCidade: porCidade.rows };
+  } catch (e) { console.error('[db] statsConversao:', e.message); return null; }
+}
+
 // Histórico de buscas (com contagem de leads e enriquecidos).
 export async function listSearches(limit = 50) {
   if (!pool) return [];

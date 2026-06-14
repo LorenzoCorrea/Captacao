@@ -11,7 +11,7 @@ const STAGES = [
   { key: 'descartado', label: 'Descartado' },
 ];
 
-export default function KanbanBoard({ leads, selectedId, onSelect, onMove }) {
+export default function KanbanBoard({ leads, selectedId, onSelect, onMove, onDispatch }) {
   const [overCol, setOverCol] = useState(null);
   const [chosen, setChosen] = useState(() => new Set()); // seleção p/ envio em massa
 
@@ -38,14 +38,9 @@ export default function KanbanBoard({ leads, selectedId, onSelect, onMove }) {
   }
 
   function sendBulk() {
-    const links = leads.filter((l) => chosen.has(l.id)).map((l) => waLink(l.phone, l.name, l.niche)).filter(Boolean);
-    if (!links.length) return;
-    const ok = window.confirm(
-      `Abrir ${links.length} conversa(s) do WhatsApp já preenchidas?\n\n` +
-        `O WhatsApp NÃO envia sozinho — você só aperta enviar em cada uma. (Máx. ${WA_LIMIT} por vez.)`
-    );
-    if (!ok) return;
-    links.forEach((href) => window.open(href, '_blank', 'noopener'));
+    const sel = leads.filter((l) => chosen.has(l.id));
+    if (!sel.length) return;
+    onDispatch?.(sel); // abre o Modo disparo (em sequência), sem despejar várias abas de uma vez
     setChosen(new Set());
   }
 
