@@ -3,6 +3,9 @@ import SearchBar from './components/SearchBar.jsx';
 import MapPanel from './components/MapPanel.jsx';
 import LeadList from './components/LeadList.jsx';
 import KanbanBoard from './components/KanbanBoard.jsx';
+import StatsPanel from './components/StatsPanel.jsx';
+import MessageSettings from './components/MessageSettings.jsx';
+import DispatchMode from './components/DispatchMode.jsx';
 import { leadScore } from './lib/score.js';
 import { useEnrichmentStream } from './hooks/useEnrichmentStream.js';
 
@@ -13,7 +16,9 @@ export default function App() {
   const [leads, setLeads] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [view, setView] = useState('map'); // 'map' | 'kanban'
+  const [view, setView] = useState('map'); // 'map' | 'kanban' | 'stats'
+  const [msgOpen, setMsgOpen] = useState(false); // modal de edição da mensagem do WhatsApp
+  const [dispatchLeads, setDispatchLeads] = useState(null); // null = fechado; array = leads em disparo
   const [sortBy, setSortBy] = useState('score'); // 'score' | 'nome'
   const [filters, setFilters] = useState({ phone: false, instagram: false, email: false });
   const toggleFilter = (k) => setFilters((f) => ({ ...f, [k]: !f[k] }));
@@ -111,7 +116,13 @@ export default function App() {
             <button type="button" className={view === 'kanban' ? 'active' : ''} onClick={() => setView('kanban')}>
               🗂 Kanban
             </button>
+            <button type="button" className={view === 'stats' ? 'active' : ''} onClick={() => setView('stats')}>
+              📊 Painel
+            </button>
           </div>
+          <button type="button" className="msg-edit-btn" onClick={() => setMsgOpen(true)}>
+            ✏️ Editar mensagem do WhatsApp
+          </button>
           {search && (
             <>
               <p className="stats">
@@ -150,6 +161,9 @@ export default function App() {
                       </button>
                     </div>
                   </div>
+                  <button type="button" className="dispatch-btn" onClick={() => setDispatchLeads(visibleLeads)}>
+                    🚀 Modo disparo ({visibleLeads.filter((l) => l.phone).length})
+                  </button>
                 </>
               )}
             </>
@@ -159,7 +173,7 @@ export default function App() {
       </aside>
 
       <main className="map-wrap">
-        {view === 'map' ? (
+        {view === 'map' && (
           <MapPanel
             center={search ? [search.query.lat, search.query.lng] : CENTRO_PADRAO}
             radiusKm={search?.query.radiusKm}
@@ -168,10 +182,21 @@ export default function App() {
             onSelect={selectLead}
             searchId={search?.searchId}
           />
-        ) : (
-          <KanbanBoard leads={visibleLeads} selectedId={selectedId} onSelect={selectLead} onMove={moveLead} />
         )}
+        {view === 'kanban' && (
+          <KanbanBoard leads={visibleLeads} selectedId={selectedId} onSelect={selectLead} onMove={moveLead} onDispatch={setDispatchLeads} />
+        )}
+        {view === 'stats' && <StatsPanel />}
       </main>
+
+      <MessageSettings open={msgOpen} onClose={() => setMsgOpen(false)} />
+      {dispatchLeads && (
+        <DispatchMode
+          leads={dispatchLeads}
+          onContacted={(id) => moveLead(id, 'contatado')}
+          onClose={() => setDispatchLeads(null)}
+        />
+      )}
     </div>
   );
 }

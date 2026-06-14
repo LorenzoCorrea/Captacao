@@ -4,7 +4,7 @@ import { gerarEstabelecimentos } from '../data/mockPlaces.js';
 import { geocodeCidade } from '../data/geocode.js';
 import { createSearch, attachStream, prioritizeLead, getSearchLeads, updateLeadStage } from '../enrichment/enricher.js';
 import { toCSV, toXLSX } from '../export/exporter.js';
-import { listSearches } from '../db.js';
+import { listSearches, statsConversao } from '../db.js';
 
 const router = Router();
 const slug = (s) =>
@@ -127,6 +127,11 @@ router.post('/api/search/:searchId/webhook', async (req, res) => {
 // Histórico de buscas persistidas (lista vazia se o banco estiver desligado).
 router.get('/api/searches', async (_req, res) => {
   res.json({ searches: await listSearches() });
+});
+
+// Estatísticas de conversão para o dashboard (null se o banco estiver desligado).
+router.get('/api/stats', async (_req, res) => {
+  res.json({ stats: await statsConversao() });
 });
 
 export default router;

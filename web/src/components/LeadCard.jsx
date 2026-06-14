@@ -8,14 +8,20 @@ export default function LeadCard({ lead, selected, onSelect }) {
   const wa = waLink(lead.phone, lead.name, lead.niche);
   const score = leadScore(lead);
   const tier = scoreTier(score);
+  const alvoIdeal = Boolean(e?.instagram); // sem site (todos são) + Instagram ativo = melhor prospecto
   return (
-    <article className={`card ${selected ? 'card--selected' : ''}`} onClick={() => onSelect(lead.id)}>
+    <article className={`card ${selected ? 'card--selected' : ''} ${alvoIdeal ? 'card--alvo' : ''}`} onClick={() => onSelect(lead.id)}>
       <header>
         <h3>{lead.name}</h3>
         <span className={`score score--${tier.key}`} title={`Score de prospecção: ${score}/100`}>
           {tier.label} · {score}
         </span>
       </header>
+      {alvoIdeal && (
+        <span className="badge-alvo" title="Sem site, mas com Instagram ativo — alvo ideal para vender um site">
+          🎯 Alvo ideal
+        </span>
+      )}
       {lead.rating != null && (
         <p className="muted">⭐ {lead.rating} ({lead.reviewsCount} avaliações)</p>
       )}
