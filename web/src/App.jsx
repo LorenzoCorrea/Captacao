@@ -85,8 +85,10 @@ export default function App() {
   const visibleLeads = useMemo(() => {
     const arr = leads.filter((l) => {
       if (filters.phone && !l.phone) return false;
-      if (filters.instagram && !l.enrichment?.instagram) return false;
-      if (filters.email && !l.enrichment?.email) return false;
+      // Enquanto o enriquecimento não terminou, não escondemos o lead: ele ainda
+      // pode ganhar o contato. Só filtramos quando já existe um veredito.
+      if (filters.instagram && l.enrichmentStatus !== 'pending' && !l.enrichment?.instagram) return false;
+      if (filters.email && l.enrichmentStatus !== 'pending' && !l.enrichment?.email) return false;
       return true;
     });
     if (sortBy === 'score') return [...arr].sort((a, b) => leadScore(b) - leadScore(a));

@@ -81,6 +81,17 @@ flowchart LR
 
 **Pré-requisitos:** Node.js 18+, Python 3.10+
 
+### Atalho — um comando (recomendado)
+
+```bash
+npm run setup   # 1ª vez: instala raiz, server, web e o worker Python
+npm run dev     # sobe API (3001) + front (5173) juntos, com logs [api]/[web]
+```
+
+> 💡 **Sem rede / demo:** `npm run dev:mock` desliga Overpass/DuckDuckGo e usa negócios e contatos fictícios — ótimo pra testar o fluxo na hora.
+
+### Manual (3 terminais)
+
 ```bash
 # 1) Worker Python (uma vez)
 pip install -r workers/requirements.txt
