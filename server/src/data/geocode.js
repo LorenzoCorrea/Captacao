@@ -6,7 +6,7 @@
 //   - nada de autocomplete por tecla  (o front faz debounce de 450ms)
 import https from 'node:https';
 
-const UA = 'CaptacaoLeadApp/0.1 (prospeccao B2B; oiloohn@gmail.com)';
+const UA = 'CaptacaoLeadApp/0.1 (prospeccao B2B; contato-no-repositorio)';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const normalize = (s) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
 

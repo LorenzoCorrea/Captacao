@@ -38,7 +38,7 @@ export default function KanbanBoard({ leads, selectedId, onSelect, onMove }) {
   }
 
   function sendBulk() {
-    const links = leads.filter((l) => chosen.has(l.id)).map((l) => waLink(l.phone, l.name)).filter(Boolean);
+    const links = leads.filter((l) => chosen.has(l.id)).map((l) => waLink(l.phone, l.name, l.niche)).filter(Boolean);
     if (!links.length) return;
     const ok = window.confirm(
       `Abrir ${links.length} conversa(s) do WhatsApp já preenchidas?\n\n` +
