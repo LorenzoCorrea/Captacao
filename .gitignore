@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 .env
 .env.*
+!.env.example
 
 # Local, específico da máquina
 .claude/settings.local.json

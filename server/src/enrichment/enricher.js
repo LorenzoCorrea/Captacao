@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import path from 'node:path';
+import * as db from '../db.js';
 
 // Gerencia as sessões SSE E executa o enriquecimento real chamando o worker
 // Python (workers/enrich.py — DuckDuckGo, gratuito). Uma fila com concorrência
@@ -20,7 +21,8 @@ const searches = new Map();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const frame = (event, data) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 
-export function createSearch(leads, { city, niche } = {}) {
+export function createSearch(leads, meta = {}) {
+  const { city, niche } = meta;
   const id = crypto.randomUUID();
   const session = {
     id,
@@ -34,6 +36,10 @@ export function createSearch(leads, { city, niche } = {}) {
   };
   searches.set(id, session);
 
+  // Persiste a busca + leads em background (não bloqueia a resposta). dbReady
+  // garante que os UPDATEs de enriquecimento/estágio só rodem após o INSERT.
+  session.dbReady = db.saveSearch(session, meta).catch((e) => console.error('[db]', e.message));
+
   if (BACKGROUND) {
     session.queue = [...session.leads.keys()];
     pump(session);
@@ -43,18 +49,20 @@ export function createSearch(leads, { city, niche } = {}) {
 }
 
 // Snapshot dos leads (com enriquecimento atual) p/ exportação/webhook.
-export function getSearchLeads(searchId) {
+export async function getSearchLeads(searchId) {
   const s = searches.get(searchId);
-  if (!s) return null;
-  return { city: s.city, niche: s.niche, leads: [...s.leads.values()] };
+  if (s) return { city: s.city, niche: s.niche, leads: [...s.leads.values()] };
+  return db.loadSearch(searchId); // sessão expirou/servidor reiniciou: tenta o banco
 }
 
 // Estágio do funil (Kanban). Fonte da verdade na sessão -> sai no export.
 export const STAGES = ['novo', 'qualificado', 'contatado', 'ganho', 'descartado'];
 export function updateLeadStage(searchId, leadId, stage) {
-  const lead = searches.get(searchId)?.leads.get(leadId);
+  const s = searches.get(searchId);
+  const lead = s?.leads.get(leadId);
   if (!lead || !STAGES.includes(stage)) return false;
   lead.stage = stage;
+  if (db.dbEnabled && s.dbReady) s.dbReady.then(() => db.saveStage(searchId, leadId, stage)).catch(() => {});
   return true;
 }
 
@@ -121,6 +129,7 @@ async function runOne(session, lead) {
   lead.enrichmentStatus = achou ? 'done' : 'not_found';
 
   broadcast(session, 'enrichment', payloadOf(lead));
+  if (db.dbEnabled) session.dbReady.then(() => db.saveEnrichment(session.id, lead)).catch(() => {});
   if (allSettled(session)) broadcast(session, 'done', { searchId: session.id });
 }
 
