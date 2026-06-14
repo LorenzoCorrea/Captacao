@@ -116,6 +116,7 @@ Abra **http://localhost:5173**, digite um nicho (ex: _"salão de estética"_), e
 | `ENRICH_CONCURRENCY` | `2` | leads enriquecidos em paralelo (educado com o DDG) |
 | `ENRICH_BACKGROUND` | `true` | `false` = só enriquece quando o usuário clica no lead |
 | `PYTHON_BIN` | `py` / `python3` | binário do Python para os workers |
+| `DATABASE_URL` | _(vazio)_ | Postgres p/ persistir buscas, leads, enriquecimento e estágios. **Vazio = só memória.** Ex.: `postgresql://user:senha@host:5432/captacao` (veja `server/.env.example`) |
 
 ---
 
@@ -150,7 +151,7 @@ Abra **http://localhost:5173**, digite um nicho (ex: _"salão de estética"_), e
 - [x] Autocomplete de cidade (Nominatim)
 - [x] Exportação CSV / Excel + webhook
 - [x] Funil Kanban (drag-and-drop)
-- [ ] **Persistência em PostgreSQL** (hoje as sessões vivem em memória)
+- [x] **Persistência em PostgreSQL** (buscas, leads, enriquecimento e estágios) — opcional via `DATABASE_URL`
 - [ ] Autenticação e multi-tenant
 - [ ] Fila distribuída (BullMQ/Redis) para múltiplos workers
 - [ ] Proxies rotativos para enriquecimento em escala
@@ -159,7 +160,7 @@ Abra **http://localhost:5173**, digite um nicho (ex: _"salão de estética"_), e
 
 ## 📌 Observações
 
-- Projeto em estágio **MVP** — as sessões (leads, estágios) ficam em memória e somem ao reiniciar o servidor. Persistência em banco é o próximo passo.
+- Projeto em estágio **MVP**. Sem `DATABASE_URL`, as sessões ficam em memória e somem ao reiniciar; com Postgres configurado, buscas/leads/estágios são persistidos (a fila e o stream SSE seguem em memória, por serem estado de runtime).
 - Tiles do OSM são gratuitos mas têm política de uso justo; em produção use um provedor de tiles (MapTiler) ou self-host.
 - Coleta de contatos para prospecção: registre a origem do dado (campo `source`), ofereça _opt-out_ e trate apenas o necessário (**LGPD**).
 

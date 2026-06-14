@@ -1,9 +1,18 @@
 import express from 'express';
-import searchRouter from './routes/search.js';
+import { fileURLToPath } from 'node:url';
+
+// Carrega server/.env (se existir) ANTES de importar módulos que leem process.env.
+try { process.loadEnvFile(fileURLToPath(new URL('../.env', import.meta.url))); } catch {}
+
+// Imports dinâmicos: garantem que o .env já está em process.env quando o db.js inicializa o pool.
+const { default: searchRouter } = await import('./routes/search.js');
+const { initDb } = await import('./db.js');
 
 const app = express();
 app.use(express.json());
 app.use(searchRouter);
+
+await initDb();
 
 const PORT = process.env.PORT ?? 3001;
 app.listen(PORT, () => {

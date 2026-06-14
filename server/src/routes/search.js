@@ -4,6 +4,7 @@ import { gerarEstabelecimentos } from '../data/mockPlaces.js';
 import { geocodeCidade } from '../data/geocode.js';
 import { createSearch, attachStream, prioritizeLead, getSearchLeads, updateLeadStage } from '../enrichment/enricher.js';
 import { toCSV, toXLSX } from '../export/exporter.js';
+import { listSearches } from '../db.js';
 
 const router = Router();
 const slug = (s) =>
@@ -36,7 +37,7 @@ router.post('/api/search', async (req, res) => {
       ({ found, leads } = await buscarEstabelecimentos(params));
     }
 
-    const searchId = createSearch(leads, { city, niche: params.niche });
+    const searchId = createSearch(leads, { city, niche: params.niche, lat: params.lat, lng: params.lng, radiusKm: params.radiusKm, found });
     res.json({
       searchId,
       query: params,
@@ -80,7 +81,7 @@ router.patch('/api/search/:searchId/leads/:leadId', (req, res) => {
 
 // ─── Exportação CSV / XLSX ──────────────────────────────────────────────────
 router.get('/api/search/:searchId/export', async (req, res) => {
-  const data = getSearchLeads(req.params.searchId);
+  const data = await getSearchLeads(req.params.searchId);
   if (!data) return res.status(404).json({ error: 'Busca não encontrada (sessão expirada?).' });
 
   const format = (req.query.format ?? 'csv').toString().toLowerCase();
@@ -102,7 +103,7 @@ router.get('/api/search/:searchId/export', async (req, res) => {
 
 // ─── Webhook: envia os leads (JSON) para um CRM/URL do usuário ──────────────
 router.post('/api/search/:searchId/webhook', async (req, res) => {
-  const data = getSearchLeads(req.params.searchId);
+  const data = await getSearchLeads(req.params.searchId);
   if (!data) return res.status(404).json({ error: 'Busca não encontrada (sessão expirada?).' });
 
   const url = (req.body?.url ?? '').toString().trim();
@@ -121,6 +122,11 @@ router.post('/api/search/:searchId/webhook', async (req, res) => {
     console.error('Webhook falhou:', e);
     res.status(502).json({ error: 'Não consegui entregar ao webhook (URL inacessível ou lenta).' });
   }
+});
+
+// Histórico de buscas persistidas (lista vazia se o banco estiver desligado).
+router.get('/api/searches', async (_req, res) => {
+  res.json({ searches: await listSearches() });
 });
 
 export default router;
