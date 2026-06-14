@@ -1,14 +1,20 @@
 import { waLink } from '../lib/whatsapp.js';
+import { mailtoLink } from '../lib/email.js';
 import { leadScore, scoreTier } from '../lib/score.js';
 
 const stop = (ev) => ev.stopPropagation();
+const hoje = () => new Date().toISOString().slice(0, 10);
+const fmtMoney = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
-export default function LeadCard({ lead, selected, onSelect }) {
+export default function LeadCard({ lead, selected, onSelect, onOpenDetails }) {
   const e = lead.enrichment;
   const wa = waLink(lead.phone, lead.name, lead.niche);
+  const mail = mailtoLink(e?.email, lead.name, lead.niche);
   const score = leadScore(lead);
   const tier = scoreTier(score);
   const alvoIdeal = Boolean(e?.instagram); // sem site (todos são) + Instagram ativo = melhor prospecto
+  const followVencido = lead.followUpAt && lead.followUpAt <= hoje();
+
   return (
     <article className={`card ${selected ? 'card--selected' : ''} ${alvoIdeal ? 'card--alvo' : ''}`} onClick={() => onSelect(lead.id)}>
       <header>
@@ -28,11 +34,27 @@ export default function LeadCard({ lead, selected, onSelect }) {
       <p className="muted">{lead.address}</p>
       {lead.phone && <p className="muted">📞 {lead.phone}</p>}
 
-      {wa && (
-        <a className="wa-btn" href={wa} target="_blank" rel="noreferrer" onClick={stop}>
-          💬 Chamar no WhatsApp
-        </a>
+      {(lead.followUpAt || lead.estimatedValue != null || (lead.tags && lead.tags.length > 0)) && (
+        <div className="crm-summary">
+          {lead.followUpAt && (
+            <span className={`crm-chip ${followVencido ? 'crm-chip--due' : ''}`} title="Data de retorno">
+              🕑 {lead.followUpAt.split('-').reverse().join('/')}
+            </span>
+          )}
+          {lead.estimatedValue != null && <span className="crm-chip" title="Valor estimado">💰 {fmtMoney(lead.estimatedValue)}</span>}
+          {(lead.tags ?? []).map((t) => <span key={t} className="crm-chip crm-chip--tag">{t}</span>)}
+        </div>
       )}
+
+      <div className="card-actions">
+        {wa && (
+          <a className="wa-btn wa-btn--sm" href={wa} target="_blank" rel="noreferrer" onClick={stop}>💬 WhatsApp</a>
+        )}
+        {mail && (
+          <a className="mail-btn" href={mail} onClick={stop}>✉️ E-mail</a>
+        )}
+        <button type="button" className="details-btn" onClick={(ev) => { stop(ev); onOpenDetails?.(lead.id); }}>📝 Detalhes</button>
+      </div>
 
       <footer className="contacts">
         {lead.enrichmentStatus === 'pending' && <span className="chip chip--pending">🔎 buscando contatos…</span>}
@@ -40,24 +62,16 @@ export default function LeadCard({ lead, selected, onSelect }) {
         {lead.enrichmentStatus === 'done' && e && (
           <>
             {e.email && (
-              <a className="chip chip--ok" href={`mailto:${e.email}`} onClick={stop}>
-                ✉️ {e.email}
-              </a>
+              <a className="chip chip--ok" href={`mailto:${e.email}`} onClick={stop}>✉️ {e.email}</a>
             )}
             {e.instagram && (
-              <a className="chip chip--ok" href={e.instagram} target="_blank" rel="noreferrer" onClick={stop}>
-                📷 Instagram
-              </a>
+              <a className="chip chip--ok" href={e.instagram} target="_blank" rel="noreferrer" onClick={stop}>📷 Instagram</a>
             )}
             {e.facebook && (
-              <a className="chip" href={e.facebook} target="_blank" rel="noreferrer" onClick={stop}>
-                Facebook
-              </a>
+              <a className="chip" href={e.facebook} target="_blank" rel="noreferrer" onClick={stop}>Facebook</a>
             )}
             {e.linkedin && (
-              <a className="chip" href={e.linkedin} target="_blank" rel="noreferrer" onClick={stop}>
-                LinkedIn
-              </a>
+              <a className="chip" href={e.linkedin} target="_blank" rel="noreferrer" onClick={stop}>LinkedIn</a>
             )}
           </>
         )}

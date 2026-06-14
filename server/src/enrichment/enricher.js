@@ -28,7 +28,9 @@ export function createSearch(leads, meta = {}) {
     id,
     city: city ?? '',
     niche: niche ?? '',
-    leads: new Map(leads.map((l) => [l.id, { ...l, enrichment: null, enrichmentStatus: 'pending', stage: 'novo' }])),
+    query: { niche: niche ?? '', city: city ?? '', lat: meta.lat, lng: meta.lng, radiusKm: meta.radiusKm },
+    found: meta.found ?? null,
+    leads: new Map(leads.map((l) => [l.id, { ...l, enrichment: null, enrichmentStatus: 'pending', stage: 'novo', notes: '', followUpAt: null, tags: [], estimatedValue: null }])),
     clients: new Set(),
     queue: [],
     inFlight: new Set(),
@@ -57,13 +59,54 @@ export async function getSearchLeads(searchId) {
 
 // Estágio do funil (Kanban). Fonte da verdade na sessão -> sai no export.
 export const STAGES = ['novo', 'qualificado', 'contatado', 'ganho', 'descartado'];
-export function updateLeadStage(searchId, leadId, stage) {
+
+// Atualiza campos editáveis do lead (CRM): stage, notes, followUpAt, tags, estimatedValue.
+// Aceita um patch parcial; só os campos presentes são alterados.
+export function updateLead(searchId, leadId, patch = {}) {
   const s = searches.get(searchId);
   const lead = s?.leads.get(leadId);
-  if (!lead || !STAGES.includes(stage)) return false;
-  lead.stage = stage;
-  if (db.dbEnabled && s.dbReady) s.dbReady.then(() => db.saveStage(searchId, leadId, stage)).catch(() => {});
+  if (!lead) return false;
+  const fields = {};
+  if (patch.stage !== undefined) {
+    if (!STAGES.includes(patch.stage)) return false;
+    lead.stage = patch.stage; fields.stage = patch.stage;
+  }
+  if (patch.notes !== undefined) { lead.notes = String(patch.notes); fields.notes = lead.notes; }
+  if (patch.followUpAt !== undefined) { lead.followUpAt = patch.followUpAt || null; fields.followUpAt = lead.followUpAt; }
+  if (patch.tags !== undefined) { lead.tags = Array.isArray(patch.tags) ? patch.tags : []; fields.tags = lead.tags; }
+  if (patch.estimatedValue !== undefined) {
+    const v = patch.estimatedValue === null || patch.estimatedValue === '' ? null : Number(patch.estimatedValue);
+    lead.estimatedValue = Number.isFinite(v) ? v : null; fields.estimatedValue = lead.estimatedValue;
+  }
+  if (Object.keys(fields).length && db.dbEnabled && s.dbReady) {
+    s.dbReady.then(() => db.saveLeadFields(searchId, leadId, fields)).catch(() => {});
+  }
   return true;
+}
+
+// Reabre uma busca: se já saiu da memória (TTL/restart), re-hidrata do banco
+// (sem re-enriquecer — o que já foi achado fica como está).
+export async function reopenSearch(searchId) {
+  let s = searches.get(searchId);
+  if (!s) {
+    const data = await db.loadSearch(searchId);
+    if (!data) return null;
+    s = {
+      id: searchId, city: data.city ?? '', niche: data.niche ?? '',
+      query: data.query, found: data.found ?? null,
+      leads: new Map(data.leads.map((l) => [l.id, l])),
+      clients: new Set(), queue: [], inFlight: new Set(), running: 0,
+      dbReady: Promise.resolve(),
+    };
+    searches.set(searchId, s);
+    setTimeout(() => destroySearch(searchId), TTL_MS);
+  }
+  return {
+    searchId,
+    query: s.query ?? { niche: s.niche, city: s.city },
+    stats: { found: s.found, withoutWebsite: s.leads.size },
+    leads: [...s.leads.values()],
+  };
 }
 
 // Usuário interagiu com o lead -> fura a fila (não recomeça se já está pronto)

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 const pct = (part, total) => (total ? Math.round((part / total) * 100) : 0);
+const fmtMoney = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
 function Tabela({ titulo, linhas }) {
   if (!linhas?.length) return null;
@@ -68,6 +69,8 @@ export default function StatsPanel() {
         <div className="stats-card stats-card--win"><strong>{g.ganho ?? 0}</strong><span>ganhos</span></div>
         <div className="stats-card"><strong>{pct(g.ganho, g.total)}%</strong><span>conversão</span></div>
         <div className="stats-card"><strong>{g.buscas ?? 0}</strong><span>buscas</span></div>
+        <div className="stats-card"><strong>{fmtMoney(g.pipeline_value)}</strong><span>no funil</span></div>
+        <div className="stats-card stats-card--win"><strong>{fmtMoney(g.won_value)}</strong><span>fechado (R$)</span></div>
       </div>
       <Tabela titulo="Por nicho" linhas={data.porNicho} />
       <Tabela titulo="Por cidade" linhas={data.porCidade} />

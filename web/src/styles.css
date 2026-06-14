@@ -242,6 +242,51 @@ body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1f
 .dispatch-done { text-align: center; font-size: 15px; color: #1b7a3d; padding: 16px 0; }
 .dispatch-send { margin-top: 0 !important; }
 
+/* ── Ações do card (WhatsApp / e-mail / detalhes) ── */
+.card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.card-actions .wa-btn { margin-top: 0; }
+.mail-btn {
+  display: inline-flex; align-items: center; gap: 5px; text-decoration: none;
+  font-size: 12px; font-weight: 600; border-radius: 8px; padding: 5px 9px;
+  background: #eaf1fb; color: #1f6feb; border: 1px solid #cfe0fb;
+}
+.mail-btn:hover { background: #1f6feb; color: #fff; }
+.details-btn {
+  font-size: 12px; border-radius: 8px; padding: 5px 9px; cursor: pointer;
+  background: #fff; color: #57606a; border: 1px solid #d0d7de;
+}
+.details-btn:hover { border-color: #1f6feb; color: #1f6feb; }
+
+/* ── Resumo de CRM no card ── */
+.crm-summary { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.crm-chip { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: #eef1f4; color: #57606a; }
+.crm-chip--due { background: #fde3d3; color: #b23c0a; font-weight: 600; }
+.crm-chip--tag { background: #ece9fb; color: #5b4bce; }
+
+/* ── Detalhes do lead (CRM): campos lado a lado + tags ── */
+.field-row { display: flex; gap: 12px; }
+.field-row .field { flex: 1; }
+.field input[type='date'], .field input[type='number'] {
+  border: 1px solid #d0d7de; border-radius: 8px; padding: 8px 10px; font-size: 13px; font-family: inherit; width: 100%;
+}
+.tag-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-chip {
+  font-size: 12px; padding: 5px 10px; border-radius: 999px; cursor: pointer;
+  border: 1px solid #d0d7de; background: #fff; color: #57606a;
+}
+.tag-chip.on { background: #5b4bce; border-color: #5b4bce; color: #fff; }
+
+/* ── Histórico de buscas ── */
+.history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.history-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; border: 1px solid #e2e2e2; border-radius: 8px; cursor: pointer;
+}
+.history-item:hover { border-color: #1f6feb; background: #f7faff; }
+.history-item .muted { margin: 2px 0 0; font-size: 12px; }
+.history-niche { text-transform: capitalize; }
+.history-open { color: #1f6feb; font-size: 13px; font-weight: 600; white-space: nowrap; }
+
 /* ── Responsivo simples: empilha em telas estreitas ── */
 @media (max-width: 760px) {
   .app { grid-template-columns: 1fr; grid-template-rows: 45% 55%; }
