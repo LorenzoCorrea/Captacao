@@ -17,7 +17,7 @@
 
 Um SaaS estilo **busca imobiliária**: de um lado um mapa interativo, do outro a lista de leads. Você define **nicho + cidade + raio**, e o sistema encontra os estabelecimentos comerciais da região que **não têm website cadastrado** — exatamente o público que mais precisa de presença digital. Para cada lead, um worker busca **e-mail, Instagram, Facebook e LinkedIn** na web, em tempo real.
 
-> 💸 **100% gratuito, sem chaves de API e sem cartão de crédito.** Os dados vêm do **OpenStreetMap** e o enriquecimento do **DuckDuckGo**. Zero cobrança.
+> 💸 **100% gratuito, sem chaves de API e sem cartão de crédito.** Os dados vêm do **OpenStreetMap** e o enriquecimento do **DuckDuckGo**. 
 
 ---
 
