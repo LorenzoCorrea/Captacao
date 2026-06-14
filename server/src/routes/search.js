@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { buscarEstabelecimentos } from '../data/osmProvider.js';
 import { gerarEstabelecimentos } from '../data/mockPlaces.js';
 import { geocodeCidade } from '../data/geocode.js';
-import { createSearch, attachStream, prioritizeLead, getSearchLeads, updateLeadStage } from '../enrichment/enricher.js';
+import { createSearch, attachStream, prioritizeLead, getSearchLeads, updateLead, reopenSearch } from '../enrichment/enricher.js';
 import { toCSV, toXLSX } from '../export/exporter.js';
 import { listSearches, statsConversao } from '../db.js';
 
@@ -73,10 +73,17 @@ router.post('/api/search/:searchId/leads/:leadId/prioritize', (req, res) => {
   res.status(ok ? 202 : 404).json({ accepted: ok });
 });
 
-// Move um lead de estágio no funil (Kanban)
+// Atualiza um lead: estágio do Kanban + campos de CRM (notas, follow-up, tags, valor)
 router.patch('/api/search/:searchId/leads/:leadId', (req, res) => {
-  const ok = updateLeadStage(req.params.searchId, req.params.leadId, (req.body?.stage ?? '').toString());
+  const ok = updateLead(req.params.searchId, req.params.leadId, req.body ?? {});
   res.status(ok ? 200 : 400).json({ ok });
+});
+
+// Reabre uma busca salva (re-hidrata do banco se já saiu da memória) — usado pelo histórico
+router.get('/api/search/:searchId/leads', async (req, res) => {
+  const data = await reopenSearch(req.params.searchId);
+  if (!data) return res.status(404).json({ error: 'Busca não encontrada.' });
+  res.json(data);
 });
 
 // ─── Exportação CSV / XLSX ──────────────────────────────────────────────────

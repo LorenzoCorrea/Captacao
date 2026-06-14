@@ -43,12 +43,21 @@ CREATE TABLE IF NOT EXISTS leads (
   enrichment        jsonb,
   enrichment_status text NOT NULL DEFAULT 'pending',
   stage             text NOT NULL DEFAULT 'novo',
+  notes             text,
+  follow_up_at      text,
+  tags              text[] DEFAULT '{}',
+  estimated_value   numeric,
   created_at        timestamptz NOT NULL DEFAULT now(),
   updated_at        timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (search_id, lead_id)
 );
 CREATE INDEX IF NOT EXISTS idx_leads_lead_id ON leads(lead_id);
 CREATE INDEX IF NOT EXISTS idx_leads_search_stage ON leads(search_id, stage);
+-- Migração idempotente: adiciona as colunas de CRM em bancos criados antes.
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS notes text;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS follow_up_at text;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS tags text[] DEFAULT '{}';
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS estimated_value numeric;
 `;
 
 export async function initDb() {
@@ -112,12 +121,29 @@ export async function saveStage(searchId, leadId, stage) {
   } catch (e) { console.error('[db] saveStage:', e.message); }
 }
 
+// Atualiza os campos editáveis do lead (CRM): stage, notas, follow-up, tags, valor.
+export async function saveLeadFields(searchId, leadId, fields = {}) {
+  if (!pool) return;
+  const map = { stage: 'stage', notes: 'notes', followUpAt: 'follow_up_at', tags: 'tags', estimatedValue: 'estimated_value' };
+  const sets = []; const vals = []; let i = 1;
+  for (const [k, col] of Object.entries(map)) {
+    if (fields[k] !== undefined) { sets.push(`${col}=$${i++}`); vals.push(fields[k]); }
+  }
+  if (!sets.length) return;
+  vals.push(searchId, leadId);
+  try {
+    await pool.query(`UPDATE leads SET ${sets.join(', ')}, updated_at=now() WHERE search_id=$${i++} AND lead_id=$${i}`, vals);
+  } catch (e) { console.error('[db] saveLeadFields:', e.message); }
+}
+
 function rowToLead(r) {
   return {
     id: r.lead_id, name: r.name, address: r.address, phone: r.phone,
     lat: r.lat, lng: r.lng, hasWebsite: r.has_website, source: r.source, niche: r.niche,
     rating: r.rating, reviewsCount: r.reviews_count,
     enrichment: r.enrichment, enrichmentStatus: r.enrichment_status, stage: r.stage,
+    notes: r.notes ?? '', followUpAt: r.follow_up_at ?? null,
+    tags: r.tags ?? [], estimatedValue: r.estimated_value != null ? Number(r.estimated_value) : null,
   };
 }
 
@@ -127,8 +153,13 @@ export async function loadSearch(searchId) {
   try {
     const s = await pool.query('SELECT * FROM searches WHERE id=$1', [searchId]);
     if (!s.rowCount) return null;
+    const r = s.rows[0];
     const leads = await pool.query('SELECT * FROM leads WHERE search_id=$1 ORDER BY created_at', [searchId]);
-    return { city: s.rows[0].city, niche: s.rows[0].niche, leads: leads.rows.map(rowToLead) };
+    return {
+      city: r.city, niche: r.niche, found: r.found,
+      query: { niche: r.niche, city: r.city, lat: r.lat, lng: r.lng, radiusKm: r.radius_km },
+      leads: leads.rows.map(rowToLead),
+    };
   } catch (e) { console.error('[db] loadSearch:', e.message); return null; }
 }
 
@@ -146,7 +177,9 @@ export async function statsConversao() {
               count(*) FILTER (WHERE l.stage='contatado')::int contatado,
               count(*) FILTER (WHERE l.stage='qualificado')::int qualificado,
               count(*) FILTER (WHERE l.stage='descartado')::int descartado,
-              count(DISTINCT l.search_id)::int buscas
+              count(DISTINCT l.search_id)::int buscas,
+              COALESCE(sum(l.estimated_value) FILTER (WHERE l.stage NOT IN ('descartado','ganho')), 0)::float pipeline_value,
+              COALESCE(sum(l.estimated_value) FILTER (WHERE l.stage='ganho'), 0)::float won_value
        FROM leads l`
     );
     const porNicho = await pool.query(

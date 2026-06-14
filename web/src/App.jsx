@@ -6,6 +6,8 @@ import KanbanBoard from './components/KanbanBoard.jsx';
 import StatsPanel from './components/StatsPanel.jsx';
 import MessageSettings from './components/MessageSettings.jsx';
 import DispatchMode from './components/DispatchMode.jsx';
+import LeadDetails from './components/LeadDetails.jsx';
+import HistoryPanel from './components/HistoryPanel.jsx';
 import { leadScore } from './lib/score.js';
 import { useEnrichmentStream } from './hooks/useEnrichmentStream.js';
 
@@ -19,6 +21,8 @@ export default function App() {
   const [view, setView] = useState('map'); // 'map' | 'kanban' | 'stats'
   const [msgOpen, setMsgOpen] = useState(false); // modal de edição da mensagem do WhatsApp
   const [dispatchLeads, setDispatchLeads] = useState(null); // null = fechado; array = leads em disparo
+  const [detailId, setDetailId] = useState(null); // lead aberto no modal de detalhes/CRM
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [sortBy, setSortBy] = useState('score'); // 'score' | 'nome'
   const [filters, setFilters] = useState({ phone: false, instagram: false, email: false });
   const toggleFilter = (k) => setFilters((f) => ({ ...f, [k]: !f[k] }));
@@ -70,19 +74,36 @@ export default function App() {
   );
 
   // Kanban: move o lead de estágio (otimista no front + PATCH no back)
-  const moveLead = useCallback(
-    (leadId, stage) => {
-      setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, stage } : l)));
+  // Atualiza um lead (estágio do Kanban OU campos de CRM): otimista no front + PATCH no back
+  const patchLead = useCallback(
+    (leadId, patch) => {
+      setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, ...patch } : l)));
       if (search) {
         fetch(`/api/search/${search.searchId}/leads/${leadId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stage }),
+          body: JSON.stringify(patch),
         }).catch(() => {});
       }
     },
     [search]
   );
+  const moveLead = useCallback((leadId, stage) => patchLead(leadId, { stage }), [patchLead]);
+
+  // Reabre uma busca salva (do histórico): re-hidrata do banco e popula a tela
+  const openSearch = useCallback(async (searchId) => {
+    try {
+      const r = await fetch(`/api/search/${searchId}/leads`);
+      if (!r.ok) throw new Error('Não consegui abrir essa busca.');
+      const data = await r.json();
+      setSearch(data);
+      setLeads(data.leads);
+      setSelectedId(null);
+      setHistoryOpen(false);
+    } catch (err) {
+      alert(err.message);
+    }
+  }, []);
 
   const enriched = useMemo(() => leads.filter((l) => l.enrichmentStatus !== 'pending').length, [leads]);
 
@@ -122,6 +143,9 @@ export default function App() {
           </div>
           <button type="button" className="msg-edit-btn" onClick={() => setMsgOpen(true)}>
             ✏️ Editar mensagem do WhatsApp
+          </button>
+          <button type="button" className="msg-edit-btn" onClick={() => setHistoryOpen(true)}>
+            🕑 Buscas anteriores
           </button>
           {search && (
             <>
@@ -169,7 +193,7 @@ export default function App() {
             </>
           )}
         </header>
-        <LeadList leads={visibleLeads} selectedId={selectedId} onSelect={selectLead} loading={loading} />
+        <LeadList leads={visibleLeads} selectedId={selectedId} onSelect={selectLead} onOpenDetails={setDetailId} loading={loading} />
       </aside>
 
       <main className="map-wrap">
@@ -197,6 +221,14 @@ export default function App() {
           onClose={() => setDispatchLeads(null)}
         />
       )}
+      {detailId && (
+        <LeadDetails
+          lead={leads.find((l) => l.id === detailId)}
+          onSave={(patch) => patchLead(detailId, patch)}
+          onClose={() => setDetailId(null)}
+        />
+      )}
+      {historyOpen && <HistoryPanel onOpen={openSearch} onClose={() => setHistoryOpen(false)} />}
     </div>
   );
 }
