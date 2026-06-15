@@ -16,14 +16,20 @@ export default function LeadCard({ lead, selected, onSelect, onOpenDetails }) {
   const followVencido = lead.followUpAt && lead.followUpAt <= hoje();
 
   return (
-    <article className={`card ${selected ? 'card--selected' : ''} ${alvoIdeal ? 'card--alvo' : ''}`} onClick={() => onSelect(lead.id)}>
+    <article className={`card ${selected ? 'card--selected' : ''} ${alvoIdeal ? 'card--alvo' : ''} ${e?.discoveredWebsite ? 'card--has-site' : ''}`} onClick={() => onSelect(lead.id)}>
       <header>
         <h3>{lead.name}</h3>
         <span className={`score score--${tier.key}`} title={`Score de prospecção: ${score}/100`}>
           {tier.label} · {score}
         </span>
       </header>
-      {alvoIdeal && (
+      {e?.discoveredWebsite && (
+        <a className="badge-has-site" href={e.discoveredWebsite} target="_blank" rel="noreferrer" onClick={stop}
+           title="O OpenStreetMap dizia que não tem site, mas o enriquecimento achou um. Provavelmente NÃO é um bom prospecto.">
+          ⚠️ Site encontrado: {e.discoveredWebsite.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+        </a>
+      )}
+      {alvoIdeal && !e?.discoveredWebsite && (
         <span className="badge-alvo" title="Sem site, mas com Instagram ativo — alvo ideal para vender um site">
           🎯 Alvo ideal
         </span>
