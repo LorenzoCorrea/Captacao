@@ -180,7 +180,20 @@ export default function App() {
           <button type="button" className="msg-edit-btn" onClick={() => setHistoryOpen(true)}>
             🕑 Buscas anteriores
           </button>
-          {search && (
+          {search && search.stats.found === 0 && (
+            // OSM tem cobertura desigual: alguns ramos têm zero cadastro no Brasil.
+            // Empreiteira, construtora e contabilidade são os campeões de "0 found".
+            <div className="empty-coverage" role="alert">
+              <strong>Nenhum estabelecimento desse tipo no raio.</strong>
+              <p>
+                O OpenStreetMap depende de voluntários e a cobertura varia muito por ramo.
+                Nichos com bom cadastro no Brasil: <em>restaurante, barbearia, padaria, dentista, salão de beleza, mecânica, pet shop</em>.
+                Ramos como <em>empreiteira, construtora, contabilidade</em> geralmente têm cobertura quase zero.
+              </p>
+              <p className="muted">Sugestão: troque o nicho ou aumente o raio.</p>
+            </div>
+          )}
+          {search && search.stats.found > 0 && (
             <>
               <p className="stats">
                 <strong>{visibleLeads.length}</strong>

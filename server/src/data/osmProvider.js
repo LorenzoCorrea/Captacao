@@ -9,7 +9,11 @@
 import https from 'node:https';
 
 const ENDPOINTS = [
+  // Mirrors públicos do Overpass — se o primeiro estiver enfileirado/lento,
+  // tentamos o próximo. Multiplica as chances de pegar uma instância livre.
   'https://overpass-api.de/api/interpreter',
+  'https://lz4.overpass-api.de/api/interpreter',
+  'https://z.overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
 ];
 // Etiqueta do OSM: identifique a aplicação e um contato.
@@ -33,6 +37,14 @@ const NICHE_GROUPS = [
   { kw: ['fisio'], tags: ['healthcare=physiotherapist'] },
   { kw: ['otica', 'oculos'], tags: ['shop=optician'] },
   { kw: ['mecanic', 'funilaria', 'oficina', 'autocenter'], tags: ['shop=car_repair', 'craft=car_repair'] },
+  // Construção civil: empreiteiras, construtoras, reformas. Cobre vários
+  // crafts comuns no OSM brasileiro (pedreiros, eletricistas, marceneiros…).
+  { kw: ['empreit', 'construt', 'reform', 'pedreir', 'engenh'], tags: [
+      'office=construction_company', 'craft=builder', 'craft=carpenter',
+      'craft=electrician', 'craft=plumber', 'craft=painter',
+      'craft=tiler', 'craft=roofer', 'shop=trade',
+  ] },
+  { kw: ['floricult', 'flor'], tags: ['shop=florist'] },
 ];
 
 const normalize = (s) => (s ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
@@ -115,7 +127,7 @@ async function fetchOverpass(query) {
   let lastErr;
   for (const url of ENDPOINTS) {
     try {
-      return await overpassPost(url, query, 20000);
+      return await overpassPost(url, query, 25000);
     } catch (e) {
       lastErr = e; // tenta o próximo endpoint
     }

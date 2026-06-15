@@ -55,6 +55,16 @@ body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1f
 }
 .badge-has-site:hover { background: #ffe9c7; }
 
+/* Aviso quando OSM não tem cobertura desse nicho/região */
+.empty-coverage {
+  margin-top: 10px; padding: 12px 14px; border-radius: 10px;
+  background: #fff8e1; border: 1px solid #f3d27a; color: #5d4006;
+  font-size: 13.5px; line-height: 1.5;
+}
+.empty-coverage p { margin: 8px 0 0; }
+.empty-coverage em { color: #7a4a00; font-style: normal; font-weight: 600; }
+.empty-coverage .muted { color: #7a6433; font-size: 12.5px; }
+
 /* Aviso de banco desativado no HistoryPanel */
 .db-warning {
   padding: 14px 16px; border-radius: 10px;
