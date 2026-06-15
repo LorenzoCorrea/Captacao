@@ -26,11 +26,13 @@ export default function App() {
   const [sortBy, setSortBy] = useState('score'); // 'score' | 'nome'
   const [filters, setFilters] = useState({ phone: false, instagram: false, email: false });
   const toggleFilter = (k) => setFilters((f) => ({ ...f, [k]: !f[k] }));
+  const [searchError, setSearchError] = useState(null); // erro inline (substitui alert)
 
   // FASE 1 — busca síncrona: pinos e cards aparecem de imediato
   const runSearch = useCallback(async (params) => {
     setLoading(true);
     setSelectedId(null);
+    setSearchError(null);
     try {
       const r = await fetch('/api/search', {
         method: 'POST',
@@ -42,7 +44,7 @@ export default function App() {
       setSearch(data);
       setLeads(data.leads);
     } catch (e) {
-      alert(e.message);
+      setSearchError(e.message);
     } finally {
       setLoading(false);
     }
@@ -130,6 +132,12 @@ export default function App() {
             Captação<span>.app</span>
           </h1>
           <SearchBar onSearch={runSearch} loading={loading} />
+          {searchError && (
+            <div className="search-error" role="alert">
+              <strong>Não consegui buscar agora.</strong> {searchError}
+              <button type="button" onClick={() => setSearchError(null)} aria-label="fechar">✕</button>
+            </div>
+          )}
           <div className="view-toggle">
             <button type="button" className={view === 'map' ? 'active' : ''} onClick={() => setView('map')}>
               🗺 Mapa

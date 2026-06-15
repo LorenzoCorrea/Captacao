@@ -4,8 +4,19 @@ import { useEffect, useRef, useState } from 'react';
 // Centro deslocado p/ o bairro Bom Jesus (leste de Porto Alegre).
 const DEFAULT_CITY = { label: 'Porto Alegre, Rio Grande do Sul', lat: -30.0427211, lng: -51.1626625 };
 
+// Nichos pré-definidos (atalhos rápidos para os ramos que o Lorenzo mais prospecta).
+// "Outros" libera o input pra digitar livremente.
+const NICHE_PRESETS = [
+  { label: 'Advocacia', value: 'advocacia' },
+  { label: 'Salão de beleza', value: 'salão de beleza' },
+  { label: 'Manicure', value: 'manicure' },
+  { label: 'Empreiteira', value: 'empreiteira' },
+];
+
 export default function SearchBar({ onSearch, loading }) {
-  const [niche, setNiche] = useState('salão de estética');
+  const [niche, setNiche] = useState('salão de beleza');
+  // 'preset' = um dos atalhos selecionado · 'outros' = input livre · '' = indefinido
+  const [preset, setPreset] = useState('salão de beleza');
   const [cityQuery, setCityQuery] = useState(DEFAULT_CITY.label);
   const [selectedCity, setSelectedCity] = useState(DEFAULT_CITY);
   const [suggestions, setSuggestions] = useState([]);
@@ -63,9 +74,29 @@ export default function SearchBar({ onSearch, loading }) {
     onSearch({ niche, city: city.label, lat: city.lat, lng: city.lng, radiusKm });
   }
 
+  function chooseNiche(v) {
+    setPreset(v);
+    if (v !== 'outros') setNiche(v); // preset escolhido = nicho definido
+    else setNiche(''); // "Outros" -> limpa pra ele digitar
+  }
+
   return (
     <form className="search-bar" onSubmit={submit} autoComplete="off">
-      <input value={niche} onChange={(e) => setNiche(e.target.value)} placeholder='Nicho (ex: "escritório de advocacia")' required />
+      <select className="niche-select" value={preset} onChange={(e) => chooseNiche(e.target.value)} required>
+        {NICHE_PRESETS.map((p) => (
+          <option key={p.value} value={p.value}>{p.label}</option>
+        ))}
+        <option value="outros">Outros (digite)</option>
+      </select>
+      {preset === 'outros' && (
+        <input
+          value={niche}
+          onChange={(e) => setNiche(e.target.value)}
+          placeholder='Digite o nicho (ex: "dentista", "academia")'
+          autoFocus
+          required
+        />
+      )}
 
       <div className="city-field">
         <input

@@ -43,6 +43,18 @@ body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1f
 .search-bar input:not([type='range']), .search-bar select {
   padding: 9px 10px; border: 1px solid #d0d7de; border-radius: 8px; font-size: 14px; width: 100%;
 }
+.niche-select { background: #fff; cursor: pointer; }
+
+/* Mensagem de erro inline (substitui o alert) */
+.search-error {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+  background: #fdecea; border: 1px solid #f5c2c0; color: #8a1f1c; font-size: 13px; line-height: 1.4;
+}
+.search-error button {
+  margin-left: auto; background: none; border: 0; color: #8a1f1c;
+  font-size: 14px; cursor: pointer; padding: 0 2px;
+}
 .radius { display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; color: #57606a; }
 .radius input[type='range'] { flex: 1; }
 
