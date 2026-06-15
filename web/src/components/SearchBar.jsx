@@ -5,12 +5,33 @@ import { useEffect, useRef, useState } from 'react';
 const DEFAULT_CITY = { label: 'Porto Alegre, Rio Grande do Sul', lat: -30.0427211, lng: -51.1626625 };
 
 // Nichos pré-definidos (atalhos rápidos para os ramos que o Lorenzo mais prospecta).
-// "Outros" libera o input pra digitar livremente.
+// "Outros" libera o input pra digitar livremente. Lista ordenada por bom encaixe
+// no perfil de "negócio físico sem site" + cobertura no OpenStreetMap.
 const NICHE_PRESETS = [
   { label: 'Advocacia', value: 'advocacia' },
   { label: 'Salão de beleza', value: 'salão de beleza' },
   { label: 'Manicure', value: 'manicure' },
+  { label: 'Barbearia', value: 'barbearia' },
+  { label: 'Estética', value: 'estética' },
   { label: 'Empreiteira', value: 'empreiteira' },
+  { label: 'Construtora', value: 'construtora' },
+  { label: 'Mecânica', value: 'mecânica' },
+  { label: 'Dentista', value: 'dentista' },
+  { label: 'Clínica médica', value: 'clínica médica' },
+  { label: 'Psicologia', value: 'psicólogo' },
+  { label: 'Nutricionista', value: 'nutricionista' },
+  { label: 'Fisioterapia', value: 'fisioterapia' },
+  { label: 'Academia', value: 'academia' },
+  { label: 'Pet shop / Veterinária', value: 'pet shop' },
+  { label: 'Restaurante', value: 'restaurante' },
+  { label: 'Lanchonete', value: 'lanchonete' },
+  { label: 'Pizzaria', value: 'pizzaria' },
+  { label: 'Padaria', value: 'padaria' },
+  { label: 'Imobiliária', value: 'imobiliária' },
+  { label: 'Contabilidade', value: 'contabilidade' },
+  { label: 'Arquitetura', value: 'arquitetura' },
+  { label: 'Floricultura', value: 'floricultura' },
+  { label: 'Ótica', value: 'ótica' },
 ];
 
 export default function SearchBar({ onSearch, loading }) {
