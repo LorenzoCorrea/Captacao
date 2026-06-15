@@ -187,4 +187,3 @@ Na barra à esquerda, em **Exportar**, baixe a planilha em **CSV** ou **Excel** 
 
 ---
 
-Feito com ☕ e dados abertos do OpenStreetMap.
