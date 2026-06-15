@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import SearchBar from './components/SearchBar.jsx';
 import MapPanel from './components/MapPanel.jsx';
 import LeadList from './components/LeadList.jsx';
@@ -28,6 +28,25 @@ export default function App() {
   const toggleFilter = (k) => setFilters((f) => ({ ...f, [k]: !f[k] }));
   const [searchError, setSearchError] = useState(null); // erro inline (substitui alert)
 
+  // Persiste o searchId no navegador pra sobreviver a F5: ao montar, tenta
+  // reabrir a última busca (ainda em memória do back OU no banco quando ativo).
+  // Sem isso, F5 perde tudo — estágios do Kanban, notas, follow-ups, etc.
+  useEffect(() => {
+    const sid = localStorage.getItem('captacao.lastSearchId');
+    if (!sid) return;
+    (async () => {
+      try {
+        const r = await fetch(`/api/search/${sid}/leads`);
+        if (!r.ok) { localStorage.removeItem('captacao.lastSearchId'); return; }
+        const data = await r.json();
+        setSearch(data);
+        setLeads(data.leads);
+      } catch {
+        localStorage.removeItem('captacao.lastSearchId');
+      }
+    })();
+  }, []);
+
   // FASE 1 — busca síncrona: pinos e cards aparecem de imediato
   const runSearch = useCallback(async (params) => {
     setLoading(true);
@@ -43,6 +62,7 @@ export default function App() {
       const data = await r.json();
       setSearch(data);
       setLeads(data.leads);
+      localStorage.setItem('captacao.lastSearchId', data.searchId);
     } catch (e) {
       setSearchError(e.message);
     } finally {
@@ -102,6 +122,7 @@ export default function App() {
       setLeads(data.leads);
       setSelectedId(null);
       setHistoryOpen(false);
+      localStorage.setItem('captacao.lastSearchId', searchId);
     } catch (err) {
       alert(err.message);
     }
