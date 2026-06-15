@@ -30,6 +30,7 @@ Um SaaS estilo **busca imobiliária**: de um lado um mapa interativo, do outro a
 - 🗂️ **Funil Kanban** — arraste leads entre `Novo · Qualificado · Contatado · Ganho · Descartado`
 - 🏙️ **Autocomplete de cidade** com geocoding gratuito (Nominatim)
 - 📤 **Exportação CSV / Excel** + **webhook** para integrar com seu CRM
+- 🗄️ **Persistência opcional** em PostgreSQL (roda em memória por padrão; ativa com `DATABASE_URL`)
 
 ---
 
@@ -117,6 +118,80 @@ Abra **http://localhost:5173**, digite um nicho (ex: _"salão de estética"_), e
 | `ENRICH_BACKGROUND` | `true` | `false` = só enriquece quando o usuário clica no lead |
 | `PYTHON_BIN` | `py` / `python3` | binário do Python para os workers |
 | `DATABASE_URL` | _(vazio)_ | Postgres p/ persistir buscas, leads, enriquecimento e estágios. **Vazio = só memória.** Ex.: `postgresql://user:senha@host:5432/captacao` (veja `server/.env.example`) |
+
+---
+
+## 🗄️ Persistência com PostgreSQL (opcional, recomendada)
+
+Sem `DATABASE_URL`, o app roda em memória — buscas duram 30 min e somem no F5/reinício. Com Postgres configurado, **tudo fica salvo**: buscas, leads, enriquecimento, estágios do Kanban, notas, follow-ups, tags e valor estimado.
+
+### Setup escolhido: PostgreSQL no Docker + ZimaOS + Tailscale
+
+A combinação é gratuita, autônoma (zero dependência de nuvem) e acessível de qualquer máquina sua via VPN privada:
+
+```
+[Seu PC] ──── Tailscale (VPN) ──── [ZimaOS] ──── [Container PostgreSQL]
+```
+
+- **ZimaOS** = sistema operacional do home server (gerencia containers Docker pela UI).
+- **PostgreSQL** = banco de dados (roda como container no ZimaOS).
+- **Tailscale** = rede privada que dá ao seu PC um IP `100.x.y.z` pra falar com o Zima de qualquer lugar.
+
+### Passo a passo (uma vez)
+
+**1. Suba o Postgres no ZimaOS** (App Store → Docker → `postgres:15`). Configure as variáveis do container:
+
+| Variável | Sugestão |
+|---|---|
+| `POSTGRES_USER` | um nome dedicado, ex.: `lorenzo` |
+| `POSTGRES_PASSWORD` | **senha forte gerada por gerenciador** (Bitwarden/1Password, 20+ chars aleatórios) |
+| `POSTGRES_DB` | `captacao` (banco dedicado pro projeto) |
+| Porta | `5432:5432` (mapeada pro host) |
+
+> ⚠️ **Nunca commite a senha em lugar nenhum.** Ela mora só no container e no seu `.env` local (que está no `.gitignore`).
+
+**2. Instale o Tailscale** no ZimaOS e em cada PC que vai acessar. Anote o IP do Zima na rede privada (algo como `100.74.x.x`) em [tailscale.com/admin/machines](https://login.tailscale.com/admin/machines).
+
+**3. (Opcional) Crie um banco dedicado** se ainda não fez via `POSTGRES_DB`. Conecte no Postgres como superuser e rode:
+```sql
+CREATE DATABASE captacao OWNER lorenzo;
+```
+
+**4. Configure o `.env`** no seu PC, dentro de `server/`:
+```bash
+cp .env.example .env   # Windows: copy .env.example .env
+```
+
+Edite o `.env` com a sua connection string:
+```
+DATABASE_URL=postgresql://lorenzo:SUA_SENHA@100.x.y.z:5432/captacao
+```
+
+**5. Reinicie a API.** No log você deve ver:
+```
+[db] schema pronto — persistência ATIVADA.
+```
+
+As tabelas são criadas automaticamente no primeiro boot — não precisa rodar migration nenhuma.
+
+### Como testar a conexão (antes de subir a API)
+
+```bash
+psql "postgresql://lorenzo:SUA_SENHA@100.x.y.z:5432/captacao" -c "\l"
+```
+
+| Erro | Causa provável |
+|---|---|
+| `connection refused` | Tailscale offline, IP errado, container fora do ar, ou porta não exposta |
+| `password authentication failed` | Senha errada ou usuário não criado |
+| Lista de databases aparece | ✅ Tudo OK, pode subir a API |
+
+### Boas práticas
+
+- 🔒 **Senha forte e exclusiva** — use gerador, não reaproveite de outros serviços
+- 🚫 **Não exponha a porta 5432 na internet** — Tailscale resolve sem precisar abrir nada no roteador
+- 💾 **Backup periódico** do volume Docker (ou `pg_dump` semanal pra um arquivo)
+- 🏷️ **Banco dedicado por projeto** — evita misturar `captacao` com outros projetos seus no mesmo Postgres
 
 ---
 
