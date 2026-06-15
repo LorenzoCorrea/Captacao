@@ -121,6 +121,42 @@ Abra **http://localhost:5173**, digite um nicho (ex: _"salão de estética"_), e
 
 ---
 
+## 🐳 Rodar 24/7 em casa (Docker no ZimaOS)
+
+Quando você quiser que o sistema fique **sempre ligado** (sem depender de abrir terminal e sem você ter que rodar `npm run dev`), suba os containers no seu home server. O `docker-compose.yml` na raiz monta tudo:
+
+- **`api`** — Node + worker Python no mesmo container (porque o enrich.py é spawnado em processo filho)
+- **`web`** — build estático servido por **nginx** (mais leve e seguro que rodar Vite em produção); o nginx faz proxy `/api/*` pro container da API, **com SSE preservado** (`proxy_buffering off`)
+
+Postgres **não** entra no compose — ele já roda como container separado no Zima. Os apps conversam com ele via `host.docker.internal:5432`.
+
+### Setup (uma vez, no ZimaOS)
+
+```bash
+git clone https://github.com/LorenzoCorrea/Captacao.git
+cd Captacao
+cp .env.example .env       # edite com a DATABASE_URL real
+docker compose up -d --build
+```
+
+Pronto. Acesse pelo IP do Zima na Tailscale (ex.: `http://100.x.y.z`). O nginx escuta na **80** — não precisa de porta no URL.
+
+### Compartilhar com o sócio
+
+No admin do Tailscale → 3 pontinhos da máquina `zimaos` → **Share...** → coloca o email dele. Ele cria conta grátis do Tailscale (até 100 dispositivos), instala o app, e acessa a **mesma URL**. Ele só enxerga essa máquina compartilhada — não tem acesso ao resto do seu tailnet.
+
+### Atualizando depois de mudar o código
+
+```bash
+cd Captacao
+git pull
+docker compose up -d --build
+```
+
+O Docker rebuilda só o que mudou (cache de camadas) e reinicia em segundos.
+
+---
+
 ## 🗄️ Persistência com PostgreSQL (opcional, recomendada)
 
 Sem `DATABASE_URL`, o app roda em memória — buscas duram 30 min e somem no F5/reinício. Com Postgres configurado, **tudo fica salvo**: buscas, leads, enriquecimento, estágios do Kanban, notas, follow-ups, tags e valor estimado.
