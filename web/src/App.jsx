@@ -24,7 +24,9 @@ export default function App() {
   const [detailId, setDetailId] = useState(null); // lead aberto no modal de detalhes/CRM
   const [historyOpen, setHistoryOpen] = useState(false);
   const [sortBy, setSortBy] = useState('score'); // 'score' | 'nome'
-  const [filters, setFilters] = useState({ phone: false, instagram: false, email: false });
+  // showWithSite começa FALSO: o produto é prospectar quem NÃO tem site,
+  // então esconder por padrão quem o enriquecimento detectou que tem.
+  const [filters, setFilters] = useState({ phone: false, instagram: false, email: false, showWithSite: false });
   const toggleFilter = (k) => setFilters((f) => ({ ...f, [k]: !f[k] }));
   const [searchError, setSearchError] = useState(null); // erro inline (substitui alert)
 
@@ -133,6 +135,8 @@ export default function App() {
   // Lista exibida = filtrada + ordenada (vale p/ mapa, lista e Kanban)
   const visibleLeads = useMemo(() => {
     const arr = leads.filter((l) => {
+      // Esconde leads que o enriquecimento descobriu que TÊM site (falso "sem site" do OSM)
+      if (!filters.showWithSite && l.enrichment?.discoveredWebsite) return false;
       if (filters.phone && !l.phone) return false;
       // Enquanto o enriquecimento não terminou, não escondemos o lead: ele ainda
       // pode ganhar o contato. Só filtramos quando já existe um veredito.
@@ -211,6 +215,14 @@ export default function App() {
                       </button>
                       <button type="button" className={filters.email ? 'on' : ''} onClick={() => toggleFilter('email')}>
                         ✉️ E-mail
+                      </button>
+                      <button
+                        type="button"
+                        className={filters.showWithSite ? 'on' : ''}
+                        onClick={() => toggleFilter('showWithSite')}
+                        title="Por padrão escondemos quem o enriquecimento descobriu que TEM site. Marque pra ver todos."
+                      >
+                        ⚠️ Incluir quem tem site
                       </button>
                     </div>
                   </div>
