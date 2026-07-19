@@ -16,8 +16,10 @@ const ENDPOINTS = [
   'https://z.overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
 ];
-// Etiqueta do OSM: identifique a aplicação e um contato.
-const UA = 'CaptacaoLeadApp/0.1 (prospeccao B2B; contato-no-repositorio)';
+// Etiqueta do OSM: identifique a aplicação e um contato. A URL do repositório
+// vale como contato — e-mail pessoal não vai hardcoded em repo público (spam).
+// Se quiser usar e-mail, defina OSM_CONTACT no .env.
+const UA = `CaptacaoLeadApp/0.1 (${process.env.OSM_CONTACT || '+https://github.com/LorenzoCorrea/Captacao'})`;
 
 // Mapa nicho (PT-BR) -> tags OSM. `kw` são radicais SEM acento (casamos por
 // substring contra o nicho normalizado). Vários grupos podem casar e somar tags.
