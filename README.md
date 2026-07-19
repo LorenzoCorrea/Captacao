@@ -139,7 +139,7 @@ cp .env.example .env       # edite com a DATABASE_URL real
 docker compose up -d --build
 ```
 
-Pronto. Acesse pelo IP do Zima na Tailscale (ex.: `http://100.x.y.z`). O nginx escuta na **80** — não precisa de porta no URL.
+Pronto. Acesse pelo IP do Zima na Tailscale (algo como `http://100.x.y.z` — veja o seu em [tailscale.com/admin/machines](https://login.tailscale.com/admin/machines)). O nginx escuta na **80** — não precisa de porta no URL.
 
 ### Compartilhar com o sócio
 
