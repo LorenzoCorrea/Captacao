@@ -97,18 +97,32 @@ export default function App() {
     [leads, search]
   );
 
-  // Kanban: move o lead de estágio (otimista no front + PATCH no back)
-  // Atualiza um lead (estágio do Kanban OU campos de CRM): otimista no front + PATCH no back
+  // Atualiza um lead (estágio do Kanban OU campos de CRM): otimista no front +
+  // PATCH no back. Se o PATCH falhar, REVERTE os campos alterados e avisa —
+  // sem isso, a tela mostraria como salvo algo que se perdeu.
   const patchLead = useCallback(
     (leadId, patch) => {
-      setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, ...patch } : l)));
-      if (search) {
-        fetch(`/api/search/${search.searchId}/leads/${leadId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(patch),
-        }).catch(() => {});
-      }
+      let before = null;
+      setLeads((prev) => {
+        before = prev.find((l) => l.id === leadId) ?? null;
+        return prev.map((l) => (l.id === leadId ? { ...l, ...patch } : l));
+      });
+      if (!search) return;
+      fetch(`/api/search/${search.searchId}/leads/${leadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      })
+        .then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        })
+        .catch(() => {
+          if (!before) return;
+          // Reverte só os campos do patch (não sobrescreve enriquecimento que chegou depois)
+          const revert = Object.fromEntries(Object.keys(patch).map((k) => [k, before[k]]));
+          setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, ...revert } : l)));
+          setSearchError('Não consegui salvar a alteração do lead — verifique a conexão e tente de novo.');
+        });
     },
     [search]
   );
@@ -126,7 +140,7 @@ export default function App() {
       setHistoryOpen(false);
       localStorage.setItem('captacao.lastSearchId', searchId);
     } catch (err) {
-      alert(err.message);
+      setSearchError(err.message); // erro inline, consistente com o resto da UI
     }
   }, []);
 

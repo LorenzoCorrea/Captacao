@@ -60,6 +60,25 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS tags text[] DEFAULT '{}';
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS estimated_value numeric;
 `;
 
+// O container do Postgres pode ter sido criado com outro POSTGRES_DB (ex.:
+// "estudos_js"). Se o banco da DATABASE_URL não existir (erro 3D000), conecta
+// no banco administrativo "postgres" com as mesmas credenciais e cria — zero
+// passo manual no Portainer.
+async function createDatabaseIfMissing() {
+  const u = new URL(url);
+  const dbName = decodeURIComponent(u.pathname.slice(1));
+  if (!dbName) throw new Error('DATABASE_URL sem nome de banco');
+  u.pathname = '/postgres';
+  const admin = new pg.Client({ connectionString: u.toString(), connectionTimeoutMillis: 8000 });
+  await admin.connect();
+  try {
+    await admin.query(`CREATE DATABASE "${dbName.replaceAll('"', '""')}"`);
+    console.log(`[db] banco "${dbName}" criado automaticamente.`);
+  } finally {
+    await admin.end().catch(() => {});
+  }
+}
+
 export async function initDb() {
   if (!pool) {
     console.log('[db] DATABASE_URL ausente — rodando em memória (sem persistência).');
@@ -70,6 +89,18 @@ export async function initDb() {
     console.log('[db] schema pronto — persistência ATIVADA.');
     return true;
   } catch (e) {
+    if (e.code === '3D000') {
+      // banco não existe ainda — cria e tenta de novo
+      try {
+        await createDatabaseIfMissing();
+        await pool.query(DDL);
+        console.log('[db] schema pronto — persistência ATIVADA.');
+        return true;
+      } catch (e2) {
+        console.error('[db] falha ao criar o banco (seguindo em memória):', e2.message);
+        return false;
+      }
+    }
     console.error('[db] falha ao preparar o schema (seguindo em memória):', e.message);
     return false;
   }
@@ -87,12 +118,24 @@ export async function saveSearch(search, meta = {}) {
        VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING`,
       [search.id, meta.niche ?? '', meta.city ?? null, meta.lat ?? null, meta.lng ?? null, meta.radiusKm ?? null, meta.found ?? null]
     );
-    for (const l of search.leads.values()) {
+    // INSERT em lote (multi-VALUES): com o Postgres do outro lado da Tailscale,
+    // 150 inserts sequenciais custariam segundos; em lote é 1 round-trip.
+    const leads = [...search.leads.values()];
+    const CHUNK = 200; // 15 params/linha → bem abaixo do limite de 65535 do protocolo
+    for (let off = 0; off < leads.length; off += CHUNK) {
+      const chunk = leads.slice(off, off + CHUNK);
+      const vals = [];
+      const rows = chunk.map((l, i) => {
+        vals.push(search.id, l.id, l.name, l.address, l.phone, l.lat, l.lng, l.hasWebsite ?? false, l.source ?? null, l.niche ?? null, l.rating ?? null, l.reviewsCount ?? null, l.enrichment ?? null, l.enrichmentStatus, l.stage);
+        const b = i * 15;
+        return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12},$${b + 13},$${b + 14},$${b + 15})`;
+      });
+      if (!rows.length) continue;
       await client.query(
         `INSERT INTO leads (search_id, lead_id, name, address, phone, lat, lng, has_website, source, niche, rating, reviews_count, enrichment, enrichment_status, stage)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+         VALUES ${rows.join(',')}
          ON CONFLICT (search_id, lead_id) DO NOTHING`,
-        [search.id, l.id, l.name, l.address, l.phone, l.lat, l.lng, l.hasWebsite ?? false, l.source ?? null, l.niche ?? null, l.rating ?? null, l.reviewsCount ?? null, l.enrichment ?? null, l.enrichmentStatus, l.stage]
+        vals
       );
     }
     await client.query('COMMIT');

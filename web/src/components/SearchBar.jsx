@@ -45,6 +45,7 @@ export default function SearchBar({ onSearch, loading }) {
   const [open, setOpen] = useState(false);
   const [radiusKm, setRadiusKm] = useState(5);
   const blurTimer = useRef(null);
+  useEffect(() => () => clearTimeout(blurTimer.current), []); // limpa no unmount
 
   // Autocomplete via Nominatim/OSM (grátis). Debounce de 450ms para respeitar a
   // política de uso (nada de request a cada tecla) e poupar a rede.

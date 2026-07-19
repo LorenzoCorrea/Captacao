@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import net from 'node:net';
+import { lookup } from 'node:dns/promises';
 import { buscarEstabelecimentos } from '../data/osmProvider.js';
 import { gerarEstabelecimentos } from '../data/mockPlaces.js';
 import { geocodeCidade } from '../data/geocode.js';
@@ -22,6 +24,11 @@ router.post('/api/search', async (req, res) => {
   const { niche, city = 'São Paulo', lat = -23.5505, lng = -46.6333, radiusKm = 5 } = req.body ?? {};
   if (!niche?.trim()) {
     return res.status(400).json({ error: 'Informe o nicho (ex: "salão de estética").' });
+  }
+  // Coordenadas inválidas virariam NaN dentro da query do Overpass e voltariam
+  // como um 502 confuso — melhor um 400 claro aqui.
+  if (!Number.isFinite(+lat) || !Number.isFinite(+lng) || Math.abs(+lat) > 90 || Math.abs(+lng) > 180) {
+    return res.status(400).json({ error: 'Coordenadas inválidas — escolha a cidade pela lista de sugestões.' });
   }
   const radius = clamp(radiusKm, 0.5, 30);
   const params = { niche: niche.trim(), city, lat: +lat, lng: +lng, radiusKm: radius };
@@ -65,17 +72,25 @@ router.get('/api/geocode', async (req, res) => {
 });
 
 // ─── FASE 2 — stream SSE: o enriquecimento pinga aqui conforme fica pronto ──
-router.get('/api/search/:searchId/stream', (req, res) => attachStream(req.params.searchId, req, res));
+// (async: re-hidrata a sessão do banco se ela expirou da memória)
+router.get('/api/search/:searchId/stream', async (req, res) => {
+  try {
+    await attachStream(req.params.searchId, req, res);
+  } catch (e) {
+    console.error('Falha no stream:', e);
+    if (!res.headersSent) res.status(500).json({ error: 'Falha ao abrir o stream.' });
+  }
+});
 
 // Enriquecimento sob demanda: o usuário clicou no lead → fura a fila
-router.post('/api/search/:searchId/leads/:leadId/prioritize', (req, res) => {
-  const ok = prioritizeLead(req.params.searchId, req.params.leadId);
+router.post('/api/search/:searchId/leads/:leadId/prioritize', async (req, res) => {
+  const ok = await prioritizeLead(req.params.searchId, req.params.leadId);
   res.status(ok ? 202 : 404).json({ accepted: ok });
 });
 
 // Atualiza um lead: estágio do Kanban + campos de CRM (notas, follow-up, tags, valor)
-router.patch('/api/search/:searchId/leads/:leadId', (req, res) => {
-  const ok = updateLead(req.params.searchId, req.params.leadId, req.body ?? {});
+router.patch('/api/search/:searchId/leads/:leadId', async (req, res) => {
+  const ok = await updateLead(req.params.searchId, req.params.leadId, req.body ?? {});
   res.status(ok ? 200 : 400).json({ ok });
 });
 
@@ -109,13 +124,46 @@ router.get('/api/search/:searchId/export', async (req, res) => {
 });
 
 // ─── Webhook: envia os leads (JSON) para um CRM/URL do usuário ──────────────
+
+// Proteção SSRF: o webhook só pode apontar para a internet pública. Sem isso,
+// uma URL como http://host.docker.internal:5432 alcançaria o Postgres e outros
+// serviços internos do Zima/Tailscale.
+function isPrivateIp(ip) {
+  if (net.isIPv6(ip)) {
+    const low = ip.toLowerCase();
+    if (low.startsWith('::ffff:')) return isPrivateIp(low.slice(7)); // IPv4 mapeado
+    return low === '::1' || low === '::' || low.startsWith('fc') || low.startsWith('fd') || low.startsWith('fe80');
+  }
+  const p = ip.split('.').map(Number);
+  if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
+  return (
+    p[0] === 0 || p[0] === 10 || p[0] === 127 ||
+    (p[0] === 100 && p[1] >= 64 && p[1] <= 127) || // CGNAT — inclui a faixa da Tailscale
+    (p[0] === 169 && p[1] === 254) ||
+    (p[0] === 172 && p[1] >= 16 && p[1] <= 31) ||
+    (p[0] === 192 && p[1] === 168)
+  );
+}
+
+async function assertPublicUrl(raw) {
+  const u = new URL(raw);
+  if (!/^https?:$/.test(u.protocol)) throw new Error('protocolo inválido');
+  const host = u.hostname;
+  const addrs = net.isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
+  if (addrs.some((a) => isPrivateIp(a.address))) throw new Error('endereço interno/privado');
+}
+
 router.post('/api/search/:searchId/webhook', async (req, res) => {
   const data = await getSearchLeads(req.params.searchId);
   if (!data) return res.status(404).json({ error: 'Busca não encontrada (sessão expirada?).' });
 
   const url = (req.body?.url ?? '').toString().trim();
-  // NB: produção deve barrar IPs internos (proteção SSRF) antes de postar.
   if (!/^https?:\/\/.+/i.test(url)) return res.status(400).json({ error: 'Informe uma URL http(s) válida.' });
+  try {
+    await assertPublicUrl(url);
+  } catch {
+    return res.status(400).json({ error: 'URL de webhook inválida: só endereços públicos são aceitos.' });
+  }
 
   try {
     const r = await fetch(url, {

@@ -27,6 +27,11 @@ function rateLimited(fn) {
 // ── Cache (cidades não se movem) ──
 const cache = new Map();
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+// Poda periódica pra memória não crescer sem limite num servidor 24/7.
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of cache) if (now - v.ts > CACHE_TTL_MS) cache.delete(k);
+}, 60 * 60 * 1000).unref();
 
 function nominatimGet(q) {
   return new Promise((resolve, reject) => {
