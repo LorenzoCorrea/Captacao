@@ -141,6 +141,20 @@ docker compose up -d --build
 
 Pronto. Acesse pelo IP do Zima na Tailscale (algo como `http://100.x.y.z` — veja o seu em [tailscale.com/admin/machines](https://login.tailscale.com/admin/machines)). O nginx escuta na **80** — não precisa de porta no URL.
 
+### URL fixa com HTTPS (MagicDNS + Tailscale Serve)
+
+Para não depender do IP `100.x.y.z`, dê ao sistema uma URL fixa com certificado válido:
+
+1. Em [login.tailscale.com/admin/dns](https://login.tailscale.com/admin/dns): ative **MagicDNS** e **HTTPS Certificates**.
+2. (Opcional) Renomeie a máquina do Zima em **Machines → Edit machine name** (ex.: `captacao`).
+3. No terminal do Zima (ou console do container do Tailscale):
+   ```bash
+   tailscale serve --bg --https=443 http://127.0.0.1:80
+   ```
+4. Confira com `tailscale serve status` e acesse `https://captacao.SEU-TAILNET.ts.net` — o link vale para todo mundo da tailnet (incluindo máquinas compartilhadas) e nunca muda.
+
+> ☁️ **Por que não Vercel/nuvem?** O back-end depende de processo persistente (fila em memória, SSE de longa duração, worker Python spawnado) — serverless não roda isso — e o Postgres mora na rede privada. Se um dia quiser link público, o caminho é: implementar autenticação → expor via **Tailscale Funnel** (ou migrar API+banco para Railway/Render + Neon).
+
 ### Compartilhar com o sócio
 
 No admin do Tailscale → 3 pontinhos da máquina `zimaos` → **Share...** → coloca o email dele. Ele cria conta grátis do Tailscale (até 100 dispositivos), instala o app, e acessa a **mesma URL**. Ele só enxerga essa máquina compartilhada — não tem acesso ao resto do seu tailnet.
