@@ -44,6 +44,16 @@ function rowsFromLeads(leads) {
   });
 }
 
+// Letra de coluna do Excel (1 -> A, 27 -> AA): não quebra se passar de 26 colunas.
+const colLetter = (n) => {
+  let s = '';
+  while (n > 0) {
+    s = String.fromCharCode(65 + ((n - 1) % 26)) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+};
+
 const escapeCsv = (v) => {
   const s = String(v ?? '');
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -66,6 +76,6 @@ export async function toXLSX(leads) {
   header.font = { bold: true };
   header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF1F4' } };
   ws.views = [{ state: 'frozen', ySplit: 1 }]; // congela o cabeçalho
-  ws.autoFilter = { from: 'A1', to: `${String.fromCharCode(64 + COLUMNS.length)}1` };
+  ws.autoFilter = { from: 'A1', to: `${colLetter(COLUMNS.length)}1` };
   return Buffer.from(await wb.xlsx.writeBuffer());
 }

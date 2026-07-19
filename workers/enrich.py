@@ -121,6 +121,9 @@ def _first_email(html: str) -> str | None:
 
 async def _serp(client: httpx.AsyncClient, query: str) -> str:
     r = await client.post(DDG, data={"q": query}, headers=UA)
+    # 403/429/CAPTCHA = bloqueio do DDG. Sem este check, o HTML de erro seria
+    # parseado normalmente e o lead viraria um falso "not_found" permanente.
+    r.raise_for_status()
     return r.text
 
 
@@ -146,10 +149,14 @@ async def _enrich(lead: dict) -> dict:
                 out["discoveredWebsite"] = url.split("?")[0].rstrip("/")
                 break
 
-        # 2ª consulta só se faltou e-mail
+        # 2ª consulta só se faltou e-mail. Falha aqui não descarta o que a 1ª
+        # consulta já achou — marca partial e segue com os dados que temos.
         if not out["email"]:
-            html2 = await _serp(client, f'"{name}" {city} email contato')
-            out["email"] = _first_email(html2)
+            try:
+                html2 = await _serp(client, f'"{name}" {city} email contato')
+                out["email"] = _first_email(html2)
+            except httpx.HTTPError:
+                out["partial"] = True
 
     found = sum(1 for k in ("email", "instagram", "facebook", "linkedin") if out[k])
     out["confidence"] = round(min(1.0, 0.55 + 0.15 * found), 2) if found else 0.0

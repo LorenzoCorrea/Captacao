@@ -74,7 +74,9 @@ function buildQuery({ tags, niche, lat, lng, radiusKm }) {
     const safe = niche.replace(/["\\]/g, ' ').trim();
     body = `nwr["name"~"${safe}",i](around:${R},${center});`;
   }
-  return `[out:json][timeout:25];(${body});out center 150;`;
+  // timeout do servidor alinhado ao do cliente (PER_MIRROR_MS) — não adianta
+  // o Overpass continuar processando depois que já desistimos da resposta.
+  return `[out:json][timeout:15];(${body});out center 150;`;
 }
 
 // node:https com `agent: false` (socket novo a cada chamada) + `family: 4`.
@@ -123,11 +125,20 @@ function overpassPost(url, query, timeoutMs) {
   });
 }
 
+// Orçamento TOTAL de 40s para a busca: sem ele, 4 mirrors lentos em série
+// custariam até 100s com o usuário olhando "Buscando…". Cada mirror recebe no
+// máximo 15s (ou o que sobrar do orçamento).
+const SEARCH_BUDGET_MS = 40000;
+const PER_MIRROR_MS = 15000;
+
 async function fetchOverpass(query) {
+  const deadline = Date.now() + SEARCH_BUDGET_MS;
   let lastErr;
   for (const url of ENDPOINTS) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 1000) break; // orçamento esgotado
     try {
-      return await overpassPost(url, query, 25000);
+      return await overpassPost(url, query, Math.min(PER_MIRROR_MS, remaining));
     } catch (e) {
       lastErr = e; // tenta o próximo endpoint
     }
@@ -174,6 +185,12 @@ function mapElement(el) {
 // 2 slots por IP). Mantém o app rápido e dentro da etiqueta do serviço gratuito.
 const cache = new Map();
 const CACHE_TTL_MS = 10 * 60 * 1000;
+// Poda periódica: sem ela, entradas expiradas nunca saem do Map e a memória
+// cresce sem limite num servidor que roda 24/7.
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of cache) if (now - v.ts > CACHE_TTL_MS) cache.delete(k);
+}, CACHE_TTL_MS).unref();
 
 export async function buscarEstabelecimentos({ niche, city, lat, lng, radiusKm }) {
   const cacheKey = `${normalize(niche)}|${lat.toFixed(3)}|${lng.toFixed(3)}|${radiusKm}`;
