@@ -139,7 +139,7 @@ cp .env.example .env       # edite com a DATABASE_URL real
 docker compose up -d --build
 ```
 
-Pronto. Acesse pelo IP do Zima na Tailscale (ex.: `http://100.x.y.z`). O nginx escuta na **80** — não precisa de porta no URL.
+Pronto. Acesse pelo IP do Zima na Tailscale (algo como `http://100.x.y.z` — veja o seu em [tailscale.com/admin/machines](https://login.tailscale.com/admin/machines)). O nginx escuta na **80** — não precisa de porta no URL.
 
 ### Compartilhar com o sócio
 
@@ -188,10 +188,7 @@ A combinação é gratuita, autônoma (zero dependência de nuvem) e acessível 
 
 **2. Instale o Tailscale** no ZimaOS e em cada PC que vai acessar. Anote o IP do Zima na rede privada (algo como `100.74.x.x`) em [tailscale.com/admin/machines](https://login.tailscale.com/admin/machines).
 
-**3. (Opcional) Crie um banco dedicado** se ainda não fez via `POSTGRES_DB`. Conecte no Postgres como superuser e rode:
-```sql
-CREATE DATABASE captacao OWNER lorenzo;
-```
+**3. Banco dedicado: automático.** Não importa qual `POSTGRES_DB` o container foi criado — se o banco da sua `DATABASE_URL` (ex.: `captacao`) não existir, **a API cria ele sozinha no primeiro boot**, junto com as tabelas. Nenhum SQL manual.
 
 **4. Configure o `.env`** no seu PC, dentro de `server/`:
 ```bash

@@ -6,7 +6,8 @@
 //   - nada de autocomplete por tecla  (o front faz debounce de 450ms)
 import https from 'node:https';
 
-const UA = 'CaptacaoLeadApp/0.1 (prospeccao B2B; contato-no-repositorio)';
+// Contato exigido pela política do Nominatim: URL do repo (ou OSM_CONTACT no .env).
+const UA = `CaptacaoLeadApp/0.1 (${process.env.OSM_CONTACT || '+https://github.com/LorenzoCorrea/Captacao'})`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const normalize = (s) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
 
@@ -27,6 +28,11 @@ function rateLimited(fn) {
 // ── Cache (cidades não se movem) ──
 const cache = new Map();
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+// Poda periódica pra memória não crescer sem limite num servidor 24/7.
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of cache) if (now - v.ts > CACHE_TTL_MS) cache.delete(k);
+}, 60 * 60 * 1000).unref();
 
 function nominatimGet(q) {
   return new Promise((resolve, reject) => {
