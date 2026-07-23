@@ -1,6 +1,6 @@
 import { waLink } from '../lib/whatsapp.js';
 import { mailtoLink } from '../lib/email.js';
-import { igHandle, igUrl } from '../lib/instagram.js';
+import { igHandle, igUrl, fmtSeguidores } from '../lib/instagram.js';
 import { leadScore, scoreTier } from '../lib/score.js';
 
 const stop = (ev) => ev.stopPropagation();
@@ -92,6 +92,7 @@ export default function LeadCard({ lead, selected, onSelect, onOpenDetails, sear
             {e.instagram && (
               <a className="chip chip--ok" href={e.instagram} target="_blank" rel="noreferrer" onClick={stop}>
                 📷 {ig ? `@${ig}` : 'Instagram'}
+                {fmtSeguidores(e.igFollowers) ? ` · ${fmtSeguidores(e.igFollowers)}` : ''}
               </a>
             )}
             {e.facebook && (

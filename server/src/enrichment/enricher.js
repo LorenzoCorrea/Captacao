@@ -315,9 +315,11 @@ function mockEnrichment(lead) {
   const slug = lead.name.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]+/g, '');
   const socios = ['Maria Oliveira', 'João Pereira', 'Ana Souza', 'Carlos Lima'];
   const temCnpj = Math.random() < 0.5;
+  const instagram = Math.random() < 0.8 ? `https://instagram.com/${slug}` : null;
   return {
     email: Math.random() < 0.6 ? `contato@${slug}.com.br` : null,
-    instagram: Math.random() < 0.8 ? `https://instagram.com/${slug}` : null,
+    instagram,
+    igFollowers: instagram && Math.random() < 0.7 ? Math.floor(80 + Math.random() * 20000) : null,
     facebook: Math.random() < 0.4 ? `https://facebook.com/${slug}` : null,
     linkedin: null,
     whatsapp: lead.phone,

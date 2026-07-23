@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { igHandle } from '../lib/instagram.js';
+import { igHandle, fmtSeguidores } from '../lib/instagram.js';
 
 // Detalhes/CRM de um lead: anotações, data de retorno (follow-up), tags, valor
 // estimado e timeline de interações. Salva via PATCH (persiste no banco).
@@ -74,6 +74,7 @@ export default function LeadDetails({ lead, searchId, onSave, onClose }) {
             {lead.enrichment?.instagram && (
               <a className="crm-chip" href={lead.enrichment.instagram} target="_blank" rel="noreferrer">
                 📷 {igHandle(lead.enrichment.instagram) ? `@${igHandle(lead.enrichment.instagram)}` : 'Instagram'}
+                {fmtSeguidores(lead.enrichment.igFollowers) ? ` · ${fmtSeguidores(lead.enrichment.igFollowers)} seguidores` : ''}
               </a>
             )}
             {lead.enrichment?.email && <a className="crm-chip" href={`mailto:${lead.enrichment.email}`}>✉️ {lead.enrichment.email}</a>}

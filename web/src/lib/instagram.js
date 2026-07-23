@@ -20,3 +20,11 @@ export function igHandle(url) {
 }
 
 export const igUrl = (handle) => `https://instagram.com/${handle}`;
+
+// 1234 -> "1,2 mil" · 2500000 -> "2,5 M" · null -> null
+export function fmtSeguidores(n) {
+  if (n == null) return null;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace('.', ',')} M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace('.', ',').replace(',0', '')} mil`;
+  return String(n);
+}

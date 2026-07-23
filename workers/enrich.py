@@ -38,6 +38,8 @@ TIMEOUT_CNPJ = 5.0  # sub-orçamento da etapa de CNPJ (não pode comer os contat
 
 EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
 CNPJ_RE = re.compile(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}")
+# Snippet de perfil do Instagram na SERP: "12.3K Followers, ..." / "12 mil seguidores"
+FOLLOWERS_RE = re.compile(r"([\d.,]+)\s*(mil|k|m)?\s*(?:followers|seguidores)", re.I)
 # Resultados do DDG HTML usam <a class="result__a" href="https://destino-real">.
 # (Em 2024 deixaram de usar o redirect /l/?uddg=, então lemos a href direta.)
 HREF_RE = re.compile(r'href="(https?://[^"]+)"', re.I)
@@ -113,6 +115,28 @@ def _first_social(links: list[str], domain: str, bad: tuple[str, ...]) -> str | 
         low = url.lower()
         if domain in low and not any(b in low for b in bad):
             return url.split("?")[0].rstrip("/")
+    return None
+
+
+# Sinal de atividade no Instagram, SEM request extra: o snippet do resultado
+# na SERP já traz "N Followers/seguidores". Honestidade sobre o limite: nem
+# toda SERP traz o número — quando não traz, fica None (não é zero).
+def _parse_count(num: str, suf: str | None) -> int | None:
+    num = num.strip()
+    try:
+        if suf:  # "12.3K" / "1,2 mil" / "1M"
+            v = float(num.replace(".", "").replace(",", ".")) if "," in num else float(num)
+            return int(v * (1_000_000 if suf.lower() == "m" else 1000))
+        return int(re.sub(r"[.,]", "", num))  # "1.234" / "1,234" / "829"
+    except ValueError:
+        return None
+
+
+def _ig_followers(html: str) -> int | None:
+    for m in FOLLOWERS_RE.finditer(html):
+        n = _parse_count(m.group(1), m.group(2))
+        if n is not None and 0 < n < 50_000_000:  # sanidade
+            return n
     return None
 
 
@@ -193,6 +217,7 @@ def _base(lead: dict, partial: bool = False) -> dict:
         "discoveredWebsite": None,  # site oficial achado na SERP (rebaixa o lead)
         "cnpj": None, "razaoSocial": None, "ownerName": None,
         "companyAge": None, "porte": None, "cnpjActive": None,
+        "igFollowers": None,  # seguidores (do snippet da SERP; None = não veio)
     }
 
 
@@ -207,6 +232,8 @@ async def _enrich(lead: dict) -> dict:
         out["facebook"] = _first_social(links, "facebook.com", ("/sharer", "/tr?", "/events", "/groups"))
         out["linkedin"] = _first_social(links, "linkedin.com", ("/posts/", "/feed/"))
         out["email"] = _first_email(html)
+        if out["instagram"]:
+            out["igFollowers"] = _ig_followers(html)
         # Pega o 1º link que pareça o site OFICIAL do negócio (corrige o falso
         # positivo do OSM, em que a tag `website` não foi preenchida).
         for url in links:
