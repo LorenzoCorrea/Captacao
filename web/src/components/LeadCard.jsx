@@ -7,7 +7,7 @@ const stop = (ev) => ev.stopPropagation();
 const hoje = () => new Date().toISOString().slice(0, 10);
 const fmtMoney = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
-export default function LeadCard({ lead, selected, onSelect, onOpenDetails }) {
+export default function LeadCard({ lead, selected, onSelect, onOpenDetails, searchId }) {
   const e = lead.enrichment;
   const wa = waLink(lead.phone, lead.name, lead.niche);
   const mail = mailtoLink(e?.email, lead.name, lead.niche);
@@ -66,6 +66,12 @@ export default function LeadCard({ lead, selected, onSelect, onOpenDetails }) {
           <a className="mail-btn" href={mail} onClick={stop}>✉️ E-mail</a>
         )}
         <button type="button" className="details-btn" onClick={(ev) => { stop(ev); onOpenDetails?.(lead.id); }}>📝 Detalhes</button>
+        {searchId && (
+          // Prévia de site personalizada: mostre ao lead o negócio dele num site pronto
+          <a className="details-btn" href={`/previa/${searchId}/${lead.id}`} target="_blank" rel="noreferrer" onClick={stop}>
+            🖥️ Prévia
+          </a>
+        )}
       </div>
 
       <footer className="contacts">

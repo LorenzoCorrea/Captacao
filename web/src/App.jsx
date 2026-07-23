@@ -262,7 +262,7 @@ export default function App() {
             </>
           )}
         </header>
-        <LeadList leads={visibleLeads} selectedId={selectedId} onSelect={selectLead} onOpenDetails={setDetailId} loading={loading} />
+        <LeadList leads={visibleLeads} selectedId={selectedId} onSelect={selectLead} onOpenDetails={setDetailId} loading={loading} searchId={search?.searchId} />
       </aside>
 
       <main className="map-wrap">

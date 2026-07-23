@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import LeadCard from './LeadCard.jsx';
 
-export default function LeadList({ leads, selectedId, onSelect, onOpenDetails, loading }) {
+export default function LeadList({ leads, selectedId, onSelect, onOpenDetails, loading, searchId }) {
   const refs = useRef({});
 
   // Clicou no pino do mapa → o card correspondente rola até ficar visível
@@ -16,7 +16,7 @@ export default function LeadList({ leads, selectedId, onSelect, onOpenDetails, l
     <div className="lead-list">
       {leads.map((lead) => (
         <div key={lead.id} ref={(el) => (refs.current[lead.id] = el)}>
-          <LeadCard lead={lead} selected={lead.id === selectedId} onSelect={onSelect} onOpenDetails={onOpenDetails} />
+          <LeadCard lead={lead} selected={lead.id === selectedId} onSelect={onSelect} onOpenDetails={onOpenDetails} searchId={searchId} />
         </div>
       ))}
     </div>

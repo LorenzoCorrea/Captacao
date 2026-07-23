@@ -6,6 +6,7 @@ import { gerarEstabelecimentos } from '../data/mockPlaces.js';
 import { geocodeCidade } from '../data/geocode.js';
 import { createSearch, attachStream, prioritizeLead, getSearchLeads, updateLead, reopenSearch } from '../enrichment/enricher.js';
 import { toCSV, toXLSX } from '../export/exporter.js';
+import { previewHtml } from '../preview/preview.js';
 import { listSearches, statsConversao, dbEnabled } from '../db.js';
 
 const router = Router();
@@ -177,6 +178,16 @@ router.post('/api/search/:searchId/webhook', async (req, res) => {
     console.error('Webhook falhou:', e);
     res.status(502).json({ error: 'Não consegui entregar ao webhook (URL inacessível ou lenta).' });
   }
+});
+
+// ─── Prévia de site do lead (HTML standalone) ───────────────────────────────
+// O "fechador": o lead vê o próprio negócio num site pronto. SELLER_WHATSAPP
+// (opcional, no .env) liga o botão "Quero meu site" da faixa de venda.
+router.get('/previa/:searchId/:leadId', async (req, res) => {
+  const data = await getSearchLeads(req.params.searchId);
+  const lead = data?.leads.find((l) => l.id === req.params.leadId);
+  if (!lead) return res.status(404).send('<h1>Prévia não encontrada</h1><p>Busca expirada ou lead inexistente.</p>');
+  res.type('html').send(previewHtml({ ...lead, niche: lead.niche || data.niche }, { sellerWhats: process.env.SELLER_WHATSAPP }));
 });
 
 // Histórico de buscas persistidas (lista vazia se o banco estiver desligado).
