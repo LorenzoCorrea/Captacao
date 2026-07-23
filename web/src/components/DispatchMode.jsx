@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { waLink, montarMensagem } from '../lib/whatsapp.js';
+import { waLink, montarMensagem, variantOf } from '../lib/whatsapp.js';
 import { igHandle, igUrl } from '../lib/instagram.js';
 
 // "Modo disparo" — abordagem em sequência, com humano no loop (respeita as
@@ -15,8 +15,9 @@ export default function DispatchMode({ leads, onContacted, onClose }) {
   const done = i >= fila.length;
   const lead = fila[i];
   const dono = lead?.enrichment?.ownerName;
-  const wa = lead ? waLink(lead.phone, lead.name, lead.niche, dono) : null;
+  const wa = lead ? waLink(lead.phone, lead.name, lead.niche, dono, lead.id) : null;
   const ig = lead ? igHandle(lead.enrichment?.instagram) : null;
+  const variante = lead ? variantOf(lead.id) : 'A';
 
   function avancar(canal) {
     onContacted?.(lead.id, canal);
@@ -33,7 +34,7 @@ export default function DispatchMode({ leads, onContacted, onClose }) {
     // Clipboard pode falhar (permissão/contexto http) — o preview na tela
     // continua disponível pra copiar na mão, então seguimos mesmo assim.
     try {
-      await navigator.clipboard.writeText(montarMensagem(lead.name, lead.niche, undefined, dono));
+      await navigator.clipboard.writeText(montarMensagem(lead.name, lead.niche, undefined, dono, lead.id));
       setCopiado(true);
     } catch { /* usuário copia do preview */ }
     window.open(igUrl(ig), '_blank', 'noopener');
@@ -65,8 +66,8 @@ export default function DispatchMode({ leads, onContacted, onClose }) {
               {ig && <p className="muted">📷 @{ig}</p>}
             </div>
             <div className="preview">
-              <span>Mensagem que será {wa ? 'aberta' : 'copiada'}:</span>
-              <pre>{montarMensagem(lead.name, lead.niche, undefined, dono)}</pre>
+              <span>Mensagem que será {wa ? 'aberta' : 'copiada'} {variante === 'B' ? '· variante B' : ''}</span>
+              <pre>{montarMensagem(lead.name, lead.niche, undefined, dono, lead.id)}</pre>
             </div>
             <p className="dispatch-hint">
               {wa ? (

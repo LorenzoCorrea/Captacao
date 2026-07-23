@@ -64,7 +64,7 @@ export default function TodayPanel({ leads, searchId, onPatch }) {
   const concluir = (item) => patch(item, { followUpAt: null });
 
   function Item({ item, sub, children }) {
-    const wa = waLink(item.phone, item.name, item.niche ?? item.searchNiche, item.enrichment?.ownerName);
+    const wa = waLink(item.phone, item.name, item.niche ?? item.searchNiche, item.enrichment?.ownerName, item.id);
     const ig = igHandle(item.enrichment?.instagram);
     return (
       <li className="today-item">

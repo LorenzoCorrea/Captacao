@@ -9,7 +9,7 @@ const fmtMoney = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency:
 
 export default function LeadCard({ lead, selected, onSelect, onOpenDetails, searchId }) {
   const e = lead.enrichment;
-  const wa = waLink(lead.phone, lead.name, lead.niche, e?.ownerName);
+  const wa = waLink(lead.phone, lead.name, lead.niche, e?.ownerName, lead.id);
   const mail = mailtoLink(e?.email, lead.name, lead.niche);
   const ig = igHandle(e?.instagram);
   const score = leadScore(lead);

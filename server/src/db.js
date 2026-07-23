@@ -59,6 +59,7 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS follow_up_at text;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS tags text[] DEFAULT '{}';
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS estimated_value numeric;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS interactions jsonb DEFAULT '[]';
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS msg_variant text;
 `;
 
 // O container do Postgres pode ter sido criado com outro POSTGRES_DB (ex.:
@@ -168,7 +169,7 @@ export async function saveStage(searchId, leadId, stage) {
 // Atualiza os campos editáveis do lead (CRM): stage, notas, follow-up, tags, valor.
 export async function saveLeadFields(searchId, leadId, fields = {}) {
   if (!pool) return;
-  const map = { stage: 'stage', notes: 'notes', followUpAt: 'follow_up_at', tags: 'tags', estimatedValue: 'estimated_value', interactions: 'interactions' };
+  const map = { stage: 'stage', notes: 'notes', followUpAt: 'follow_up_at', tags: 'tags', estimatedValue: 'estimated_value', interactions: 'interactions', msgVariant: 'msg_variant' };
   const sets = []; const vals = []; let i = 1;
   for (const [k, col] of Object.entries(map)) {
     if (fields[k] !== undefined) { sets.push(`${col}=$${i++}`); vals.push(fields[k]); }
@@ -189,6 +190,7 @@ function rowToLead(r) {
     notes: r.notes ?? '', followUpAt: r.follow_up_at ?? null,
     tags: r.tags ?? [], estimatedValue: r.estimated_value != null ? Number(r.estimated_value) : null,
     interactions: r.interactions ?? [],
+    msgVariant: r.msg_variant ?? null,
   };
 }
 
@@ -237,7 +239,13 @@ export async function statsConversao() {
        FROM leads l JOIN searches s ON s.id = l.search_id
        GROUP BY s.city ORDER BY ganho DESC, total DESC LIMIT 20`
     );
-    return { geral: geral.rows[0], porNicho: porNicho.rows, porCidade: porCidade.rows };
+    // A/B: conversão por variante de mensagem (só leads que foram abordados)
+    const porVariante = await pool.query(
+      `SELECT ('Mensagem ' || l.msg_variant) AS chave, ${agg}
+       FROM leads l WHERE l.msg_variant IS NOT NULL
+       GROUP BY l.msg_variant ORDER BY l.msg_variant`
+    );
+    return { geral: geral.rows[0], porNicho: porNicho.rows, porCidade: porCidade.rows, porVariante: porVariante.rows };
   } catch (e) { console.error('[db] statsConversao:', e.message); return null; }
 }
 

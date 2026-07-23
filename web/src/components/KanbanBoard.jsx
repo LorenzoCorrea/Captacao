@@ -84,7 +84,7 @@ export default function KanbanBoard({ leads, selectedId, onSelect, onMove, onDis
             </header>
             <div className="kanban-cards">
               {byStage[st.key].map((l) => {
-                const wa = waLink(l.phone, l.name, l.niche, l.enrichment?.ownerName);
+                const wa = waLink(l.phone, l.name, l.niche, l.enrichment?.ownerName, l.id);
                 const contatavel = wa || igHandle(l.enrichment?.instagram); // WhatsApp OU DM do Instagram
                 const score = leadScore(l);
                 const tier = scoreTier(score);

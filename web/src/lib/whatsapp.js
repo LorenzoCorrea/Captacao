@@ -30,6 +30,7 @@ const DEFAULT_BENEFICIO_PADRAO = 'um site profissional poderia ajudar vocês a a
 
 export const DEFAULT_MSG_CONFIG = {
   template: DEFAULT_TEMPLATE,
+  templateB: '', // variante B do teste A/B (vazio = A/B desligado)
   beneficios: DEFAULT_BENEFICIOS,
   beneficioPadrao: DEFAULT_BENEFICIO_PADRAO,
 };
@@ -82,11 +83,23 @@ export function primeiroNome(fullName) {
   return p ? p[0].toUpperCase() + p.slice(1).toLowerCase() : '';
 }
 
+// Teste A/B: com a variante B preenchida, cada lead recebe SEMPRE a mesma
+// variante (hash determinístico do id) — metade A, metade B. O painel de
+// stats mostra qual converte mais.
+export function variantOf(leadId, cfg = loadMsgConfig()) {
+  const c = cfg ?? loadMsgConfig();
+  if (!c.templateB?.trim()) return 'A';
+  let h = 0;
+  for (const ch of String(leadId ?? '')) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h % 2 === 0 ? 'A' : 'B';
+}
+
 // Monta a mensagem final aplicando a config (personalizada ou padrão).
 // {dono} vira o primeiro nome do sócio (via CNPJ); sem sócio, cai no nome do negócio.
-export function montarMensagem(nome, niche, cfg = loadMsgConfig(), dono = '') {
+export function montarMensagem(nome, niche, cfg = loadMsgConfig(), dono = '', leadId = '') {
   const c = cfg ?? loadMsgConfig();
-  return (c.template || DEFAULT_TEMPLATE)
+  const tpl = variantOf(leadId, c) === 'B' ? c.templateB : (c.template || DEFAULT_TEMPLATE);
+  return tpl
     .replaceAll('{nome}', nome ?? '')
     .replaceAll('{dono}', primeiroNome(dono) || nome || '')
     .replaceAll('{beneficio}', beneficio(niche, c));
@@ -101,8 +114,8 @@ export function normalizePhoneBR(phone) {
   return '55' + d;
 }
 
-export function waLink(phone, nome, niche, dono = '') {
+export function waLink(phone, nome, niche, dono = '', leadId = '') {
   const d = normalizePhoneBR(phone);
   if (!d) return null;
-  return `https://wa.me/${d}?text=${encodeURIComponent(montarMensagem(nome, niche, undefined, dono))}`;
+  return `https://wa.me/${d}?text=${encodeURIComponent(montarMensagem(nome, niche, undefined, dono, leadId))}`;
 }

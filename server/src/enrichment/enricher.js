@@ -109,6 +109,10 @@ export async function updateLead(searchId, leadId, patch = {}) {
     const v = patch.estimatedValue === null || patch.estimatedValue === '' ? null : Number(patch.estimatedValue);
     lead.estimatedValue = Number.isFinite(v) ? v : null; fields.estimatedValue = lead.estimatedValue;
   }
+  if (patch.msgVariant !== undefined) {
+    if (patch.msgVariant !== null && !['A', 'B'].includes(patch.msgVariant)) return false;
+    lead.msgVariant = patch.msgVariant; fields.msgVariant = patch.msgVariant;
+  }
   if (patch.interactions !== undefined) {
     // Timeline: [{at, type, note?}]. Cap de 200 entradas; stringify porque o
     // node-pg converte array JS em array Postgres (não jsonb) se passar cru.

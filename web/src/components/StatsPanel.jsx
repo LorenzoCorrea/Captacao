@@ -74,6 +74,7 @@ export default function StatsPanel() {
       </div>
       <Tabela titulo="Por nicho" linhas={data.porNicho} />
       <Tabela titulo="Por cidade" linhas={data.porCidade} />
+      <Tabela titulo="Teste A/B de mensagem (leads abordados)" linhas={data.porVariante} />
     </div>
   );
 }

@@ -11,6 +11,7 @@ import HistoryPanel from './components/HistoryPanel.jsx';
 import TodayPanel from './components/TodayPanel.jsx';
 import { leadScore } from './lib/score.js';
 import { igHandle } from './lib/instagram.js';
+import { variantOf } from './lib/whatsapp.js';
 import { useEnrichmentStream } from './hooks/useEnrichmentStream.js';
 
 const CENTRO_PADRAO = [-30.0427211, -51.1626625]; // Porto Alegre (bairro Bom Jesus)
@@ -154,6 +155,7 @@ export default function App() {
       const l = leads.find((x) => x.id === leadId);
       const patch = {
         stage: 'contatado',
+        msgVariant: variantOf(leadId), // registra a variante A/B usada — alimenta o painel
         interactions: [...(l?.interactions ?? []), { at: new Date().toISOString(), type: 'msg', note: canal }],
       };
       const hj = new Date().toISOString().slice(0, 10);
