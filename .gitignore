@@ -8,3 +8,4 @@ __pycache__/
 
 # Local, específico da máquina
 .claude/settings.local.json
+update.log
