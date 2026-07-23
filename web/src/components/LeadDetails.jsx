@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { igHandle } from '../lib/instagram.js';
 
 // Detalhes/CRM de um lead: anotações, data de retorno (follow-up), tags e valor
 // estimado. Salva via PATCH (que persiste no banco quando configurado).
@@ -35,6 +36,15 @@ export default function LeadDetails({ lead, onSave, onClose }) {
           <button type="button" className="modal-x" onClick={onClose} aria-label="Fechar">×</button>
         </header>
         <div className="modal-body">
+          <div className="lead-contacts">
+            {lead.phone && <span className="crm-chip">📞 {lead.phone}</span>}
+            {lead.enrichment?.instagram && (
+              <a className="crm-chip" href={lead.enrichment.instagram} target="_blank" rel="noreferrer">
+                📷 {igHandle(lead.enrichment.instagram) ? `@${igHandle(lead.enrichment.instagram)}` : 'Instagram'}
+              </a>
+            )}
+            {lead.enrichment?.email && <a className="crm-chip" href={`mailto:${lead.enrichment.email}`}>✉️ {lead.enrichment.email}</a>}
+          </div>
           <label className="field">
             <span>📝 Anotações</span>
             <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ex: liguei dia 12, pediu pra retornar quinta de manhã..." />

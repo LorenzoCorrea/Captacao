@@ -1,5 +1,6 @@
 import { waLink } from '../lib/whatsapp.js';
 import { mailtoLink } from '../lib/email.js';
+import { igHandle, igUrl } from '../lib/instagram.js';
 import { leadScore, scoreTier } from '../lib/score.js';
 
 const stop = (ev) => ev.stopPropagation();
@@ -10,6 +11,7 @@ export default function LeadCard({ lead, selected, onSelect, onOpenDetails }) {
   const e = lead.enrichment;
   const wa = waLink(lead.phone, lead.name, lead.niche);
   const mail = mailtoLink(e?.email, lead.name, lead.niche);
+  const ig = igHandle(e?.instagram);
   const score = leadScore(lead);
   const tier = scoreTier(score);
   const alvoIdeal = Boolean(e?.instagram); // sem site (todos são) + Instagram ativo = melhor prospecto
@@ -56,6 +58,10 @@ export default function LeadCard({ lead, selected, onSelect, onOpenDetails }) {
         {wa && (
           <a className="wa-btn wa-btn--sm" href={wa} target="_blank" rel="noreferrer" onClick={stop}>💬 WhatsApp</a>
         )}
+        {!wa && ig && (
+          // Sem WhatsApp mas com Instagram: a DM vira o canal principal de abordagem
+          <a className="ig-btn" href={igUrl(ig)} target="_blank" rel="noreferrer" onClick={stop}>📷 DM @{ig}</a>
+        )}
         {mail && (
           <a className="mail-btn" href={mail} onClick={stop}>✉️ E-mail</a>
         )}
@@ -71,7 +77,9 @@ export default function LeadCard({ lead, selected, onSelect, onOpenDetails }) {
               <a className="chip chip--ok" href={`mailto:${e.email}`} onClick={stop}>✉️ {e.email}</a>
             )}
             {e.instagram && (
-              <a className="chip chip--ok" href={e.instagram} target="_blank" rel="noreferrer" onClick={stop}>📷 Instagram</a>
+              <a className="chip chip--ok" href={e.instagram} target="_blank" rel="noreferrer" onClick={stop}>
+                📷 {ig ? `@${ig}` : 'Instagram'}
+              </a>
             )}
             {e.facebook && (
               <a className="chip" href={e.facebook} target="_blank" rel="noreferrer" onClick={stop}>Facebook</a>

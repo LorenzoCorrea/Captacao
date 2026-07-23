@@ -9,6 +9,7 @@ import DispatchMode from './components/DispatchMode.jsx';
 import LeadDetails from './components/LeadDetails.jsx';
 import HistoryPanel from './components/HistoryPanel.jsx';
 import { leadScore } from './lib/score.js';
+import { igHandle } from './lib/instagram.js';
 import { useEnrichmentStream } from './hooks/useEnrichmentStream.js';
 
 const CENTRO_PADRAO = [-30.0427211, -51.1626625]; // Porto Alegre (bairro Bom Jesus)
@@ -254,7 +255,7 @@ export default function App() {
                     </div>
                   </div>
                   <button type="button" className="dispatch-btn" onClick={() => setDispatchLeads(visibleLeads)}>
-                    🚀 Modo disparo ({visibleLeads.filter((l) => l.phone).length})
+                    🚀 Modo disparo ({visibleLeads.filter((l) => l.phone || igHandle(l.enrichment?.instagram)).length})
                   </button>
                 </>
               )}

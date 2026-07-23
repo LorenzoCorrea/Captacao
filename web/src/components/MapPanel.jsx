@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { waLink } from '../lib/whatsapp.js';
+import { igHandle } from '../lib/instagram.js';
 
 // Pino via divIcon (CSS puro): a cor reflete o status do enriquecimento em
 // tempo real E evita o problema clássico dos assets do ícone padrão do
@@ -65,6 +66,14 @@ function LeadMarker({ lead, selected, onSelect }) {
             <br />
             <a href={wa} target="_blank" rel="noreferrer">
               💬 Chamar no WhatsApp
+            </a>
+          </>
+        )}
+        {lead.enrichment?.instagram && (
+          <>
+            <br />
+            <a href={lead.enrichment.instagram} target="_blank" rel="noreferrer">
+              📷 {igHandle(lead.enrichment.instagram) ? `@${igHandle(lead.enrichment.instagram)}` : 'Instagram'}
             </a>
           </>
         )}

@@ -297,6 +297,19 @@ body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1f
   background: #eaf1fb; color: #1f6feb; border: 1px solid #cfe0fb;
 }
 .mail-btn:hover { background: #1f6feb; color: #fff; }
+/* Botão de DM do Instagram (fallback quando o lead não tem WhatsApp) */
+.ig-btn {
+  display: inline-flex; align-items: center; gap: 5px; text-decoration: none;
+  font-size: 12px; font-weight: 600; border-radius: 8px; padding: 5px 9px;
+  background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+  color: #fff; border: 0; cursor: pointer;
+}
+.ig-btn:hover { filter: brightness(1.08); }
+.kanban-ig { text-decoration: none; color: #57606a; font-size: 11px; }
+.kanban-ig:hover { color: #cc2366; text-decoration: underline; }
+.lead-contacts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.lead-contacts a.crm-chip { text-decoration: none; }
+.lead-contacts a.crm-chip:hover { background: #dfe4ea; }
 .details-btn {
   font-size: 12px; border-radius: 8px; padding: 5px 9px; cursor: pointer;
   background: #fff; color: #57606a; border: 1px solid #d0d7de;
