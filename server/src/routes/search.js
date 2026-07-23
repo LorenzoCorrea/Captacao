@@ -7,6 +7,7 @@ import { geocodeCidade } from '../data/geocode.js';
 import { createSearch, attachStream, prioritizeLead, getSearchLeads, updateLead, reopenSearch } from '../enrichment/enricher.js';
 import { toCSV, toXLSX } from '../export/exporter.js';
 import { previewHtml } from '../preview/preview.js';
+import { propostaPdf } from '../export/proposta.js';
 import { listSearches, statsConversao, todayLeads, dbEnabled } from '../db.js';
 
 const router = Router();
@@ -122,6 +123,16 @@ router.get('/api/search/:searchId/export', async (req, res) => {
     console.error('Falha no export:', e);
     res.status(500).json({ error: 'Falha ao gerar o arquivo.' });
   }
+});
+
+// ─── Proposta comercial em PDF (1 clique, na hora que o lead está quente) ───
+router.get('/api/search/:searchId/leads/:leadId/proposta', async (req, res) => {
+  const data = await getSearchLeads(req.params.searchId);
+  const lead = data?.leads.find((l) => l.id === req.params.leadId);
+  if (!lead) return res.status(404).json({ error: 'Lead não encontrado (busca expirada?).' });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="proposta-${slug(lead.name)}-${new Date().toISOString().slice(0, 10)}.pdf"`);
+  propostaPdf(lead, { niche: lead.niche || data.niche }).pipe(res);
 });
 
 // ─── Webhook: envia os leads (JSON) para um CRM/URL do usuário ──────────────

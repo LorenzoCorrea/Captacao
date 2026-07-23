@@ -337,6 +337,7 @@ export default function App() {
       {detailId && (
         <LeadDetails
           lead={leads.find((l) => l.id === detailId)}
+          searchId={search?.searchId}
           onSave={(patch) => patchLead(detailId, patch)}
           onClose={() => setDetailId(null)}
         />

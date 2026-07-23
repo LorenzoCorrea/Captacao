@@ -18,7 +18,7 @@ const fmtQuando = (iso) => {
   return isNaN(d) ? '' : d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 };
 
-export default function LeadDetails({ lead, onSave, onClose }) {
+export default function LeadDetails({ lead, searchId, onSave, onClose }) {
   const [notes, setNotes] = useState('');
   const [followUpAt, setFollowUpAt] = useState('');
   const [tags, setTags] = useState([]);
@@ -120,6 +120,12 @@ export default function LeadDetails({ lead, onSave, onClose }) {
           </div>
         </div>
         <footer className="modal-foot">
+          {searchId && (
+            // Proposta em PDF na hora: usa o valor estimado salvo (senão "sob consulta")
+            <a className="details-btn" href={`/api/search/${searchId}/leads/${lead.id}/proposta`} download>
+              📄 Proposta (PDF)
+            </a>
+          )}
           <span className="spacer" />
           <button type="button" className="btn-secondary" onClick={onClose}>Cancelar</button>
           <button type="button" className="btn-primary" onClick={salvar}>Salvar</button>
