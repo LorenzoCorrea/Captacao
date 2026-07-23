@@ -239,6 +239,31 @@ export async function statsConversao() {
   } catch (e) { console.error('[db] statsConversao:', e.message); return null; }
 }
 
+// Painel "Hoje": o que precisa de ação AGORA, cruzando TODAS as buscas —
+// follow-ups vencidos + contatados sem resposta há 3+ dias e sem retorno
+// agendado. A venda está no 4º toque; isso aqui é o que impede o lead esfriar.
+export async function todayLeads() {
+  if (!pool) return null;
+  const today = new Date().toISOString().slice(0, 10); // follow_up_at é text YYYY-MM-DD
+  try {
+    const r = await pool.query(
+      `SELECT l.*, s.city AS search_city, s.niche AS search_niche
+       FROM leads l JOIN searches s ON s.id = l.search_id
+       WHERE (l.follow_up_at IS NOT NULL AND l.follow_up_at <= $1 AND l.stage NOT IN ('ganho','descartado'))
+          OR (l.stage = 'contatado' AND l.follow_up_at IS NULL AND l.updated_at < now() - interval '3 days')
+       ORDER BY l.follow_up_at NULLS LAST, l.updated_at ASC
+       LIMIT 100`,
+      [today]
+    );
+    return r.rows.map((row) => ({
+      ...rowToLead(row),
+      searchId: row.search_id,
+      searchCity: row.search_city,
+      searchNiche: row.search_niche,
+    }));
+  } catch (e) { console.error('[db] todayLeads:', e.message); return null; }
+}
+
 // Histórico de buscas (com contagem de leads e enriquecidos).
 export async function listSearches(limit = 50) {
   if (!pool) return [];

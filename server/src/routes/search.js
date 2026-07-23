@@ -7,7 +7,7 @@ import { geocodeCidade } from '../data/geocode.js';
 import { createSearch, attachStream, prioritizeLead, getSearchLeads, updateLead, reopenSearch } from '../enrichment/enricher.js';
 import { toCSV, toXLSX } from '../export/exporter.js';
 import { previewHtml } from '../preview/preview.js';
-import { listSearches, statsConversao, dbEnabled } from '../db.js';
+import { listSearches, statsConversao, todayLeads, dbEnabled } from '../db.js';
 
 const router = Router();
 const slug = (s) =>
@@ -198,6 +198,12 @@ router.get('/api/searches', async (_req, res) => {
 
 // Diz se a persistência está ativa (DATABASE_URL configurada e pool aberto).
 router.get('/api/status', (_req, res) => res.json({ dbEnabled }));
+
+// Painel "Hoje": follow-ups vencidos + contatados parados, de todas as buscas.
+// items = null quando o banco está desligado (o front cai pro modo memória).
+router.get('/api/today', async (_req, res) => {
+  res.json({ dbEnabled, items: await todayLeads() });
+});
 
 // Estatísticas de conversão para o dashboard (null se o banco estiver desligado).
 router.get('/api/stats', async (_req, res) => {
