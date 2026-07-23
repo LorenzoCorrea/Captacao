@@ -169,6 +169,19 @@ docker compose up -d --build
 
 O Docker rebuilda só o que mudou (cache de camadas) e reinicia em segundos.
 
+### Atualização automática (deploy contínuo caseiro)
+
+Para o Zima se atualizar **sozinho** sempre que algo for mesclado no `main` (sem você abrir terminal), agende o script de auto-update no cron — uma vez só:
+
+```bash
+chmod +x scripts/auto-update.sh
+crontab -e
+# adicione a linha (ajuste o caminho do seu clone):
+*/10 * * * * /DATA/Captacao/scripts/auto-update.sh >> /DATA/Captacao/update.log 2>&1
+```
+
+A cada 10 min o script confere o GitHub; se houver commit novo no `main`, faz `reset --hard` + rebuild e registra em `update.log`. Sem commit novo, não faz nada (nem loga). O deploy vira: mesclou no GitHub → em até 10 min está no ar.
+
 ---
 
 ## 🗄️ Persistência com PostgreSQL (opcional, recomendada)
