@@ -8,6 +8,7 @@ const COLUMNS = [
   { header: 'Avaliação', key: 'rating' },
   { header: 'Qtd. avaliações', key: 'reviewsCount' },
   { header: 'E-mail', key: 'email' },
+  { header: 'Instagram @', key: 'instagramHandle' },
   { header: 'Instagram', key: 'instagram' },
   { header: 'Facebook', key: 'facebook' },
   { header: 'LinkedIn', key: 'linkedin' },
@@ -20,6 +21,19 @@ const COLUMNS = [
   { header: 'Longitude', key: 'lng' },
 ];
 
+// Extrai o @ do perfil da URL do Instagram (espelha web/src/lib/instagram.js) —
+// no export o @ facilita a abordagem por DM quando o lead não tem WhatsApp.
+function igHandle(url) {
+  if (!url) return '';
+  try {
+    const seg = new URL(url).pathname.split('/').filter(Boolean)[0] ?? '';
+    const h = seg.replace(/^@/, '').toLowerCase();
+    return /^[a-z0-9._]{1,30}$/.test(h) ? `@${h}` : '';
+  } catch {
+    return '';
+  }
+}
+
 function rowsFromLeads(leads) {
   return leads.map((l) => {
     const e = l.enrichment ?? {};
@@ -30,6 +44,7 @@ function rowsFromLeads(leads) {
       rating: l.rating ?? '',
       reviewsCount: l.reviewsCount ?? '',
       email: e.email ?? '',
+      instagramHandle: igHandle(e.instagram),
       instagram: e.instagram ?? '',
       facebook: e.facebook ?? '',
       linkedin: e.linkedin ?? '',

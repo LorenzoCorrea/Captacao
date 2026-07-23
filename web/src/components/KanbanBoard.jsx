@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { waLink, WA_LIMIT } from '../lib/whatsapp.js';
+import { igHandle } from '../lib/instagram.js';
 import { leadScore, scoreTier } from '../lib/score.js';
 
 // Estágios do funil (espelham o back-end em enricher.js -> STAGES).
@@ -51,7 +52,7 @@ export default function KanbanBoard({ leads, selectedId, onSelect, onMove, onDis
           <strong>{chosen.size}</strong>/{WA_LIMIT} selecionados
         </span>
         <button className="wa-btn" disabled={chosen.size === 0} onClick={sendBulk}>
-          💬 Enviar no WhatsApp ({chosen.size})
+          🚀 Disparar ({chosen.size})
         </button>
         {chosen.size > 0 && (
           <button className="link-btn" onClick={() => setChosen(new Set())}>
@@ -84,6 +85,7 @@ export default function KanbanBoard({ leads, selectedId, onSelect, onMove, onDis
             <div className="kanban-cards">
               {byStage[st.key].map((l) => {
                 const wa = waLink(l.phone, l.name, l.niche);
+                const contatavel = wa || igHandle(l.enrichment?.instagram); // WhatsApp OU DM do Instagram
                 const score = leadScore(l);
                 const tier = scoreTier(score);
                 return (
@@ -94,7 +96,7 @@ export default function KanbanBoard({ leads, selectedId, onSelect, onMove, onDis
                     onDragStart={(e) => e.dataTransfer.setData('text/plain', l.id)}
                     onClick={() => onSelect(l.id)}
                   >
-                    {wa && (
+                    {contatavel && (
                       <input
                         type="checkbox"
                         className="kanban-check"
@@ -110,7 +112,18 @@ export default function KanbanBoard({ leads, selectedId, onSelect, onMove, onDis
                     <div className="kanban-contacts">
                       {l.enrichmentStatus === 'pending' && <span className="dot dot--wait" title="buscando contatos…" />}
                       {l.enrichment?.email && <span title={l.enrichment.email}>✉️</span>}
-                      {l.enrichment?.instagram && <span title="Instagram">📷</span>}
+                      {l.enrichment?.instagram && (
+                        <a
+                          className="kanban-ig"
+                          href={l.enrichment.instagram}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          title="Abrir Instagram"
+                        >
+                          📷{igHandle(l.enrichment.instagram) ? ` @${igHandle(l.enrichment.instagram)}` : ''}
+                        </a>
+                      )}
                       {l.enrichment?.facebook && <span title="Facebook">📘</span>}
                       {l.enrichment?.linkedin && <span title="LinkedIn">🔗</span>}
                       {l.enrichmentStatus === 'not_found' && (
