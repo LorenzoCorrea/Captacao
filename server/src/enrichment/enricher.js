@@ -41,7 +41,7 @@ export function createSearch(leads, meta = {}) {
     niche: niche ?? '',
     query: { niche: niche ?? '', city: city ?? '', lat: meta.lat, lng: meta.lng, radiusKm: meta.radiusKm },
     found: meta.found ?? null,
-    leads: new Map(leads.map((l) => [l.id, { ...l, enrichment: null, enrichmentStatus: 'pending', stage: 'novo', notes: '', followUpAt: null, tags: [], estimatedValue: null }])),
+    leads: new Map(leads.map((l) => [l.id, { ...l, enrichment: null, enrichmentStatus: 'pending', stage: 'novo', notes: '', followUpAt: null, tags: [], estimatedValue: null, interactions: [] }])),
     clients: new Set(),
     queue: [],
     inFlight: new Set(),
@@ -108,6 +108,14 @@ export async function updateLead(searchId, leadId, patch = {}) {
   if (patch.estimatedValue !== undefined) {
     const v = patch.estimatedValue === null || patch.estimatedValue === '' ? null : Number(patch.estimatedValue);
     lead.estimatedValue = Number.isFinite(v) ? v : null; fields.estimatedValue = lead.estimatedValue;
+  }
+  if (patch.interactions !== undefined) {
+    // Timeline: [{at, type, note?}]. Cap de 200 entradas; stringify porque o
+    // node-pg converte array JS em array Postgres (não jsonb) se passar cru.
+    lead.interactions = Array.isArray(patch.interactions)
+      ? patch.interactions.filter((i) => i && typeof i.type === 'string').slice(-200)
+      : [];
+    fields.interactions = JSON.stringify(lead.interactions);
   }
   if (Object.keys(fields).length && db.dbEnabled && s.dbReady) {
     s.dbReady.then(() => db.saveLeadFields(searchId, leadId, fields)).catch(() => {});

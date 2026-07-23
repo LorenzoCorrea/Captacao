@@ -58,6 +58,7 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS notes text;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS follow_up_at text;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS tags text[] DEFAULT '{}';
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS estimated_value numeric;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS interactions jsonb DEFAULT '[]';
 `;
 
 // O container do Postgres pode ter sido criado com outro POSTGRES_DB (ex.:
@@ -167,7 +168,7 @@ export async function saveStage(searchId, leadId, stage) {
 // Atualiza os campos editáveis do lead (CRM): stage, notas, follow-up, tags, valor.
 export async function saveLeadFields(searchId, leadId, fields = {}) {
   if (!pool) return;
-  const map = { stage: 'stage', notes: 'notes', followUpAt: 'follow_up_at', tags: 'tags', estimatedValue: 'estimated_value' };
+  const map = { stage: 'stage', notes: 'notes', followUpAt: 'follow_up_at', tags: 'tags', estimatedValue: 'estimated_value', interactions: 'interactions' };
   const sets = []; const vals = []; let i = 1;
   for (const [k, col] of Object.entries(map)) {
     if (fields[k] !== undefined) { sets.push(`${col}=$${i++}`); vals.push(fields[k]); }
@@ -187,6 +188,7 @@ function rowToLead(r) {
     enrichment: r.enrichment, enrichmentStatus: r.enrichment_status, stage: r.stage,
     notes: r.notes ?? '', followUpAt: r.follow_up_at ?? null,
     tags: r.tags ?? [], estimatedValue: r.estimated_value != null ? Number(r.estimated_value) : null,
+    interactions: r.interactions ?? [],
   };
 }
 

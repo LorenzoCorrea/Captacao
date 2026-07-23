@@ -147,6 +147,26 @@ export default function App() {
     [patchLead, leads]
   );
 
+  // Disparo confirmado: marca contatado + registra a interação na timeline
+  // (canal usado) + cadência D+2, tudo num PATCH só.
+  const registrarContato = useCallback(
+    (leadId, canal = 'whatsapp') => {
+      const l = leads.find((x) => x.id === leadId);
+      const patch = {
+        stage: 'contatado',
+        interactions: [...(l?.interactions ?? []), { at: new Date().toISOString(), type: 'msg', note: canal }],
+      };
+      const hj = new Date().toISOString().slice(0, 10);
+      if (!l?.followUpAt || l.followUpAt <= hj) {
+        const d = new Date();
+        d.setDate(d.getDate() + 2);
+        patch.followUpAt = d.toISOString().slice(0, 10);
+      }
+      patchLead(leadId, patch);
+    },
+    [leads, patchLead]
+  );
+
   // Reabre uma busca salva (do histórico): re-hidrata do banco e popula a tela
   const openSearch = useCallback(async (searchId) => {
     try {
@@ -308,7 +328,7 @@ export default function App() {
       {dispatchLeads && (
         <DispatchMode
           leads={dispatchLeads}
-          onContacted={(id) => moveLead(id, 'contatado')}
+          onContacted={registrarContato}
           onClose={() => setDispatchLeads(null)}
         />
       )}

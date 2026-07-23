@@ -1,15 +1,29 @@
 import { useEffect, useState } from 'react';
 import { igHandle } from '../lib/instagram.js';
 
-// Detalhes/CRM de um lead: anotações, data de retorno (follow-up), tags e valor
-// estimado. Salva via PATCH (que persiste no banco quando configurado).
+// Detalhes/CRM de um lead: anotações, data de retorno (follow-up), tags, valor
+// estimado e timeline de interações. Salva via PATCH (persiste no banco).
 const TAGS_SUGERIDAS = ['interessado', 'sem orçamento', 'follow-up', 'pediu proposta', 'fechou', 'sem interesse'];
+
+// Tipos de interação (timeline): registro rápido de cada toque no lead.
+const INTERACOES = [
+  { type: 'msg', label: '💬 Enviei mensagem' },
+  { type: 'reply', label: '↩️ Respondeu' },
+  { type: 'call', label: '📞 Liguei' },
+  { type: 'proposal', label: '📄 Proposta enviada' },
+];
+const rotulo = (i) => INTERACOES.find((x) => x.type === i.type)?.label ?? `📝 ${i.type}`;
+const fmtQuando = (iso) => {
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+};
 
 export default function LeadDetails({ lead, onSave, onClose }) {
   const [notes, setNotes] = useState('');
   const [followUpAt, setFollowUpAt] = useState('');
   const [tags, setTags] = useState([]);
   const [value, setValue] = useState('');
+  const [interactions, setInteractions] = useState([]);
 
   useEffect(() => {
     if (!lead) return;
@@ -17,11 +31,20 @@ export default function LeadDetails({ lead, onSave, onClose }) {
     setFollowUpAt(lead.followUpAt ?? '');
     setTags(lead.tags ?? []);
     setValue(lead.estimatedValue != null ? String(lead.estimatedValue) : '');
+    setInteractions(lead.interactions ?? []);
   }, [lead]);
 
   if (!lead) return null;
 
   const toggleTag = (t) => setTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+
+  // Registro rápido: salva NA HORA (sem esperar o botão Salvar) — um toque
+  // registrado na timeline nunca se perde por fechar o modal sem salvar.
+  function registrar(type) {
+    const next = [...interactions, { at: new Date().toISOString(), type }];
+    setInteractions(next);
+    onSave({ interactions: next });
+  }
 
   function salvar() {
     onSave({ notes, followUpAt: followUpAt || null, tags, estimatedValue: value === '' ? null : Number(value) });
@@ -76,6 +99,24 @@ export default function LeadDetails({ lead, onSave, onClose }) {
                 <button type="button" key={t} className={`tag-chip ${tags.includes(t) ? 'on' : ''}`} onClick={() => toggleTag(t)}>{t}</button>
               ))}
             </div>
+          </div>
+          <div className="field">
+            <span>📜 Interações <em>(clique para registrar — salva na hora)</em></span>
+            <div className="tag-picker">
+              {INTERACOES.map((i) => (
+                <button type="button" key={i.type} className="tag-chip" onClick={() => registrar(i.type)}>{i.label}</button>
+              ))}
+            </div>
+            {interactions.length > 0 && (
+              <ul className="timeline">
+                {[...interactions].reverse().map((i, idx) => (
+                  <li key={`${i.at}-${idx}`}>
+                    <span className="timeline-when">{fmtQuando(i.at)}</span> {rotulo(i)}
+                    {i.note ? <span className="muted"> · {i.note}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
         <footer className="modal-foot">

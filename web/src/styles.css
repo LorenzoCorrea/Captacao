@@ -323,6 +323,10 @@ body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1f
 .today-actions .wa-btn { margin-top: 0; }
 
 .lead-contacts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+/* Timeline de interações (modal de detalhes) */
+.timeline { list-style: none; margin-top: 8px; display: flex; flex-direction: column; gap: 4px; max-height: 160px; overflow-y: auto; }
+.timeline li { font-size: 13px; color: #333; }
+.timeline-when { color: #8a8f98; font-size: 12px; margin-right: 6px; }
 .lead-contacts a.crm-chip { text-decoration: none; }
 .lead-contacts a.crm-chip:hover { background: #dfe4ea; }
 .details-btn {

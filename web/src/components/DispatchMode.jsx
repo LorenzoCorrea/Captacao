@@ -18,15 +18,15 @@ export default function DispatchMode({ leads, onContacted, onClose }) {
   const wa = lead ? waLink(lead.phone, lead.name, lead.niche, dono) : null;
   const ig = lead ? igHandle(lead.enrichment?.instagram) : null;
 
-  function avancar() {
-    onContacted?.(lead.id);
+  function avancar(canal) {
+    onContacted?.(lead.id, canal);
     setCopiado(false);
     setI((n) => n + 1);
   }
 
   function enviarWhatsApp() {
     if (wa) window.open(wa, '_blank', 'noopener');
-    avancar();
+    avancar('whatsapp');
   }
 
   async function enviarInstagram() {
@@ -37,7 +37,7 @@ export default function DispatchMode({ leads, onContacted, onClose }) {
       setCopiado(true);
     } catch { /* usuário copia do preview */ }
     window.open(igUrl(ig), '_blank', 'noopener');
-    avancar();
+    avancar('instagram');
   }
 
   return (
