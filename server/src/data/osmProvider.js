@@ -51,34 +51,85 @@ const NICHE_GROUPS = [
 
 const normalize = (s) => (s ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 
-function resolveTags(niche) {
+// Nicho especial "todos": varre todas as categorias comerciais do OSM no raio.
+const isAllNiches = (niche) => /^(todos( os nichos)?|todas|geral|tudo)$/.test(normalize(niche).trim());
+
+// Chaves do OSM que marcam estabelecimento comercial (usadas na busca por nome
+// e no nicho "todos"). amenity/leisure/tourism são filtradas por valor porque
+// incluem coisas que não são negócio (banco de praça, estacionamento…).
+const COMMERCIAL_KEYS = ['shop', 'amenity', 'office', 'craft', 'healthcare', 'leisure', 'tourism'];
+const ALL_AMENITY = 'restaurant|fast_food|cafe|bar|pub|ice_cream|dentist|clinic|doctors|veterinary|pharmacy|driving_school|language_school|music_school|events_venue|car_wash|coworking_space';
+const ALL_LEISURE = 'fitness_centre|sports_centre|dance|spa|bowling_alley';
+const ALL_TOURISM = 'hotel|guest_house|hostel';
+
+// Regex tolerante a acento: os radicais dos nichos são sem acento, mas os nomes
+// no OSM têm ("estetic" precisa casar com "Estética"). Duas pegadinhas do
+// Overpass: o regex é POSIX byte-a-byte (classe [á] com UTF-8 multi-byte
+// quebra — por isso alternância com grupos) e o flag `i` não cobre maiúscula
+// acentuada (por isso as duas caixas explícitas).
+const ACCENT = {
+  a: 'a|á|à|â|ã|Á|À|Â|Ã', e: 'e|é|ê|É|Ê', i: 'i|í|Í',
+  o: 'o|ó|ô|õ|Ó|Ô|Õ', u: 'u|ú|û|Ú|Û', c: 'c|ç|Ç',
+};
+const accentRegex = (kw) =>
+  kw.split('').map((ch) => (ACCENT[ch] ? `(${ACCENT[ch]})` : ch)).join('');
+
+// Devolve as tags OSM do nicho E os radicais que casaram (para a busca por nome).
+function resolveNiche(niche) {
   const n = normalize(niche);
   const tags = new Set();
+  const kws = new Set();
   for (const g of NICHE_GROUPS) {
-    if (g.kw.some((k) => n.includes(k))) g.tags.forEach((t) => tags.add(t));
+    for (const k of g.kw) {
+      if (n.includes(k)) {
+        kws.add(k);
+        g.tags.forEach((t) => tags.add(t));
+      }
+    }
   }
-  return [...tags];
+  if (!kws.size) {
+    // Nicho fora do mapa de grupos: usa as próprias palavras digitadas (>=4
+    // letras, até 4 palavras) como radicais de busca por nome.
+    n.replace(/[^a-z0-9 ]/g, ' ').split(/\s+/)
+      .filter((w) => w.length >= 4).slice(0, 4)
+      .forEach((w) => kws.add(w));
+  }
+  return { tags: [...tags], kws: [...kws] };
 }
 
-function buildQuery({ tags, niche, lat, lng, radiusKm }) {
+function buildQuery({ tags, kws, niche, lat, lng, radiusKm }) {
   const R = Math.round(radiusKm * 1000);
-  const center = `${lat},${lng}`;
-  let body;
-  if (tags.length) {
-    body = tags
-      .map((t) => {
-        const [k, v] = t.split('=');
-        return `nwr["${k}"="${v}"](around:${R},${center});`;
-      })
-      .join('');
+  const around = `(around:${R},${lat},${lng})`;
+  const clauses = [];
+
+  if (isAllNiches(niche)) {
+    // "Todos": qualquer estabelecimento com nome nas categorias comerciais.
+    clauses.push(`nwr["shop"]["name"]${around};`);
+    clauses.push(`nwr["office"]["name"]${around};`);
+    clauses.push(`nwr["craft"]["name"]${around};`);
+    clauses.push(`nwr["healthcare"]["name"]${around};`);
+    clauses.push(`nwr["amenity"~"^(${ALL_AMENITY})$"]["name"]${around};`);
+    clauses.push(`nwr["leisure"~"^(${ALL_LEISURE})$"]["name"]${around};`);
+    clauses.push(`nwr["tourism"~"^(${ALL_TOURISM})$"]["name"]${around};`);
   } else {
-    // Nicho desconhecido -> busca por nome (mais ruidosa, mas funciona)
-    const safe = niche.replace(/["\\]/g, ' ').trim();
-    body = `nwr["name"~"${safe}",i](around:${R},${center});`;
+    // Busca por TAG (categoria certa no OSM)…
+    for (const t of tags) {
+      const [k, v] = t.split('=');
+      clauses.push(`nwr["${k}"="${v}"]${around};`);
+    }
+    // …E por NOME (pega os mal-etiquetados, que são muitos no Brasil). A busca
+    // por nome exige alguma chave comercial ou telefone, senão ruas e prédios
+    // com nome parecido entrariam como lead.
+    if (kws.length) {
+      const re = kws.map(accentRegex).join('|');
+      for (const key of COMMERCIAL_KEYS) clauses.push(`nwr["name"~"${re}",i]["${key}"]${around};`);
+      clauses.push(`nwr["name"~"${re}",i]["phone"]${around};`);
+      clauses.push(`nwr["name"~"${re}",i]["contact:phone"]${around};`);
+    }
   }
   // timeout do servidor alinhado ao do cliente (PER_MIRROR_MS) — não adianta
   // o Overpass continuar processando depois que já desistimos da resposta.
-  return `[out:json][timeout:15];(${body});out center 150;`;
+  return `[out:json][timeout:15];(${clauses.join('')});out center 250;`;
 }
 
 // node:https com `agent: false` (socket novo a cada chamada) + `family: 4`.
@@ -199,8 +250,8 @@ export async function buscarEstabelecimentos({ niche, city, lat, lng, radiusKm }
   const hit = cache.get(cacheKey);
   if (hit && Date.now() - hit.ts < CACHE_TTL_MS) return hit.result;
 
-  const tags = resolveTags(niche);
-  const query = buildQuery({ tags, niche, lat, lng, radiusKm });
+  const { tags, kws } = resolveNiche(niche);
+  const query = buildQuery({ tags, kws, niche, lat, lng, radiusKm });
   const elements = await fetchOverpass(query);
 
   const seen = new Set();

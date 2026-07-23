@@ -8,6 +8,7 @@ const DEFAULT_CITY = { label: 'Porto Alegre, Rio Grande do Sul', lat: -30.042721
 // "Outros" libera o input pra digitar livremente. Lista ordenada por bom encaixe
 // no perfil de "negócio físico sem site" + cobertura no OpenStreetMap.
 const NICHE_PRESETS = [
+  { label: '🌐 Todos os nichos', value: 'todos' }, // varre todas as categorias comerciais do OSM
   { label: 'Advocacia', value: 'advocacia' },
   { label: 'Salão de beleza', value: 'salão de beleza' },
   { label: 'Manicure', value: 'manicure' },
