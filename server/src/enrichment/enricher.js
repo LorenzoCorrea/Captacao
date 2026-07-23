@@ -301,6 +301,8 @@ function mockEnrichment(lead) {
     return { email: null, instagram: null, facebook: null, linkedin: null, whatsapp: lead.phone, confidence: 0, partial: false };
   }
   const slug = lead.name.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]+/g, '');
+  const socios = ['Maria Oliveira', 'João Pereira', 'Ana Souza', 'Carlos Lima'];
+  const temCnpj = Math.random() < 0.5;
   return {
     email: Math.random() < 0.6 ? `contato@${slug}.com.br` : null,
     instagram: Math.random() < 0.8 ? `https://instagram.com/${slug}` : null,
@@ -309,5 +311,11 @@ function mockEnrichment(lead) {
     whatsapp: lead.phone,
     confidence: 0.7,
     partial: false,
+    cnpj: temCnpj ? '12345678000190' : null,
+    razaoSocial: temCnpj ? `${lead.name} LTDA` : null,
+    ownerName: temCnpj ? socios[Math.floor(Math.random() * socios.length)] : null,
+    companyAge: temCnpj ? 2 + Math.floor(Math.random() * 12) : null,
+    porte: temCnpj ? 'MICRO EMPRESA' : null,
+    cnpjActive: temCnpj ? true : null,
   };
 }

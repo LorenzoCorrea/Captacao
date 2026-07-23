@@ -14,7 +14,8 @@ export default function DispatchMode({ leads, onContacted, onClose }) {
   const [copiado, setCopiado] = useState(false);
   const done = i >= fila.length;
   const lead = fila[i];
-  const wa = lead ? waLink(lead.phone, lead.name, lead.niche) : null;
+  const dono = lead?.enrichment?.ownerName;
+  const wa = lead ? waLink(lead.phone, lead.name, lead.niche, dono) : null;
   const ig = lead ? igHandle(lead.enrichment?.instagram) : null;
 
   function avancar() {
@@ -32,7 +33,7 @@ export default function DispatchMode({ leads, onContacted, onClose }) {
     // Clipboard pode falhar (permissão/contexto http) — o preview na tela
     // continua disponível pra copiar na mão, então seguimos mesmo assim.
     try {
-      await navigator.clipboard.writeText(montarMensagem(lead.name, lead.niche));
+      await navigator.clipboard.writeText(montarMensagem(lead.name, lead.niche, undefined, dono));
       setCopiado(true);
     } catch { /* usuário copia do preview */ }
     window.open(igUrl(ig), '_blank', 'noopener');
@@ -59,12 +60,13 @@ export default function DispatchMode({ leads, onContacted, onClose }) {
             </div>
             <div className="dispatch-lead">
               <h3>{lead.name}</h3>
+              {dono && <p className="muted">👤 {dono}</p>}
               {lead.phone && <p className="muted">📞 {lead.phone}</p>}
               {ig && <p className="muted">📷 @{ig}</p>}
             </div>
             <div className="preview">
               <span>Mensagem que será {wa ? 'aberta' : 'copiada'}:</span>
-              <pre>{montarMensagem(lead.name, lead.niche)}</pre>
+              <pre>{montarMensagem(lead.name, lead.niche, undefined, dono)}</pre>
             </div>
             <p className="dispatch-hint">
               {wa ? (

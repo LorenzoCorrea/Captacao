@@ -76,11 +76,20 @@ function beneficio(niche, cfg) {
   return (cfg.beneficios.find((b) => b.kw.some((k) => n.includes(k))) || {}).txt || cfg.beneficioPadrao;
 }
 
+// Primeiro nome do sócio (do CNPJ) para abordagem nominal: "GILBERTO DA SILVA" -> "Gilberto"
+export function primeiroNome(fullName) {
+  const p = (fullName ?? '').trim().split(/\s+/)[0] ?? '';
+  return p ? p[0].toUpperCase() + p.slice(1).toLowerCase() : '';
+}
+
 // Monta a mensagem final aplicando a config (personalizada ou padrão).
-export function montarMensagem(nome, niche, cfg = loadMsgConfig()) {
-  return (cfg.template || DEFAULT_TEMPLATE)
+// {dono} vira o primeiro nome do sócio (via CNPJ); sem sócio, cai no nome do negócio.
+export function montarMensagem(nome, niche, cfg = loadMsgConfig(), dono = '') {
+  const c = cfg ?? loadMsgConfig();
+  return (c.template || DEFAULT_TEMPLATE)
     .replaceAll('{nome}', nome ?? '')
-    .replaceAll('{beneficio}', beneficio(niche, cfg));
+    .replaceAll('{dono}', primeiroNome(dono) || nome || '')
+    .replaceAll('{beneficio}', beneficio(niche, c));
 }
 
 // Normaliza telefone BR para o formato do wa.me (DDI 55 + DDD + número, só dígitos).
@@ -92,8 +101,8 @@ export function normalizePhoneBR(phone) {
   return '55' + d;
 }
 
-export function waLink(phone, nome, niche) {
+export function waLink(phone, nome, niche, dono = '') {
   const d = normalizePhoneBR(phone);
   if (!d) return null;
-  return `https://wa.me/${d}?text=${encodeURIComponent(montarMensagem(nome, niche))}`;
+  return `https://wa.me/${d}?text=${encodeURIComponent(montarMensagem(nome, niche, undefined, dono))}`;
 }

@@ -22,7 +22,7 @@ export default function MessageSettings({ open, onClose }) {
   if (!open) return null;
 
   const cfgAtual = { template, beneficios: beneficiosFromText(beneficios), beneficioPadrao: padrao };
-  const preview = montarMensagem('Studio Aurora', 'salão de estética', cfgAtual);
+  const preview = montarMensagem('Studio Aurora', 'salão de estética', cfgAtual, 'Maria Oliveira');
 
   function salvar() {
     saveMsgConfig(cfgAtual);
@@ -44,7 +44,7 @@ export default function MessageSettings({ open, onClose }) {
         </header>
         <div className="modal-body">
           <label className="field">
-            <span>Modelo da mensagem <em>(use {'{nome}'} e {'{beneficio}'})</em></span>
+            <span>Modelo da mensagem <em>(use {'{nome}'}, {'{dono}'} — 1º nome do sócio via CNPJ — e {'{beneficio}'})</em></span>
             <textarea rows={7} value={template} onChange={(e) => setTemplate(e.target.value)} />
           </label>
           <label className="field">

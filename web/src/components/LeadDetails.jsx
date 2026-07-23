@@ -37,6 +37,16 @@ export default function LeadDetails({ lead, onSave, onClose }) {
         </header>
         <div className="modal-body">
           <div className="lead-contacts">
+            {lead.enrichment?.ownerName && (
+              <span className="crm-chip" title={lead.enrichment.razaoSocial ?? ''}>👤 {lead.enrichment.ownerName}</span>
+            )}
+            {lead.enrichment?.cnpj && (
+              <span className="crm-chip">
+                🏢 CNPJ {lead.enrichment.cnpj}
+                {lead.enrichment.companyAge != null && ` · ${lead.enrichment.companyAge} anos`}
+                {lead.enrichment.porte && ` · ${lead.enrichment.porte}`}
+              </span>
+            )}
             {lead.phone && <span className="crm-chip">📞 {lead.phone}</span>}
             {lead.enrichment?.instagram && (
               <a className="crm-chip" href={lead.enrichment.instagram} target="_blank" rel="noreferrer">

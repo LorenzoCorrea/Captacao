@@ -9,7 +9,7 @@ const fmtMoney = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency:
 
 export default function LeadCard({ lead, selected, onSelect, onOpenDetails, searchId }) {
   const e = lead.enrichment;
-  const wa = waLink(lead.phone, lead.name, lead.niche);
+  const wa = waLink(lead.phone, lead.name, lead.niche, e?.ownerName);
   const mail = mailtoLink(e?.email, lead.name, lead.niche);
   const ig = igHandle(e?.instagram);
   const score = leadScore(lead);
@@ -41,6 +41,13 @@ export default function LeadCard({ lead, selected, onSelect, onOpenDetails, sear
       )}
       <p className="muted">{lead.address}</p>
       {lead.phone && <p className="muted">📞 {lead.phone}</p>}
+      {e?.ownerName && (
+        <p className="muted" title={e.razaoSocial ? `Razão social: ${e.razaoSocial}` : undefined}>
+          👤 {e.ownerName}
+          {e.companyAge != null && ` · empresa há ${e.companyAge} ano${e.companyAge === 1 ? '' : 's'}`}
+          {e.cnpjActive === false && ' · ⚠️ CNPJ baixado'}
+        </p>
+      )}
 
       {(lead.followUpAt || lead.estimatedValue != null || (lead.tags && lead.tags.length > 0)) && (
         <div className="crm-summary">
