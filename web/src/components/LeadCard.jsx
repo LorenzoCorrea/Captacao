@@ -1,15 +1,15 @@
 import { waLink } from '../lib/whatsapp.js';
 import { mailtoLink } from '../lib/email.js';
-import { igHandle, igUrl } from '../lib/instagram.js';
+import { igHandle, igUrl, fmtSeguidores } from '../lib/instagram.js';
 import { leadScore, scoreTier } from '../lib/score.js';
 
 const stop = (ev) => ev.stopPropagation();
 const hoje = () => new Date().toISOString().slice(0, 10);
 const fmtMoney = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
-export default function LeadCard({ lead, selected, onSelect, onOpenDetails }) {
+export default function LeadCard({ lead, selected, onSelect, onOpenDetails, searchId }) {
   const e = lead.enrichment;
-  const wa = waLink(lead.phone, lead.name, lead.niche);
+  const wa = waLink(lead.phone, lead.name, lead.niche, e?.ownerName, lead.id);
   const mail = mailtoLink(e?.email, lead.name, lead.niche);
   const ig = igHandle(e?.instagram);
   const score = leadScore(lead);
@@ -41,6 +41,13 @@ export default function LeadCard({ lead, selected, onSelect, onOpenDetails }) {
       )}
       <p className="muted">{lead.address}</p>
       {lead.phone && <p className="muted">📞 {lead.phone}</p>}
+      {e?.ownerName && (
+        <p className="muted" title={e.razaoSocial ? `Razão social: ${e.razaoSocial}` : undefined}>
+          👤 {e.ownerName}
+          {e.companyAge != null && ` · empresa há ${e.companyAge} ano${e.companyAge === 1 ? '' : 's'}`}
+          {e.cnpjActive === false && ' · ⚠️ CNPJ baixado'}
+        </p>
+      )}
 
       {(lead.followUpAt || lead.estimatedValue != null || (lead.tags && lead.tags.length > 0)) && (
         <div className="crm-summary">
@@ -66,6 +73,12 @@ export default function LeadCard({ lead, selected, onSelect, onOpenDetails }) {
           <a className="mail-btn" href={mail} onClick={stop}>✉️ E-mail</a>
         )}
         <button type="button" className="details-btn" onClick={(ev) => { stop(ev); onOpenDetails?.(lead.id); }}>📝 Detalhes</button>
+        {searchId && (
+          // Prévia de site personalizada: mostre ao lead o negócio dele num site pronto
+          <a className="details-btn" href={`/previa/${searchId}/${lead.id}`} target="_blank" rel="noreferrer" onClick={stop}>
+            🖥️ Prévia
+          </a>
+        )}
       </div>
 
       <footer className="contacts">
@@ -79,6 +92,7 @@ export default function LeadCard({ lead, selected, onSelect, onOpenDetails }) {
             {e.instagram && (
               <a className="chip chip--ok" href={e.instagram} target="_blank" rel="noreferrer" onClick={stop}>
                 📷 {ig ? `@${ig}` : 'Instagram'}
+                {fmtSeguidores(e.igFollowers) ? ` · ${fmtSeguidores(e.igFollowers)}` : ''}
               </a>
             )}
             {e.facebook && (

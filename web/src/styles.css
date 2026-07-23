@@ -307,7 +307,26 @@ body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1f
 .ig-btn:hover { filter: brightness(1.08); }
 .kanban-ig { text-decoration: none; color: #57606a; font-size: 11px; }
 .kanban-ig:hover { color: #cc2366; text-decoration: underline; }
+/* ── Painel Hoje ── */
+.today-wrap { height: 100%; overflow-y: auto; padding: 20px 24px; background: #f6f7f9; }
+.today-wrap h2 { margin-bottom: 12px; }
+.today-wrap section { margin-bottom: 22px; }
+.today-wrap h3 { font-size: 15px; margin-bottom: 8px; color: #333; }
+.today-wrap ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.today-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: #fff; border: 1px solid #e2e5e9; border-radius: 10px; padding: 10px 14px;
+}
+.today-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.today-info .muted { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.today-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.today-actions .wa-btn { margin-top: 0; }
+
 .lead-contacts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+/* Timeline de interações (modal de detalhes) */
+.timeline { list-style: none; margin-top: 8px; display: flex; flex-direction: column; gap: 4px; max-height: 160px; overflow-y: auto; }
+.timeline li { font-size: 13px; color: #333; }
+.timeline-when { color: #8a8f98; font-size: 12px; margin-right: 6px; }
 .lead-contacts a.crm-chip { text-decoration: none; }
 .lead-contacts a.crm-chip:hover { background: #dfe4ea; }
 .details-btn {

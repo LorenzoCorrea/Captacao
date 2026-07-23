@@ -20,6 +20,8 @@ import asyncio
 import json
 import re
 import sys
+import unicodedata
+from datetime import date
 from html import unescape
 
 import httpx
@@ -30,9 +32,14 @@ UA = {
     "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
 }
 DDG = "https://html.duckduckgo.com/html/"
-TIMEOUT_LEAD = 9.0  # orçamento total por lead, em segundos
+BRASILAPI_CNPJ = "https://brasilapi.com.br/api/cnpj/v1/"
+TIMEOUT_LEAD = 14.0  # orçamento total por lead, em segundos
+TIMEOUT_CNPJ = 5.0  # sub-orçamento da etapa de CNPJ (não pode comer os contatos)
 
 EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+CNPJ_RE = re.compile(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}")
+# Snippet de perfil do Instagram na SERP: "12.3K Followers, ..." / "12 mil seguidores"
+FOLLOWERS_RE = re.compile(r"([\d.,]+)\s*(mil|k|m)?\s*(?:followers|seguidores)", re.I)
 # Resultados do DDG HTML usam <a class="result__a" href="https://destino-real">.
 # (Em 2024 deixaram de usar o redirect /l/?uddg=, então lemos a href direta.)
 HREF_RE = re.compile(r'href="(https?://[^"]+)"', re.I)
@@ -111,12 +118,86 @@ def _first_social(links: list[str], domain: str, bad: tuple[str, ...]) -> str | 
     return None
 
 
+# Sinal de atividade no Instagram, SEM request extra: o snippet do resultado
+# na SERP já traz "N Followers/seguidores". Honestidade sobre o limite: nem
+# toda SERP traz o número — quando não traz, fica None (não é zero).
+def _parse_count(num: str, suf: str | None) -> int | None:
+    num = num.strip()
+    try:
+        if suf:  # "12.3K" / "1,2 mil" / "1M"
+            v = float(num.replace(".", "").replace(",", ".")) if "," in num else float(num)
+            return int(v * (1_000_000 if suf.lower() == "m" else 1000))
+        return int(re.sub(r"[.,]", "", num))  # "1.234" / "1,234" / "829"
+    except ValueError:
+        return None
+
+
+def _ig_followers(html: str) -> int | None:
+    for m in FOLLOWERS_RE.finditer(html):
+        n = _parse_count(m.group(1), m.group(2))
+        if n is not None and 0 < n < 50_000_000:  # sanidade
+            return n
+    return None
+
+
 def _first_email(html: str) -> str | None:
     for e in EMAIL_RE.findall(html):
         low = e.lower()
         if not low.endswith(EMAIL_BLOCK) and not any(b in low for b in DOMAIN_BLOCK):
             return e
     return None
+
+
+# ── Enriquecimento por CNPJ (BrasilAPI, dados públicos da Receita) ──────────
+# Acha o CNPJ na SERP ("nome cidade CNPJ" aparece em cnpj.biz/econodata etc.),
+# consulta a BrasilAPI e devolve: sócio-administrador (abordagem nominal ao
+# DONO converte mais), idade da empresa, porte e situação cadastral.
+
+def _norm_txt(s: str) -> str:
+    s = unicodedata.normalize("NFD", (s or "").lower())
+    return "".join(c for c in s if not unicodedata.combining(c))
+
+
+def _same_business(lead_name: str, razao: str) -> bool:
+    """Só aceita o CNPJ se razão social/fantasia compartilhar um token (>=4
+    letras) com o nome do lead — evita casar com empresa homônima errada."""
+    tok = lambda s: {t for t in re.sub(r"[^a-z0-9 ]", " ", _norm_txt(s)).split() if len(t) >= 4}
+    return bool(tok(lead_name) & tok(razao))
+
+
+async def _cnpj_lookup(client: httpx.AsyncClient, name: str, city: str, out: dict) -> None:
+    html = await _serp(client, f'"{name}" {city} CNPJ')
+    tried = set()
+    for m in CNPJ_RE.finditer(html):
+        digits = re.sub(r"\D", "", m.group(0))
+        if len(digits) != 14 or digits in tried:
+            continue
+        tried.add(digits)
+        if len(tried) > 3:  # no máx. 3 candidatos — tempo limitado
+            break
+        r = await client.get(BRASILAPI_CNPJ + digits, headers=UA)
+        if r.status_code != 200:
+            continue
+        data = r.json()
+        razao = f"{data.get('razao_social') or ''} {data.get('nome_fantasia') or ''}"
+        if not _same_business(name, razao):
+            continue  # CNPJ de outra empresa que apareceu na mesma página
+        qsa = data.get("qsa") or []
+        socio = next((s.get("nome_socio") for s in qsa if s.get("nome_socio")), None)
+        opened = data.get("data_inicio_atividade") or ""
+        try:
+            age = max(0, date.today().year - int(opened[:4]))
+        except (ValueError, TypeError):
+            age = None
+        out.update({
+            "cnpj": digits,
+            "razaoSocial": data.get("razao_social"),
+            "ownerName": socio.title() if socio else None,
+            "companyAge": age,
+            "porte": data.get("porte") or data.get("descricao_porte"),
+            "cnpjActive": (data.get("descricao_situacao_cadastral") or "").upper() == "ATIVA",
+        })
+        return
 
 
 async def _serp(client: httpx.AsyncClient, query: str) -> str:
@@ -127,13 +208,22 @@ async def _serp(client: httpx.AsyncClient, query: str) -> str:
     return r.text
 
 
+def _base(lead: dict, partial: bool = False) -> dict:
+    """Esqueleto do resultado — ÚNICA fonte das chaves (evita drift entre o
+    caminho feliz e os fallbacks de erro/timeout)."""
+    return {
+        "email": None, "instagram": None, "facebook": None, "linkedin": None,
+        "whatsapp": lead.get("phone") or None, "confidence": 0.0, "partial": partial,
+        "discoveredWebsite": None,  # site oficial achado na SERP (rebaixa o lead)
+        "cnpj": None, "razaoSocial": None, "ownerName": None,
+        "companyAge": None, "porte": None, "cnpjActive": None,
+        "igFollowers": None,  # seguidores (do snippet da SERP; None = não veio)
+    }
+
+
 async def _enrich(lead: dict) -> dict:
     name, city = lead.get("name", ""), lead.get("city", "")
-    out = {
-        "email": None, "instagram": None, "facebook": None, "linkedin": None,
-        "whatsapp": lead.get("phone") or None, "confidence": 0.0, "partial": False,
-        "discoveredWebsite": None,  # site oficial achado na SERP (rebaixa o lead)
-    }
+    out = _base(lead)
     async with httpx.AsyncClient(timeout=6, follow_redirects=True) as client:
         # Caminho quente: 1 consulta, extrai tudo
         html = await _serp(client, f'"{name}" {city}')
@@ -142,6 +232,8 @@ async def _enrich(lead: dict) -> dict:
         out["facebook"] = _first_social(links, "facebook.com", ("/sharer", "/tr?", "/events", "/groups"))
         out["linkedin"] = _first_social(links, "linkedin.com", ("/posts/", "/feed/"))
         out["email"] = _first_email(html)
+        if out["instagram"]:
+            out["igFollowers"] = _ig_followers(html)
         # Pega o 1º link que pareça o site OFICIAL do negócio (corrige o falso
         # positivo do OSM, em que a tag `website` não foi preenchida).
         for url in links:
@@ -158,6 +250,13 @@ async def _enrich(lead: dict) -> dict:
             except httpx.HTTPError:
                 out["partial"] = True
 
+        # Etapa CNPJ com sub-orçamento próprio: se estourar/falhar, os contatos
+        # já achados acima são preservados.
+        try:
+            await asyncio.wait_for(_cnpj_lookup(client, name, city, out), timeout=TIMEOUT_CNPJ)
+        except (asyncio.TimeoutError, httpx.HTTPError, ValueError):
+            pass
+
     found = sum(1 for k in ("email", "instagram", "facebook", "linkedin") if out[k])
     out["confidence"] = round(min(1.0, 0.55 + 0.15 * found), 2) if found else 0.0
     return out
@@ -168,11 +267,7 @@ def enrich_sync(lead: dict) -> dict:
         try:
             return await asyncio.wait_for(_enrich(lead), timeout=TIMEOUT_LEAD)
         except (asyncio.TimeoutError, httpx.HTTPError):
-            return {
-                "email": None, "instagram": None, "facebook": None, "linkedin": None,
-                "whatsapp": lead.get("phone") or None, "confidence": 0.0, "partial": True,
-                "discoveredWebsite": None,
-            }
+            return _base(lead, partial=True)
 
     return asyncio.run(runner())
 
@@ -186,9 +281,7 @@ if __name__ == "__main__":
     try:
         result = enrich_sync(lead)
     except Exception:  # nunca derruba o processo — o Node depende do JSON
-        result = {"email": None, "instagram": None, "facebook": None,
-                  "linkedin": None, "whatsapp": lead.get("phone"), "confidence": 0.0, "partial": True,
-                  "discoveredWebsite": None}
+        result = _base(lead, partial=True)
 
     # ensure_ascii evita qualquer problema de encoding no stdout do Windows
     sys.stdout.write(json.dumps(result, ensure_ascii=True))

@@ -12,6 +12,7 @@ export default defineConfig({
     // O proxy do http-proxy lida com SSE (text/event-stream) sem config extra.
     proxy: {
       '/api': { target: 'http://localhost:3001', changeOrigin: true },
+      '/previa': { target: 'http://localhost:3001', changeOrigin: true }, // prévia de site do lead
     },
   },
 });

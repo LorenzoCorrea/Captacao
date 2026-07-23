@@ -6,6 +6,7 @@ export function leadScore(lead) {
   let s = 0;
   if (lead.phone) s += 30; // dá pra chamar no WhatsApp (canal principal do Lorenzo)
   if (e.instagram) s += 30; // tem Instagram mas não tem site = alvo ideal
+  if (e.igFollowers >= 1000) s += 10; // perfil com audiência = investe em presença digital
   if (e.email) s += 20;
   if (e.facebook) s += 12;
   if (e.linkedin) s += 8;

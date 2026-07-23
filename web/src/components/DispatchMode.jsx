@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { waLink, montarMensagem } from '../lib/whatsapp.js';
+import { waLink, montarMensagem, variantOf } from '../lib/whatsapp.js';
 import { igHandle, igUrl } from '../lib/instagram.js';
 
 // "Modo disparo" — abordagem em sequência, com humano no loop (respeita as
@@ -14,29 +14,31 @@ export default function DispatchMode({ leads, onContacted, onClose }) {
   const [copiado, setCopiado] = useState(false);
   const done = i >= fila.length;
   const lead = fila[i];
-  const wa = lead ? waLink(lead.phone, lead.name, lead.niche) : null;
+  const dono = lead?.enrichment?.ownerName;
+  const wa = lead ? waLink(lead.phone, lead.name, lead.niche, dono, lead.id) : null;
   const ig = lead ? igHandle(lead.enrichment?.instagram) : null;
+  const variante = lead ? variantOf(lead.id) : 'A';
 
-  function avancar() {
-    onContacted?.(lead.id);
+  function avancar(canal) {
+    onContacted?.(lead.id, canal);
     setCopiado(false);
     setI((n) => n + 1);
   }
 
   function enviarWhatsApp() {
     if (wa) window.open(wa, '_blank', 'noopener');
-    avancar();
+    avancar('whatsapp');
   }
 
   async function enviarInstagram() {
     // Clipboard pode falhar (permissão/contexto http) — o preview na tela
     // continua disponível pra copiar na mão, então seguimos mesmo assim.
     try {
-      await navigator.clipboard.writeText(montarMensagem(lead.name, lead.niche));
+      await navigator.clipboard.writeText(montarMensagem(lead.name, lead.niche, undefined, dono, lead.id));
       setCopiado(true);
     } catch { /* usuário copia do preview */ }
     window.open(igUrl(ig), '_blank', 'noopener');
-    avancar();
+    avancar('instagram');
   }
 
   return (
@@ -59,12 +61,13 @@ export default function DispatchMode({ leads, onContacted, onClose }) {
             </div>
             <div className="dispatch-lead">
               <h3>{lead.name}</h3>
+              {dono && <p className="muted">👤 {dono}</p>}
               {lead.phone && <p className="muted">📞 {lead.phone}</p>}
               {ig && <p className="muted">📷 @{ig}</p>}
             </div>
             <div className="preview">
-              <span>Mensagem que será {wa ? 'aberta' : 'copiada'}:</span>
-              <pre>{montarMensagem(lead.name, lead.niche)}</pre>
+              <span>Mensagem que será {wa ? 'aberta' : 'copiada'} {variante === 'B' ? '· variante B' : ''}</span>
+              <pre>{montarMensagem(lead.name, lead.niche, undefined, dono, lead.id)}</pre>
             </div>
             <p className="dispatch-hint">
               {wa ? (

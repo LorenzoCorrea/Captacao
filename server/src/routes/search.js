@@ -6,7 +6,9 @@ import { gerarEstabelecimentos } from '../data/mockPlaces.js';
 import { geocodeCidade } from '../data/geocode.js';
 import { createSearch, attachStream, prioritizeLead, getSearchLeads, updateLead, reopenSearch } from '../enrichment/enricher.js';
 import { toCSV, toXLSX } from '../export/exporter.js';
-import { listSearches, statsConversao, dbEnabled } from '../db.js';
+import { previewHtml } from '../preview/preview.js';
+import { propostaPdf } from '../export/proposta.js';
+import { listSearches, statsConversao, todayLeads, dbEnabled } from '../db.js';
 
 const router = Router();
 const slug = (s) =>
@@ -123,6 +125,16 @@ router.get('/api/search/:searchId/export', async (req, res) => {
   }
 });
 
+// ─── Proposta comercial em PDF (1 clique, na hora que o lead está quente) ───
+router.get('/api/search/:searchId/leads/:leadId/proposta', async (req, res) => {
+  const data = await getSearchLeads(req.params.searchId);
+  const lead = data?.leads.find((l) => l.id === req.params.leadId);
+  if (!lead) return res.status(404).json({ error: 'Lead não encontrado (busca expirada?).' });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="proposta-${slug(lead.name)}-${new Date().toISOString().slice(0, 10)}.pdf"`);
+  propostaPdf(lead, { niche: lead.niche || data.niche }).pipe(res);
+});
+
 // ─── Webhook: envia os leads (JSON) para um CRM/URL do usuário ──────────────
 
 // Proteção SSRF: o webhook só pode apontar para a internet pública. Sem isso,
@@ -179,6 +191,16 @@ router.post('/api/search/:searchId/webhook', async (req, res) => {
   }
 });
 
+// ─── Prévia de site do lead (HTML standalone) ───────────────────────────────
+// O "fechador": o lead vê o próprio negócio num site pronto. SELLER_WHATSAPP
+// (opcional, no .env) liga o botão "Quero meu site" da faixa de venda.
+router.get('/previa/:searchId/:leadId', async (req, res) => {
+  const data = await getSearchLeads(req.params.searchId);
+  const lead = data?.leads.find((l) => l.id === req.params.leadId);
+  if (!lead) return res.status(404).send('<h1>Prévia não encontrada</h1><p>Busca expirada ou lead inexistente.</p>');
+  res.type('html').send(previewHtml({ ...lead, niche: lead.niche || data.niche }, { sellerWhats: process.env.SELLER_WHATSAPP }));
+});
+
 // Histórico de buscas persistidas (lista vazia se o banco estiver desligado).
 // dbEnabled vai junto pra o front distinguir "banco off" de "banco on sem buscas".
 router.get('/api/searches', async (_req, res) => {
@@ -187,6 +209,12 @@ router.get('/api/searches', async (_req, res) => {
 
 // Diz se a persistência está ativa (DATABASE_URL configurada e pool aberto).
 router.get('/api/status', (_req, res) => res.json({ dbEnabled }));
+
+// Painel "Hoje": follow-ups vencidos + contatados parados, de todas as buscas.
+// items = null quando o banco está desligado (o front cai pro modo memória).
+router.get('/api/today', async (_req, res) => {
+  res.json({ dbEnabled, items: await todayLeads() });
+});
 
 // Estatísticas de conversão para o dashboard (null se o banco estiver desligado).
 router.get('/api/stats', async (_req, res) => {

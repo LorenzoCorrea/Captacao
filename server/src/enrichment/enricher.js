@@ -41,7 +41,7 @@ export function createSearch(leads, meta = {}) {
     niche: niche ?? '',
     query: { niche: niche ?? '', city: city ?? '', lat: meta.lat, lng: meta.lng, radiusKm: meta.radiusKm },
     found: meta.found ?? null,
-    leads: new Map(leads.map((l) => [l.id, { ...l, enrichment: null, enrichmentStatus: 'pending', stage: 'novo', notes: '', followUpAt: null, tags: [], estimatedValue: null }])),
+    leads: new Map(leads.map((l) => [l.id, { ...l, enrichment: null, enrichmentStatus: 'pending', stage: 'novo', notes: '', followUpAt: null, tags: [], estimatedValue: null, interactions: [] }])),
     clients: new Set(),
     queue: [],
     inFlight: new Set(),
@@ -108,6 +108,18 @@ export async function updateLead(searchId, leadId, patch = {}) {
   if (patch.estimatedValue !== undefined) {
     const v = patch.estimatedValue === null || patch.estimatedValue === '' ? null : Number(patch.estimatedValue);
     lead.estimatedValue = Number.isFinite(v) ? v : null; fields.estimatedValue = lead.estimatedValue;
+  }
+  if (patch.msgVariant !== undefined) {
+    if (patch.msgVariant !== null && !['A', 'B'].includes(patch.msgVariant)) return false;
+    lead.msgVariant = patch.msgVariant; fields.msgVariant = patch.msgVariant;
+  }
+  if (patch.interactions !== undefined) {
+    // Timeline: [{at, type, note?}]. Cap de 200 entradas; stringify porque o
+    // node-pg converte array JS em array Postgres (não jsonb) se passar cru.
+    lead.interactions = Array.isArray(patch.interactions)
+      ? patch.interactions.filter((i) => i && typeof i.type === 'string').slice(-200)
+      : [];
+    fields.interactions = JSON.stringify(lead.interactions);
   }
   if (Object.keys(fields).length && db.dbEnabled && s.dbReady) {
     s.dbReady.then(() => db.saveLeadFields(searchId, leadId, fields)).catch(() => {});
@@ -301,13 +313,23 @@ function mockEnrichment(lead) {
     return { email: null, instagram: null, facebook: null, linkedin: null, whatsapp: lead.phone, confidence: 0, partial: false };
   }
   const slug = lead.name.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]+/g, '');
+  const socios = ['Maria Oliveira', 'João Pereira', 'Ana Souza', 'Carlos Lima'];
+  const temCnpj = Math.random() < 0.5;
+  const instagram = Math.random() < 0.8 ? `https://instagram.com/${slug}` : null;
   return {
     email: Math.random() < 0.6 ? `contato@${slug}.com.br` : null,
-    instagram: Math.random() < 0.8 ? `https://instagram.com/${slug}` : null,
+    instagram,
+    igFollowers: instagram && Math.random() < 0.7 ? Math.floor(80 + Math.random() * 20000) : null,
     facebook: Math.random() < 0.4 ? `https://facebook.com/${slug}` : null,
     linkedin: null,
     whatsapp: lead.phone,
     confidence: 0.7,
     partial: false,
+    cnpj: temCnpj ? '12345678000190' : null,
+    razaoSocial: temCnpj ? `${lead.name} LTDA` : null,
+    ownerName: temCnpj ? socios[Math.floor(Math.random() * socios.length)] : null,
+    companyAge: temCnpj ? 2 + Math.floor(Math.random() * 12) : null,
+    porte: temCnpj ? 'MICRO EMPRESA' : null,
+    cnpjActive: temCnpj ? true : null,
   };
 }

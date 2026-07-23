@@ -8,8 +8,10 @@ import MessageSettings from './components/MessageSettings.jsx';
 import DispatchMode from './components/DispatchMode.jsx';
 import LeadDetails from './components/LeadDetails.jsx';
 import HistoryPanel from './components/HistoryPanel.jsx';
+import TodayPanel from './components/TodayPanel.jsx';
 import { leadScore } from './lib/score.js';
 import { igHandle } from './lib/instagram.js';
+import { variantOf } from './lib/whatsapp.js';
 import { useEnrichmentStream } from './hooks/useEnrichmentStream.js';
 
 const CENTRO_PADRAO = [-30.0427211, -51.1626625]; // Porto Alegre (bairro Bom Jesus)
@@ -127,7 +129,45 @@ export default function App() {
     },
     [search]
   );
-  const moveLead = useCallback((leadId, stage) => patchLead(leadId, { stage }), [patchLead]);
+  // Cadência automática: virou "contatado" sem retorno futuro agendado?
+  // Agenda follow-up em D+2 — a venda está no 3º-5º toque, não no 1º.
+  const moveLead = useCallback(
+    (leadId, stage) => {
+      const patch = { stage };
+      if (stage === 'contatado') {
+        const l = leads.find((x) => x.id === leadId);
+        const hj = new Date().toISOString().slice(0, 10);
+        if (!l?.followUpAt || l.followUpAt <= hj) {
+          const d = new Date();
+          d.setDate(d.getDate() + 2);
+          patch.followUpAt = d.toISOString().slice(0, 10);
+        }
+      }
+      patchLead(leadId, patch);
+    },
+    [patchLead, leads]
+  );
+
+  // Disparo confirmado: marca contatado + registra a interação na timeline
+  // (canal usado) + cadência D+2, tudo num PATCH só.
+  const registrarContato = useCallback(
+    (leadId, canal = 'whatsapp') => {
+      const l = leads.find((x) => x.id === leadId);
+      const patch = {
+        stage: 'contatado',
+        msgVariant: variantOf(leadId), // registra a variante A/B usada — alimenta o painel
+        interactions: [...(l?.interactions ?? []), { at: new Date().toISOString(), type: 'msg', note: canal }],
+      };
+      const hj = new Date().toISOString().slice(0, 10);
+      if (!l?.followUpAt || l.followUpAt <= hj) {
+        const d = new Date();
+        d.setDate(d.getDate() + 2);
+        patch.followUpAt = d.toISOString().slice(0, 10);
+      }
+      patchLead(leadId, patch);
+    },
+    [leads, patchLead]
+  );
 
   // Reabre uma busca salva (do histórico): re-hidrata do banco e popula a tela
   const openSearch = useCallback(async (searchId) => {
@@ -187,6 +227,9 @@ export default function App() {
             </button>
             <button type="button" className={view === 'stats' ? 'active' : ''} onClick={() => setView('stats')}>
               📊 Painel
+            </button>
+            <button type="button" className={view === 'today' ? 'active' : ''} onClick={() => setView('today')}>
+              📅 Hoje
             </button>
           </div>
           <button type="button" className="msg-edit-btn" onClick={() => setMsgOpen(true)}>
@@ -262,7 +305,7 @@ export default function App() {
             </>
           )}
         </header>
-        <LeadList leads={visibleLeads} selectedId={selectedId} onSelect={selectLead} onOpenDetails={setDetailId} loading={loading} />
+        <LeadList leads={visibleLeads} selectedId={selectedId} onSelect={selectLead} onOpenDetails={setDetailId} loading={loading} searchId={search?.searchId} />
       </aside>
 
       <main className="map-wrap">
@@ -280,19 +323,21 @@ export default function App() {
           <KanbanBoard leads={visibleLeads} selectedId={selectedId} onSelect={selectLead} onMove={moveLead} onDispatch={setDispatchLeads} />
         )}
         {view === 'stats' && <StatsPanel />}
+        {view === 'today' && <TodayPanel leads={leads} searchId={search?.searchId} onPatch={patchLead} />}
       </main>
 
       <MessageSettings open={msgOpen} onClose={() => setMsgOpen(false)} />
       {dispatchLeads && (
         <DispatchMode
           leads={dispatchLeads}
-          onContacted={(id) => moveLead(id, 'contatado')}
+          onContacted={registrarContato}
           onClose={() => setDispatchLeads(null)}
         />
       )}
       {detailId && (
         <LeadDetails
           lead={leads.find((l) => l.id === detailId)}
+          searchId={search?.searchId}
           onSave={(patch) => patchLead(detailId, patch)}
           onClose={() => setDetailId(null)}
         />
