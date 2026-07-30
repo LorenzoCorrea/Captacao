@@ -47,6 +47,14 @@ const NICHE_GROUPS = [
       'craft=tiler', 'craft=roofer', 'shop=trade',
   ] },
   { kw: ['floricult', 'flor'], tags: ['shop=florist'] },
+  { kw: ['sorvete', 'acai', 'gelat', 'picole'], tags: ['amenity=ice_cream', 'shop=ice_cream'] },
+  { kw: ['doce', 'confeit', 'bolo', 'brigadeir'], tags: ['shop=confectionery', 'shop=pastry'] },
+  { kw: ['lavander', 'lavagem de roupa'], tags: ['shop=laundry', 'shop=dry_cleaning'] },
+  { kw: ['pousada', 'hotel', 'hostel', 'hosped'], tags: ['tourism=hotel', 'tourism=guest_house', 'tourism=hostel'] },
+  { kw: ['autoescola', 'auto escola', 'cfc'], tags: ['amenity=driving_school'] },
+  { kw: ['tatu', 'tattoo', 'piercing'], tags: ['shop=tattoo'] },
+  { kw: ['roupa', 'moda', 'boutique', 'vestuar', 'calcad'], tags: ['shop=clothes', 'shop=boutique', 'shop=shoes'] },
+  { kw: ['joal', 'joia', 'semijoia', 'relojoar', 'bijuteria'], tags: ['shop=jewelry', 'craft=watchmaker'] },
 ];
 
 const normalize = (s) => (s ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();

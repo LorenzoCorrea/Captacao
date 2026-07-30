@@ -4,36 +4,66 @@ import { useEffect, useRef, useState } from 'react';
 // Centro deslocado p/ o bairro Bom Jesus (leste de Porto Alegre).
 const DEFAULT_CITY = { label: 'Porto Alegre, Rio Grande do Sul', lat: -30.0427211, lng: -51.1626625 };
 
-// Nichos pré-definidos (atalhos rápidos para os ramos que o Lorenzo mais prospecta).
-// "Outros" libera o input pra digitar livremente. Lista ordenada por bom encaixe
-// no perfil de "negócio físico sem site" + cobertura no OpenStreetMap.
-const NICHE_PRESETS = [
-  { label: '🌐 Todos os nichos', value: 'todos' }, // varre todas as categorias comerciais do OSM
-  { label: 'Advocacia', value: 'advocacia' },
-  { label: 'Salão de beleza', value: 'salão de beleza' },
-  { label: 'Manicure', value: 'manicure' },
-  { label: 'Barbearia', value: 'barbearia' },
-  { label: 'Estética', value: 'estética' },
-  { label: 'Empreiteira', value: 'empreiteira' },
-  { label: 'Construtora', value: 'construtora' },
-  { label: 'Mecânica', value: 'mecânica' },
-  { label: 'Dentista', value: 'dentista' },
-  { label: 'Clínica médica', value: 'clínica médica' },
-  { label: 'Psicologia', value: 'psicólogo' },
-  { label: 'Nutricionista', value: 'nutricionista' },
-  { label: 'Fisioterapia', value: 'fisioterapia' },
-  { label: 'Academia', value: 'academia' },
-  { label: 'Pet shop / Veterinária', value: 'pet shop' },
-  { label: 'Restaurante', value: 'restaurante' },
-  { label: 'Lanchonete', value: 'lanchonete' },
-  { label: 'Pizzaria', value: 'pizzaria' },
-  { label: 'Padaria', value: 'padaria' },
-  { label: 'Imobiliária', value: 'imobiliária' },
-  { label: 'Contabilidade', value: 'contabilidade' },
-  { label: 'Arquitetura', value: 'arquitetura' },
-  { label: 'Floricultura', value: 'floricultura' },
-  { label: 'Ótica', value: 'ótica' },
+// Nichos agrupados por COBERTURA no OpenStreetMap + encaixe com landing page.
+// O OSM depende de mapeamento voluntário e a cobertura varia MUITO por ramo:
+// o 1º grupo costuma render lista cheia, o último volta quase vazio porque os
+// negócios simplesmente não estão cadastrados. Agrupar evita que você perca
+// tempo prospectando num ramo que a fonte de dados não enxerga.
+const GRUPOS_NICHO = [
+  {
+    label: '⭐ Melhores para vender site',
+    itens: [
+      { label: 'Salão de beleza', value: 'salão de beleza' },
+      { label: 'Barbearia', value: 'barbearia' },
+      { label: 'Estética', value: 'estética' },
+      { label: 'Manicure', value: 'manicure' },
+      { label: 'Restaurante', value: 'restaurante' },
+      { label: 'Lanchonete', value: 'lanchonete' },
+      { label: 'Pizzaria', value: 'pizzaria' },
+      { label: 'Padaria', value: 'padaria' },
+      { label: 'Pet shop / Veterinária', value: 'pet shop' },
+      { label: 'Dentista', value: 'dentista' },
+      { label: 'Clínica médica', value: 'clínica médica' },
+      { label: 'Academia', value: 'academia' },
+    ],
+  },
+  {
+    label: 'Boa cobertura',
+    itens: [
+      { label: 'Hamburgueria', value: 'hamburgueria' },
+      { label: 'Cafeteria', value: 'cafeteria' },
+      { label: 'Sorveteria / Açaí', value: 'sorveteria' },
+      { label: 'Doceria / Confeitaria', value: 'doceria' },
+      { label: 'Pilates / Crossfit', value: 'pilates' },
+      { label: 'Psicologia', value: 'psicólogo' },
+      { label: 'Nutricionista', value: 'nutricionista' },
+      { label: 'Fisioterapia', value: 'fisioterapia' },
+      { label: 'Mecânica', value: 'mecânica' },
+      { label: 'Ótica', value: 'ótica' },
+      { label: 'Floricultura', value: 'floricultura' },
+      { label: 'Lavanderia', value: 'lavanderia' },
+      { label: 'Pousada / Hotel', value: 'pousada' },
+      { label: 'Autoescola', value: 'autoescola' },
+      { label: 'Estúdio de tatuagem', value: 'tatuagem' },
+      { label: 'Loja de roupas', value: 'loja de roupas' },
+      { label: 'Joalheria / Semijoias', value: 'joalheria' },
+      { label: 'Imobiliária', value: 'imobiliária' },
+      { label: 'Arquitetura', value: 'arquitetura' },
+    ],
+  },
+  {
+    label: '⚠️ Cobertura fraca no OpenStreetMap',
+    itens: [
+      { label: 'Advocacia', value: 'advocacia' },
+      { label: 'Contabilidade', value: 'contabilidade' },
+      { label: 'Empreiteira', value: 'empreiteira' },
+      { label: 'Construtora', value: 'construtora' },
+    ],
+  },
 ];
+
+// Ramos do último grupo: avisamos na tela antes de a busca voltar vazia.
+const COBERTURA_FRACA = new Set(GRUPOS_NICHO.at(-1).itens.map((i) => i.value));
 
 export default function SearchBar({ onSearch, loading }) {
   const [niche, setNiche] = useState('salão de beleza');
@@ -106,8 +136,13 @@ export default function SearchBar({ onSearch, loading }) {
   return (
     <form className="search-bar" onSubmit={submit} autoComplete="off">
       <select className="niche-select" value={preset} onChange={(e) => chooseNiche(e.target.value)} required>
-        {NICHE_PRESETS.map((p) => (
-          <option key={p.value} value={p.value}>{p.label}</option>
+        <option value="todos">🌐 Todos os nichos</option>
+        {GRUPOS_NICHO.map((g) => (
+          <optgroup key={g.label} label={g.label}>
+            {g.itens.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </optgroup>
         ))}
         <option value="outros">Outros (digite)</option>
       </select>
@@ -119,6 +154,12 @@ export default function SearchBar({ onSearch, loading }) {
           autoFocus
           required
         />
+      )}
+      {COBERTURA_FRACA.has(preset) && (
+        <p className="niche-warn">
+          ⚠️ Ramo com pouco cadastro no OpenStreetMap — a lista pode vir vazia mesmo com raio grande.
+          Aumente o raio ou use <strong>🌐 Todos os nichos</strong> e garimpe na lista.
+        </p>
       )}
 
       <div className="city-field">
