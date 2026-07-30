@@ -42,7 +42,12 @@ export function gerarEstabelecimentos({ niche, city, lat, lng, radiusKm, count =
   return Array.from({ length: count }, () => {
     const pos = pontoNoRaio(lat, lng, radiusKm);
     return {
-      id: crypto.randomUUID(),
+      // MESMO formato do provedor real (`osm:node/123`) — de propósito: o id
+      // tem `:` e `/`, que precisam ser codificados nas URLs. Um mock com UUID
+      // "limpo" escondia esse bug e deixava a prévia/PATCH quebrarem só em
+      // produção. Mock fiel ao real é o que faz o teste valer.
+      id: `osm:node/${100000000 + Math.floor(Math.random() * 899999999)}`,
+      source: 'osm',
       name: nomeFicticio(niche),
       niche,
       address: `${pick(RUAS)}, ${100 + Math.floor(Math.random() * 1900)} – ${city}`,

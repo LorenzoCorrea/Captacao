@@ -123,7 +123,7 @@ export default function LeadDetails({ lead, searchId, onSave, onClose }) {
         <footer className="modal-foot">
           {searchId && (
             // Proposta em PDF na hora: usa o valor estimado salvo (senão "sob consulta")
-            <a className="details-btn" href={`/api/search/${searchId}/leads/${lead.id}/proposta`} download>
+            <a className="details-btn" href={`/api/search/${searchId}/leads/${encodeURIComponent(lead.id)}/proposta`} download>
               📄 Proposta (PDF)
             </a>
           )}

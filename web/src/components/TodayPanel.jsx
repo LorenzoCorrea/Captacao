@@ -51,7 +51,7 @@ export default function TodayPanel({ leads, searchId, onPatch }) {
     if (item.searchId === searchId) {
       onPatch(item.id, fields);
     } else {
-      fetch(`/api/search/${item.searchId}/leads/${item.id}`, {
+      fetch(`/api/search/${item.searchId}/leads/${encodeURIComponent(item.id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(fields),
