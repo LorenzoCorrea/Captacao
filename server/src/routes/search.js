@@ -56,7 +56,7 @@ router.post('/api/search', async (req, res) => {
   } catch (e) {
     console.error('Falha na busca OSM:', e);
     res.status(502).json({
-      error: 'Não consegui consultar o mapa agora (Overpass ocupado). Tente de novo em instantes ou reduza o raio.',
+      error: 'O servidor de mapas (OpenStreetMap) não respondeu. Costuma ser sobrecarga momentânea — tente de novo em 1 ou 2 minutos.',
     });
   }
 });

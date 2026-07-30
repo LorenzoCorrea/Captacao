@@ -97,7 +97,10 @@ function resolveNiche(niche) {
   return { tags: [...tags], kws: [...kws] };
 }
 
-function buildQuery({ tags, kws, niche, lat, lng, radiusKm }) {
+// FASE 1 — consulta por TAG: só lookups de chave/valor indexados. É barata,
+// rápida e responde mesmo com o Overpass sob carga. Devolve null quando o
+// nicho não tem nenhuma tag conhecida (aí quem manda é a busca por nome).
+function buildTagQuery({ tags, niche, lat, lng, radiusKm }) {
   const R = Math.round(radiusKm * 1000);
   const around = `(around:${R},${lat},${lng})`;
   const clauses = [];
@@ -112,24 +115,31 @@ function buildQuery({ tags, kws, niche, lat, lng, radiusKm }) {
     clauses.push(`nwr["leisure"~"^(${ALL_LEISURE})$"]["name"]${around};`);
     clauses.push(`nwr["tourism"~"^(${ALL_TOURISM})$"]["name"]${around};`);
   } else {
-    // Busca por TAG (categoria certa no OSM)…
     for (const t of tags) {
       const [k, v] = t.split('=');
       clauses.push(`nwr["${k}"="${v}"]${around};`);
     }
-    // …E por NOME (pega os mal-etiquetados, que são muitos no Brasil). A busca
-    // por nome exige alguma chave comercial ou telefone, senão ruas e prédios
-    // com nome parecido entrariam como lead.
-    if (kws.length) {
-      const re = kws.map(accentRegex).join('|');
-      for (const key of COMMERCIAL_KEYS) clauses.push(`nwr["name"~"${re}",i]["${key}"]${around};`);
-      clauses.push(`nwr["name"~"${re}",i]["phone"]${around};`);
-      clauses.push(`nwr["name"~"${re}",i]["contact:phone"]${around};`);
-    }
   }
-  // timeout do servidor alinhado ao do cliente (PER_MIRROR_MS) — não adianta
-  // o Overpass continuar processando depois que já desistimos da resposta.
-  return `[out:json][timeout:15];(${clauses.join('')});out center 250;`;
+  if (!clauses.length) return null;
+  return `[out:json][timeout:20];(${clauses.join('')});out center 250;`;
+}
+
+// FASE 2 — complemento por NOME: pega os mal-etiquetados (muitos no Brasil).
+// UMA cláusula só: filtrar por chave comercial dentro da consulta obrigaria o
+// Overpass a repetir a varredura do regex por chave (era o que derrubava a
+// busca inteira). O filtro de "parece negócio" roda aqui no Node, de graça.
+function buildNameQuery({ kws, lat, lng, radiusKm }) {
+  if (!kws.length) return null;
+  const R = Math.round(radiusKm * 1000);
+  const re = kws.map(accentRegex).join('|');
+  return `[out:json][timeout:20];(nwr["name"~"${re}",i](around:${R},${lat},${lng}););out center 250;`;
+}
+
+// Um resultado da busca por nome só vira lead se parecer estabelecimento —
+// senão rua, praça e prédio com nome parecido entrariam na lista.
+function pareceNegocio(el) {
+  const t = el.tags ?? {};
+  return COMMERCIAL_KEYS.some((k) => t[k]) || Boolean(t.phone || t['contact:phone']);
 }
 
 // node:https com `agent: false` (socket novo a cada chamada) + `family: 4`.
@@ -178,14 +188,16 @@ function overpassPost(url, query, timeoutMs) {
   });
 }
 
-// Orçamento TOTAL de 40s para a busca: sem ele, 4 mirrors lentos em série
-// custariam até 100s com o usuário olhando "Buscando…". Cada mirror recebe no
-// máximo 15s (ou o que sobrar do orçamento).
+// Orçamento TOTAL por consulta: sem ele, 4 mirrors lentos em série custariam
+// mais de um minuto com o usuário olhando "Buscando…". A fase 1 (tags) ganha
+// o orçamento cheio; o complemento por nome ganha um curto — se não couber,
+// desiste sem estragar a busca.
 const SEARCH_BUDGET_MS = 40000;
+const NAME_BUDGET_MS = 18000;
 const PER_MIRROR_MS = 15000;
 
-async function fetchOverpass(query) {
-  const deadline = Date.now() + SEARCH_BUDGET_MS;
+async function fetchOverpass(query, budgetMs = SEARCH_BUDGET_MS) {
+  const deadline = Date.now() + budgetMs;
   let lastErr;
   for (const url of ENDPOINTS) {
     const remaining = deadline - Date.now();
@@ -251,8 +263,33 @@ export async function buscarEstabelecimentos({ niche, city, lat, lng, radiusKm }
   if (hit && Date.now() - hit.ts < CACHE_TTL_MS) return hit.result;
 
   const { tags, kws } = resolveNiche(niche);
-  const query = buildQuery({ tags, kws, niche, lat, lng, radiusKm });
-  const elements = await fetchOverpass(query);
+  const elements = [];
+  let erroFase1 = null;
+
+  // FASE 1 — tags: é o que traz o grosso e quase nunca falha.
+  const tagQuery = buildTagQuery({ tags, niche, lat, lng, radiusKm });
+  if (tagQuery) {
+    try {
+      elements.push(...(await fetchOverpass(tagQuery)));
+    } catch (e) {
+      erroFase1 = e;
+    }
+  }
+
+  // FASE 2 — nome: complemento best-effort, em consulta SEPARADA. Se falhar
+  // ou estourar o orçamento curto, a busca segue valendo com o que a fase 1
+  // trouxe (antes, uma consulta única derrubava tudo junto).
+  const nameQuery = isAllNiches(niche) ? null : buildNameQuery({ kws, lat, lng, radiusKm });
+  if (nameQuery) {
+    try {
+      elements.push(...(await fetchOverpass(nameQuery, NAME_BUDGET_MS)).filter(pareceNegocio));
+    } catch (e) {
+      // Só é erro fatal se a fase 1 não existia (nicho sem tag conhecida).
+      if (!tagQuery) erroFase1 = e;
+    }
+  }
+  // Falhou tudo e não sobrou nada: aí sim é erro de verdade (502 pro usuário).
+  if (erroFase1 && !elements.length) throw erroFase1;
 
   const seen = new Set();
   const all = [];
