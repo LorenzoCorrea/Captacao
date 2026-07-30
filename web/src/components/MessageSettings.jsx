@@ -3,6 +3,7 @@ import {
   loadMsgConfig, saveMsgConfig, resetMsgConfig, DEFAULT_MSG_CONFIG,
   beneficiosToText, beneficiosFromText, montarMensagem,
 } from '../lib/whatsapp.js';
+import { loadLimits, saveLimits, getUsage, DEFAULT_LIMITS, AQUECIMENTO } from '../lib/limits.js';
 
 // Editor da mensagem de abordagem do WhatsApp. A config fica no navegador
 // (localStorage) — cada um ajusta o pitch sem mexer no código.
@@ -11,6 +12,8 @@ export default function MessageSettings({ open, onClose }) {
   const [templateB, setTemplateB] = useState('');
   const [beneficios, setBeneficios] = useState('');
   const [padrao, setPadrao] = useState('');
+  const [limits, setLimits] = useState(DEFAULT_LIMITS);
+  const [usage, setUsage] = useState(() => getUsage());
 
   useEffect(() => {
     if (!open) return;
@@ -19,6 +22,8 @@ export default function MessageSettings({ open, onClose }) {
     setTemplateB(cfg.templateB ?? '');
     setBeneficios(beneficiosToText(cfg.beneficios));
     setPadrao(cfg.beneficioPadrao);
+    setLimits(loadLimits());
+    setUsage(getUsage());
   }, [open]);
 
   if (!open) return null;
@@ -26,8 +31,11 @@ export default function MessageSettings({ open, onClose }) {
   const cfgAtual = { template, templateB, beneficios: beneficiosFromText(beneficios), beneficioPadrao: padrao };
   const preview = montarMensagem('Studio Aurora', 'salão de estética', cfgAtual, 'Maria Oliveira');
 
+  const setLimite = (k, v) => setLimits((p) => ({ ...p, [k]: Math.max(0, Number(v) || 0) }));
+
   function salvar() {
     saveMsgConfig(cfgAtual);
+    saveLimits(limits);
     onClose();
   }
   function restaurar() {
@@ -36,6 +44,7 @@ export default function MessageSettings({ open, onClose }) {
     setTemplateB('');
     setBeneficios(beneficiosToText(DEFAULT_MSG_CONFIG.beneficios));
     setPadrao(DEFAULT_MSG_CONFIG.beneficioPadrao);
+    setLimits(DEFAULT_LIMITS);
   }
 
   return (
@@ -65,6 +74,31 @@ export default function MessageSettings({ open, onClose }) {
           <div className="preview">
             <span>Prévia — exemplo "Studio Aurora" (estética)</span>
             <pre>{preview}</pre>
+          </div>
+
+          <div className="field">
+            <span>🛡️ Limites de envio por dia <em>(proteção anti-ban)</em></span>
+            <div className="field-row">
+              <label className="field">
+                <span>WhatsApp / dia</span>
+                <input type="number" min="0" max="100" value={limits.whatsapp} onChange={(e) => setLimite('whatsapp', e.target.value)} />
+              </label>
+              <label className="field">
+                <span>Instagram / dia</span>
+                <input type="number" min="0" max="100" value={limits.instagram} onChange={(e) => setLimite('instagram', e.target.value)} />
+              </label>
+              <label className="field">
+                <span>Intervalo (min)</span>
+                <input type="number" min="0" max="120" value={limits.minSpacingMin} onChange={(e) => setLimite('minSpacingMin', e.target.value)} />
+              </label>
+            </div>
+            <p className="muted" style={{ fontSize: 12 }}>
+              Hoje já foram <strong>{usage.whatsapp}</strong> no WhatsApp e <strong>{usage.instagram}</strong> no Instagram
+              (zera sozinho à meia-noite). Plano de aquecimento para número novo:
+            </p>
+            <ul className="warmup">
+              {AQUECIMENTO.map((linha) => <li key={linha}>{linha}</li>)}
+            </ul>
           </div>
         </div>
         <footer className="modal-foot">
