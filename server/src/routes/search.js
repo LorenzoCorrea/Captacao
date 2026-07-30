@@ -194,9 +194,15 @@ router.post('/api/search/:searchId/webhook', async (req, res) => {
 // ─── Prévia de site do lead (HTML standalone) ───────────────────────────────
 // O "fechador": o lead vê o próprio negócio num site pronto. SELLER_WHATSAPP
 // (opcional, no .env) liga o botão "Quero meu site" da faixa de venda.
-router.get('/previa/:searchId/:leadId', async (req, res) => {
+// Curinga `*` no lugar de `:leadId`: o id do lead traz barra (`osm:node/123`),
+// então além do link do app (que codifica) precisamos aceitar uma URL colada
+// crua — prévia existe para ser compartilhada.
+router.get('/previa/:searchId/*', async (req, res) => {
+  const bruto = req.params[0] ?? '';
+  const candidatos = new Set([bruto]);
+  try { candidatos.add(decodeURIComponent(bruto)); } catch { /* bruto já serve */ }
   const data = await getSearchLeads(req.params.searchId);
-  const lead = data?.leads.find((l) => l.id === req.params.leadId);
+  const lead = data?.leads.find((l) => candidatos.has(l.id));
   if (!lead) return res.status(404).send('<h1>Prévia não encontrada</h1><p>Busca expirada ou lead inexistente.</p>');
   res.type('html').send(previewHtml({ ...lead, niche: lead.niche || data.niche }, { sellerWhats: process.env.SELLER_WHATSAPP }));
 });

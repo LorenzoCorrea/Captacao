@@ -94,7 +94,9 @@ export default function App() {
       const lead = leads.find((l) => l.id === id);
       if (lead?.enrichmentStatus === 'pending' && search) {
         // enriquecimento sob demanda: interagiu → fura a fila
-        fetch(`/api/search/${search.searchId}/leads/${id}/prioritize`, { method: 'POST' }).catch(() => {});
+        // encodeURIComponent obrigatório: o id do lead é `osm:node/123` — a
+        // barra viraria separador de rota e o servidor devolveria 404.
+        fetch(`/api/search/${search.searchId}/leads/${encodeURIComponent(id)}/prioritize`, { method: 'POST' }).catch(() => {});
       }
     },
     [leads, search]
@@ -111,7 +113,7 @@ export default function App() {
         return prev.map((l) => (l.id === leadId ? { ...l, ...patch } : l));
       });
       if (!search) return;
-      fetch(`/api/search/${search.searchId}/leads/${leadId}`, {
+      fetch(`/api/search/${search.searchId}/leads/${encodeURIComponent(leadId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),

@@ -75,7 +75,7 @@ export default function LeadCard({ lead, selected, onSelect, onOpenDetails, sear
         <button type="button" className="details-btn" onClick={(ev) => { stop(ev); onOpenDetails?.(lead.id); }}>📝 Detalhes</button>
         {searchId && (
           // Prévia de site personalizada: mostre ao lead o negócio dele num site pronto
-          <a className="details-btn" href={`/previa/${searchId}/${lead.id}`} target="_blank" rel="noreferrer" onClick={stop}>
+          <a className="details-btn" href={`/previa/${searchId}/${encodeURIComponent(lead.id)}`} target="_blank" rel="noreferrer" onClick={stop}>
             🖥️ Prévia
           </a>
         )}
