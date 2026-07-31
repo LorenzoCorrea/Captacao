@@ -69,6 +69,9 @@ function waDigits(phone) {
   if (!phone) return null;
   const d = String(phone).replace(/\D/g, '').replace(/^0+/, '');
   if (d.length < 10) return null;
+  // Fixo (local de 8 dígitos começando em 2-5) não tem WhatsApp.
+  const local = d.startsWith('55') ? d.slice(4) : d.slice(2);
+  if (local.length === 8 && /^[2-5]/.test(local)) return null;
   if ((d.length === 12 || d.length === 13) && d.startsWith('55')) return d;
   return '55' + d;
 }

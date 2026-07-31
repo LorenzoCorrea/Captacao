@@ -11,7 +11,7 @@ import HistoryPanel from './components/HistoryPanel.jsx';
 import TodayPanel from './components/TodayPanel.jsx';
 import { leadScore } from './lib/score.js';
 import { igHandle } from './lib/instagram.js';
-import { variantOf } from './lib/whatsapp.js';
+import { variantOf, telefoneWhats } from './lib/whatsapp.js';
 import { lerJson } from './lib/api.js';
 import { useEnrichmentStream } from './hooks/useEnrichmentStream.js';
 
@@ -202,7 +202,8 @@ export default function App() {
     const arr = leads.filter((l) => {
       // Esconde leads que o enriquecimento descobriu que TÊM site (falso "sem site" do OSM)
       if (!filters.showWithSite && l.enrichment?.discoveredWebsite) return false;
-      if (filters.phone && !l.phone) return false;
+      // O filtro de WhatsApp exige CELULAR — fixo não serve pra abordagem.
+      if (filters.phone && !telefoneWhats(l)) return false;
       // Enquanto o enriquecimento não terminou, não escondemos o lead: ele ainda
       // pode ganhar o contato. Só filtramos quando já existe um veredito.
       if (filters.instagram && l.enrichmentStatus !== 'pending' && !l.enrichment?.instagram) return false;
@@ -308,7 +309,7 @@ export default function App() {
                     </div>
                   </div>
                   <button type="button" className="dispatch-btn" onClick={() => setDispatchLeads(visibleLeads)}>
-                    🚀 Modo disparo ({visibleLeads.filter((l) => l.phone || igHandle(l.enrichment?.instagram)).length})
+                    🚀 Modo disparo ({visibleLeads.filter((l) => telefoneWhats(l) || igHandle(l.enrichment?.instagram)).length})
                   </button>
                 </>
               )}

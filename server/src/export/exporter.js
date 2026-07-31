@@ -4,6 +4,8 @@ import ExcelJS from 'exceljs';
 const COLUMNS = [
   { header: 'Nome', key: 'name' },
   { header: 'Telefone', key: 'phone' },
+  { header: 'Tipo do telefone', key: 'phoneType' },
+  { header: 'Celular (achado na web)', key: 'mobilePhone' },
   { header: 'Endereço', key: 'address' },
   { header: 'Avaliação', key: 'rating' },
   { header: 'Qtd. avaliações', key: 'reviewsCount' },
@@ -26,6 +28,18 @@ const COLUMNS = [
   { header: 'Longitude', key: 'lng' },
 ];
 
+// Classifica o telefone BR (espelha web/src/lib/whatsapp.js): celular tem local
+// de 9 dígitos começando em 9; fixo tem 8 começando em 2–5. No export isso evita
+// que você perca tempo tentando WhatsApp num número que não tem.
+function tipoTelefone(phone) {
+  let d = String(phone ?? '').replace(/\D/g, '').replace(/^0+/, '');
+  if (d.startsWith('55') && (d.length === 12 || d.length === 13)) d = d.slice(2);
+  if (d.length !== 10 && d.length !== 11) return null;
+  const local = d.slice(2);
+  if (local.length === 9) return local[0] === '9' ? 'celular' : null;
+  return /^[2-5]/.test(local) ? 'fixo' : 'celular';
+}
+
 // Extrai o @ do perfil da URL do Instagram (espelha web/src/lib/instagram.js) —
 // no export o @ facilita a abordagem por DM quando o lead não tem WhatsApp.
 function igHandle(url) {
@@ -45,6 +59,8 @@ function rowsFromLeads(leads) {
     return {
       name: l.name ?? '',
       phone: l.phone ?? '',
+      phoneType: tipoTelefone(l.phone) ?? '',
+      mobilePhone: e.mobilePhone ?? '',
       address: l.address ?? '',
       rating: l.rating ?? '',
       reviewsCount: l.reviewsCount ?? '',

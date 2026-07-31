@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { waLink, WA_LIMIT } from '../lib/whatsapp.js';
+import { waLink, WA_LIMIT, telefoneWhats, tipoTelefone } from '../lib/whatsapp.js';
 import { igHandle } from '../lib/instagram.js';
 import { leadScore, scoreTier } from '../lib/score.js';
 
@@ -84,7 +84,7 @@ export default function KanbanBoard({ leads, selectedId, onSelect, onMove, onDis
             </header>
             <div className="kanban-cards">
               {byStage[st.key].map((l) => {
-                const wa = waLink(l.phone, l.name, l.niche, l.enrichment?.ownerName, l.id);
+                const wa = waLink(telefoneWhats(l), l.name, l.niche, l.enrichment?.ownerName, l.id);
                 const contatavel = wa || igHandle(l.enrichment?.instagram); // WhatsApp OU DM do Instagram
                 const score = leadScore(l);
                 const tier = scoreTier(score);
@@ -108,7 +108,12 @@ export default function KanbanBoard({ leads, selectedId, onSelect, onMove, onDis
                     )}
                     <strong>{l.name}</strong>
                     <span className={`score score--${tier.key}`} title={`Score ${score}/100`}>{tier.label}</span>
-                    {l.phone && <div className="muted">📞 {l.phone}</div>}
+                    {l.phone && (
+                      <div className="muted">
+                        📞 {l.phone}
+                        {tipoTelefone(l.phone) === 'fixo' && <span className="tel-fixo">fixo</span>}
+                      </div>
+                    )}
                     <div className="kanban-contacts">
                       {l.enrichmentStatus === 'pending' && <span className="dot dot--wait" title="buscando contatos…" />}
                       {l.enrichment?.email && <span title={l.enrichment.email}>✉️</span>}

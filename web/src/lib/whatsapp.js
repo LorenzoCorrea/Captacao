@@ -105,6 +105,38 @@ export function montarMensagem(nome, niche, cfg = loadMsgConfig(), dono = '', le
     .replaceAll('{beneficio}', beneficio(niche, c));
 }
 
+// ── Classificação de telefone BR ────────────────────────────────────────────
+// Muito lead do OSM traz só o telefone FIXO do comércio, que não tem WhatsApp.
+// Gerar link wa.me pra ele fazia o usuário abrir uma conversa que não existe —
+// e ainda consumia o limite diário de abordagens à toa.
+//
+// Regra do Brasil: DDD (2) + local. Local com 9 dígitos começa com 9 = celular.
+// Local com 8 dígitos começando em 2–5 = fixo; em 6–9 = celular antigo (de
+// antes do 9º dígito), que ainda existe cadastrado no OSM.
+function soDigitos(phone) {
+  let d = String(phone ?? '').replace(/\D/g, '').replace(/^0+/, '');
+  if (d.startsWith('55') && (d.length === 12 || d.length === 13)) d = d.slice(2); // tira o DDI
+  return d;
+}
+
+export function tipoTelefone(phone) {
+  const d = soDigitos(phone);
+  if (d.length !== 10 && d.length !== 11) return null; // sem DDD ou inválido
+  const local = d.slice(2);
+  if (local.length === 9) return local[0] === '9' ? 'celular' : null;
+  return /^[2-5]/.test(local) ? 'fixo' : 'celular';
+}
+
+export const temWhatsApp = (phone) => tipoTelefone(phone) === 'celular';
+
+// Melhor número para WhatsApp: o celular achado no enriquecimento tem
+// preferência sobre o telefone do OSM, que muitas vezes é o fixo da loja.
+export function telefoneWhats(lead) {
+  const doEnriquecimento = lead?.enrichment?.mobilePhone;
+  if (temWhatsApp(doEnriquecimento)) return doEnriquecimento;
+  return temWhatsApp(lead?.phone) ? lead.phone : null;
+}
+
 // Normaliza telefone BR para o formato do wa.me (DDI 55 + DDD + número, só dígitos).
 export function normalizePhoneBR(phone) {
   if (!phone) return null;
@@ -115,6 +147,7 @@ export function normalizePhoneBR(phone) {
 }
 
 export function waLink(phone, nome, niche, dono = '', leadId = '') {
+  if (!temWhatsApp(phone)) return null; // fixo não tem WhatsApp — não gera link
   const d = normalizePhoneBR(phone);
   if (!d) return null;
   return `https://wa.me/${d}?text=${encodeURIComponent(montarMensagem(nome, niche, undefined, dono, leadId))}`;

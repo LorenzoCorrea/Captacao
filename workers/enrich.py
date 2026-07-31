@@ -40,6 +40,31 @@ EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
 CNPJ_RE = re.compile(r"\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}")
 # Snippet de perfil do Instagram na SERP: "12.3K Followers, ..." / "12 mil seguidores"
 FOLLOWERS_RE = re.compile(r"([\d.,]+)\s*(mil|k|m)?\s*(?:followers|seguidores)", re.I)
+
+# Telefone BR na SERP: (55) 99123-4567 / 55 99123 4567 / +55 55 991234567.
+# Muito lead do OSM só tem o FIXO da loja (sem WhatsApp), mas o celular costuma
+# estar no Instagram, no Google ou em agregador — e aparece no texto da busca.
+PHONE_RE = re.compile(r"(?:\+?55[\s.\-]?)?\(?([1-9]\d)\)?[\s.\-]?(\d{4,5})[\s.\-]?(\d{4})")
+# DDDs que existem de verdade — evita casar CNPJ, CEP e data soltos no HTML.
+DDDS_VALIDOS = {
+    11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 27, 28,
+    31, 32, 33, 34, 35, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+    51, 53, 54, 55, 61, 62, 63, 64, 65, 66, 67, 68, 69,
+    71, 73, 74, 75, 77, 79, 81, 82, 83, 84, 85, 86, 87, 88, 89,
+    91, 92, 93, 94, 95, 96, 97, 98, 99,
+}
+
+
+def _first_mobile(html: str) -> str | None:
+    """Primeiro CELULAR válido no texto (9 dígitos começando com 9)."""
+    for m in PHONE_RE.finditer(html):
+        ddd, p1, p2 = m.groups()
+        if int(ddd) not in DDDS_VALIDOS:
+            continue
+        local = p1 + p2
+        if len(local) == 9 and local.startswith("9"):
+            return f"({ddd}) {local[:5]}-{local[5:]}"
+    return None
 # Resultados do DDG HTML usam <a class="result__a" href="https://destino-real">.
 # (Em 2024 deixaram de usar o redirect /l/?uddg=, então lemos a href direta.)
 HREF_RE = re.compile(r'href="(https?://[^"]+)"', re.I)
@@ -218,6 +243,7 @@ def _base(lead: dict, partial: bool = False) -> dict:
         "cnpj": None, "razaoSocial": None, "ownerName": None,
         "companyAge": None, "porte": None, "cnpjActive": None,
         "igFollowers": None,  # seguidores (do snippet da SERP; None = não veio)
+        "mobilePhone": None,  # celular achado na web (o OSM costuma dar só o fixo)
     }
 
 
@@ -232,6 +258,7 @@ async def _enrich(lead: dict) -> dict:
         out["facebook"] = _first_social(links, "facebook.com", ("/sharer", "/tr?", "/events", "/groups"))
         out["linkedin"] = _first_social(links, "linkedin.com", ("/posts/", "/feed/"))
         out["email"] = _first_email(html)
+        out["mobilePhone"] = _first_mobile(html)
         if out["instagram"]:
             out["igFollowers"] = _ig_followers(html)
         # Pega o 1º link que pareça o site OFICIAL do negócio (corrige o falso
@@ -241,12 +268,14 @@ async def _enrich(lead: dict) -> dict:
                 out["discoveredWebsite"] = url.split("?")[0].rstrip("/")
                 break
 
-        # 2ª consulta só se faltou e-mail. Falha aqui não descarta o que a 1ª
-        # consulta já achou — marca partial e segue com os dados que temos.
-        if not out["email"]:
+        # 2ª consulta se faltou e-mail OU celular — este último é o que decide
+        # se dá pra abordar por WhatsApp, então vale a busca extra. Falha aqui
+        # não descarta o que a 1ª consulta já achou.
+        if not out["email"] or not out["mobilePhone"]:
             try:
-                html2 = await _serp(client, f'"{name}" {city} email contato')
-                out["email"] = _first_email(html2)
+                html2 = await _serp(client, f'"{name}" {city} whatsapp contato')
+                out["email"] = out["email"] or _first_email(html2)
+                out["mobilePhone"] = out["mobilePhone"] or _first_mobile(html2)
             except httpx.HTTPError:
                 out["partial"] = True
 

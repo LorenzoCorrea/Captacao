@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { waLink } from '../lib/whatsapp.js';
+import { waLink, telefoneWhats } from '../lib/whatsapp.js';
 import { igHandle, igUrl } from '../lib/instagram.js';
 import { leadScore } from '../lib/score.js';
 
@@ -64,7 +64,7 @@ export default function TodayPanel({ leads, searchId, onPatch }) {
   const concluir = (item) => patch(item, { followUpAt: null });
 
   function Item({ item, sub, children }) {
-    const wa = waLink(item.phone, item.name, item.niche ?? item.searchNiche, item.enrichment?.ownerName, item.id);
+    const wa = waLink(telefoneWhats(item), item.name, item.niche ?? item.searchNiche, item.enrichment?.ownerName, item.id);
     const ig = igHandle(item.enrichment?.instagram);
     return (
       <li className="today-item">

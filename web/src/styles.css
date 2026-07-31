@@ -307,6 +307,15 @@ body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1f
 .ig-btn:hover { filter: brightness(1.08); }
 .kanban-ig { text-decoration: none; color: #57606a; font-size: 11px; }
 .kanban-ig:hover { color: #cc2366; text-decoration: underline; }
+.tel-fixo {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px;
+  background: #eef1f4; color: #6b7280; border-radius: 4px; padding: 1px 5px; margin-left: 4px;
+}
+.tel-achado {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px;
+  background: #e8f6ec; color: #1a5b2f; border-radius: 4px; padding: 1px 5px; margin-left: 2px;
+}
+
 .niche-warn {
   font-size: 12px; line-height: 1.45; color: #8a4b0a; background: #fff6e6;
   border: 1px solid #ffd9a0; border-radius: 8px; padding: 8px 10px;

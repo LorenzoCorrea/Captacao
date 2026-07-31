@@ -1,10 +1,14 @@
+import { telefoneWhats } from './whatsapp.js';
+
 // Score de qualificação (0-100): quão bom prospecto é o lead p/ vender site.
 // Como TODOS os leads já não têm site, o que diferencia é contactabilidade +
 // sinais de presença online. (OSM não traz avaliações, então não entram aqui.)
 export function leadScore(lead) {
   const e = lead.enrichment || {};
   let s = 0;
-  if (lead.phone) s += 30; // dá pra chamar no WhatsApp (canal principal do Lorenzo)
+  // Só celular vale os 30: fixo não tem WhatsApp, serve pra ligar (vale menos).
+  if (telefoneWhats(lead)) s += 30;
+  else if (lead.phone) s += 12;
   if (e.instagram) s += 30; // tem Instagram mas não tem site = alvo ideal
   if (e.igFollowers >= 1000) s += 10; // perfil com audiência = investe em presença digital
   if (e.email) s += 20;

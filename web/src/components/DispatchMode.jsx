@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { waLink, montarMensagem, variantOf } from '../lib/whatsapp.js';
+import { waLink, montarMensagem, variantOf, telefoneWhats } from '../lib/whatsapp.js';
 import { igHandle, igUrl } from '../lib/instagram.js';
 import { checkSend, registerSend, getUsage, loadLimits, fmtEspera } from '../lib/limits.js';
 
@@ -13,7 +13,7 @@ import { checkSend, registerSend, getUsage, loadLimits, fmtEspera } from '../lib
 // (lib/limits.js). O botão TRAVA quando o limite é atingido — disparar frio em
 // volume é o que derruba número no WhatsApp, e número novo cai mais rápido.
 export default function DispatchMode({ leads, onContacted, onClose }) {
-  const fila = leads.filter((l) => waLink(l.phone, l.name, l.niche) || igHandle(l.enrichment?.instagram));
+  const fila = leads.filter((l) => telefoneWhats(l) || igHandle(l.enrichment?.instagram));
   const [i, setI] = useState(0);
   const [copiado, setCopiado] = useState(false);
   const [usage, setUsage] = useState(getUsage);
@@ -22,7 +22,7 @@ export default function DispatchMode({ leads, onContacted, onClose }) {
   const done = i >= fila.length;
   const lead = fila[i];
   const dono = lead?.enrichment?.ownerName;
-  const wa = lead ? waLink(lead.phone, lead.name, lead.niche, dono, lead.id) : null;
+  const wa = lead ? waLink(telefoneWhats(lead), lead.name, lead.niche, dono, lead.id) : null;
   const ig = lead ? igHandle(lead.enrichment?.instagram) : null;
   const variante = lead ? variantOf(lead.id) : 'A';
   const canal = wa ? 'whatsapp' : 'instagram';
