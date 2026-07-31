@@ -323,6 +323,8 @@ function mockEnrichment(lead) {
     facebook: Math.random() < 0.4 ? `https://facebook.com/${slug}` : null,
     linkedin: null,
     whatsapp: lead.phone,
+    // Metade dos leads sem celular ganha um "achado na web", como no real
+    mobilePhone: Math.random() < 0.5 ? `(51) 9${String(1000 + Math.floor(Math.random() * 8999))}-${String(1000 + Math.floor(Math.random() * 8999))}` : null,
     confidence: 0.7,
     partial: false,
     cnpj: temCnpj ? '12345678000190' : null,

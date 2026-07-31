@@ -1,4 +1,4 @@
-import { waLink } from '../lib/whatsapp.js';
+import { waLink, telefoneWhats, tipoTelefone } from '../lib/whatsapp.js';
 import { mailtoLink } from '../lib/email.js';
 import { igHandle, igUrl, fmtSeguidores } from '../lib/instagram.js';
 import { leadScore, scoreTier } from '../lib/score.js';
@@ -9,7 +9,10 @@ const fmtMoney = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency:
 
 export default function LeadCard({ lead, selected, onSelect, onOpenDetails, searchId }) {
   const e = lead.enrichment;
-  const wa = waLink(lead.phone, lead.name, lead.niche, e?.ownerName, lead.id);
+  // Prefere o celular achado no enriquecimento; o telefone do OSM costuma ser
+  // o fixo da loja, que não tem WhatsApp.
+  const celular = telefoneWhats(lead);
+  const wa = waLink(celular, lead.name, lead.niche, e?.ownerName, lead.id);
   const mail = mailtoLink(e?.email, lead.name, lead.niche);
   const ig = igHandle(e?.instagram);
   const score = leadScore(lead);
@@ -40,7 +43,15 @@ export default function LeadCard({ lead, selected, onSelect, onOpenDetails, sear
         <p className="muted">⭐ {lead.rating} ({lead.reviewsCount} avaliações)</p>
       )}
       <p className="muted">{lead.address}</p>
-      {lead.phone && <p className="muted">📞 {lead.phone}</p>}
+      {lead.phone && (
+        <p className="muted">
+          📞 {lead.phone}
+          {tipoTelefone(lead.phone) === 'fixo' && <span className="tel-fixo" title="Telefone fixo: não tem WhatsApp, só ligação"> fixo</span>}
+        </p>
+      )}
+      {celular && celular !== lead.phone && (
+        <p className="muted" title="Celular encontrado na web pelo enriquecimento">📱 {celular} <span className="tel-achado">achado na web</span></p>
+      )}
       {e?.ownerName && (
         <p className="muted" title={e.razaoSocial ? `Razão social: ${e.razaoSocial}` : undefined}>
           👤 {e.ownerName}

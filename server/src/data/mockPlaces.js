@@ -51,7 +51,9 @@ export function gerarEstabelecimentos({ niche, city, lat, lng, radiusKm, count =
       name: nomeFicticio(niche),
       niche,
       address: `${pick(RUAS)}, ${100 + Math.floor(Math.random() * 1900)} – ${city}`,
-      phone: `(${ddd}) 9${rand4()}-${rand4()}`,
+      // ~40% só com FIXO (8 dígitos começando em 2-5), como acontece de
+      // verdade no OSM — mock fiel é o que faz o teste valer.
+      phone: Math.random() < 0.4 ? `(${ddd}) 3${rand4().slice(0, 3)}-${rand4()}` : `(${ddd}) 9${rand4()}-${rand4()}`,
       rating: Math.round((3.4 + Math.random() * 1.6) * 10) / 10,
       reviewsCount: 3 + Math.floor(Math.random() * 180),
       hasWebsite: Math.random() < 0.35, // ~35% têm site e serão descartados pelo filtro

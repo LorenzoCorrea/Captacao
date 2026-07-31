@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { waLink } from '../lib/whatsapp.js';
+import { waLink, telefoneWhats } from '../lib/whatsapp.js';
 import { igHandle } from '../lib/instagram.js';
 
 // Pino via divIcon (CSS puro): a cor reflete o status do enriquecimento em
@@ -38,7 +38,7 @@ function FlyToSelected({ lead }) {
 function LeadMarker({ lead, selected, onSelect }) {
   const ref = useRef(null);
   const icon = useMemo(() => pinIcon(lead.enrichmentStatus, selected), [lead.enrichmentStatus, selected]);
-  const wa = waLink(lead.phone, lead.name, lead.niche, lead.enrichment?.ownerName, lead.id);
+  const wa = waLink(telefoneWhats(lead), lead.name, lead.niche, lead.enrichment?.ownerName, lead.id);
 
   useEffect(() => {
     if (selected) ref.current?.openPopup();
