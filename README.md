@@ -86,8 +86,10 @@ flowchart LR
 
 ```bash
 npm run setup   # 1ª vez: instala raiz, server, web e o worker Python
-npm run dev     # sobe API (3001) + front (5173) juntos, com logs [api]/[web]
+npm start       # sobe API (3001) + front (5173) juntos, com logs [api]/[web]
 ```
+
+> ⚠️ **Use `npm start`, não `npm run dev`.** O `dev` roda a API com `node --watch`, que reinicia a cada arquivo alterado — ótimo para editar código, péssimo para usar o sistema: antivírus, OneDrive ou sincronização de pasta "tocam" arquivos e derrubam a API **no meio de uma busca** (`ECONNRESET` no log). Se a pasta estiver na Área de Trabalho sincronizada, vale movê-la para algo como `C:\Captacao`.
 
 > 💡 **Sem rede / demo:** `npm run dev:mock` desliga Overpass/DuckDuckGo e usa negócios e contatos fictícios — ótimo pra testar o fluxo na hora.
 
