@@ -12,6 +12,7 @@ import TodayPanel from './components/TodayPanel.jsx';
 import { leadScore } from './lib/score.js';
 import { igHandle } from './lib/instagram.js';
 import { variantOf } from './lib/whatsapp.js';
+import { lerJson } from './lib/api.js';
 import { useEnrichmentStream } from './hooks/useEnrichmentStream.js';
 
 const CENTRO_PADRAO = [-30.0427211, -51.1626625]; // Porto Alegre (bairro Bom Jesus)
@@ -43,16 +44,20 @@ export default function App() {
       try {
         const r = await fetch(`/api/search/${sid}/leads`);
         if (!r.ok) { localStorage.removeItem('captacao.lastSearchId'); return; }
-        const data = await r.json();
+        const data = await lerJson(r);
         setSearch(data);
         setLeads(data.leads);
       } catch {
+        // Busca antiga não recuperável: limpa e segue em silêncio (é só o
+        // restore automático do F5, não uma ação que o usuário pediu).
         localStorage.removeItem('captacao.lastSearchId');
       }
     })();
   }, []);
 
-  // FASE 1 — busca síncrona: pinos e cards aparecem de imediato
+  // FASE 1 — busca síncrona: pinos e cards aparecem de imediato.
+  // O timeout é generoso porque o Overpass pode enfileirar a resposta; passou
+  // disso, é melhor avisar do que deixar "Buscando…" para sempre.
   const runSearch = useCallback(async (params) => {
     setLoading(true);
     setSelectedId(null);
@@ -62,14 +67,18 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params),
+        signal: AbortSignal.timeout(75000),
       });
-      if (!r.ok) throw new Error((await r.json()).error ?? 'Falha na busca');
-      const data = await r.json();
+      const data = await lerJson(r);
       setSearch(data);
       setLeads(data.leads);
       localStorage.setItem('captacao.lastSearchId', data.searchId);
     } catch (e) {
-      setSearchError(e.message);
+      setSearchError(
+        e.name === 'TimeoutError'
+          ? 'A busca passou de 75 segundos sem resposta. O OpenStreetMap deve estar sobrecarregado — tente de novo em alguns minutos.'
+          : e.message
+      );
     } finally {
       setLoading(false);
     }
@@ -175,8 +184,7 @@ export default function App() {
   const openSearch = useCallback(async (searchId) => {
     try {
       const r = await fetch(`/api/search/${searchId}/leads`);
-      if (!r.ok) throw new Error('Não consegui abrir essa busca.');
-      const data = await r.json();
+      const data = await lerJson(r);
       setSearch(data);
       setLeads(data.leads);
       setSelectedId(null);
