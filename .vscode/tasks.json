@@ -1,0 +1,34 @@
+{
+  // Atalhos do VS Code: Terminal → Executar Tarefa… (ou Ctrl+Shift+B para a 1ª).
+  // Evita depender de decorar comando no dia a dia de prospecção.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "▶ Rodar Captação",
+      "detail": "Sobe API (3001) + front (5173). Depois abra http://localhost:5173",
+      "type": "shell",
+      "command": "npm start",
+      "isBackground": true,
+      "problemMatcher": [],
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "⬇ Atualizar do GitHub",
+      "detail": "git pull + instala dependências novas, se houver",
+      "type": "shell",
+      "command": "git pull && npm run setup",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "🧪 Rodar em modo demo (sem internet)",
+      "detail": "Dados fictícios: serve pra conferir se a tela está funcionando",
+      "type": "shell",
+      "command": "npm run dev:mock",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    }
+  ]
+}
