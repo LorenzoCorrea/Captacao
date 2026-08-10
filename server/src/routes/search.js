@@ -21,6 +21,33 @@ const slug = (s) =>
 const USE_MOCK = process.env.DATA_PROVIDER === 'mock'; // demo offline sem rede
 const clamp = (n, lo, hi) => Math.min(Math.max(Number(n) || lo, lo), hi);
 
+// "Overpass não respondeu" é diagnóstico ruim: sobrecarga do serviço, bloqueio
+// de firewall corporativo e antivírus interceptando TLS exigem AÇÕES bem
+// diferentes. Traduz o erro técnico na causa provável e no que fazer.
+function mensagemFalhaOsm(e) {
+  const m = String(e?.message ?? '');
+  if (/ENOTFOUND|EAI_AGAIN/i.test(m)) {
+    return 'Não consegui nem resolver o endereço do OpenStreetMap (DNS). Verifique a internet — em rede de empresa isso costuma ser bloqueio.';
+  }
+  if (/ECONNREFUSED|ECONNRESET|EHOSTUNREACH|ENETUNREACH|EPROTO/i.test(m)) {
+    return 'A conexão com o OpenStreetMap foi recusada ou cortada. Em rede de empresa (firewall/proxy) isso é comum — teste abrir https://overpass-api.de/api/status no navegador.';
+  }
+  if (/certificate|self.signed|unable to verify|DEPTH_ZERO/i.test(m)) {
+    return 'A conexão com o OpenStreetMap foi interceptada por antivírus ou proxy da empresa (erro de certificado). Use outra rede, ex.: roteando pelo celular.';
+  }
+  if (/timeout/i.test(m)) {
+    return 'O OpenStreetMap não respondeu a tempo — servidor ocupado. Tente de novo em 1 ou 2 minutos.';
+  }
+  const http = m.match(/HTTP (\d{3})/);
+  if (http) {
+    const code = http[1];
+    if (code === '429') return 'O OpenStreetMap limitou as consultas do seu IP (429). Espere alguns minutos antes de buscar de novo.';
+    if (code.startsWith('4')) return `O OpenStreetMap recusou a consulta (HTTP ${code}). Em rede de empresa pode ser o proxy barrando.`;
+    return `O OpenStreetMap está com problema no servidor (HTTP ${code}). Tente em alguns minutos.`;
+  }
+  return `Não consegui consultar o OpenStreetMap${m ? ` (${m})` : ''}. Se repetir, teste abrir https://overpass-api.de/api/status no navegador.`;
+}
+
 // ─── FASE 1 — síncrona: pinos no mapa em ~1–2s ──────────────────────────────
 router.post('/api/search', async (req, res) => {
   const { niche, city = 'São Paulo', lat = -23.5505, lng = -46.6333, radiusKm = 5 } = req.body ?? {};
@@ -55,9 +82,7 @@ router.post('/api/search', async (req, res) => {
     });
   } catch (e) {
     console.error('Falha na busca OSM:', e);
-    res.status(502).json({
-      error: 'O servidor de mapas (OpenStreetMap) não respondeu. Costuma ser sobrecarga momentânea — tente de novo em 1 ou 2 minutos.',
-    });
+    res.status(502).json({ error: mensagemFalhaOsm(e) });
   }
 });
 
