@@ -89,6 +89,11 @@ export const STAGES = ['novo', 'qualificado', 'contatado', 'ganho', 'descartado'
 // Se a sessão já saiu da memória, re-hidrata do banco antes — mover um card no
 // Kanban NUNCA falha silenciosamente por causa do TTL.
 export async function updateLead(searchId, leadId, patch = {}) {
+  // Valide o patch inteiro antes de tocar na sessão: um 400 não pode salvar
+  // só parte dos campos em memória e deixar o banco com valores diferentes.
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return false;
+  if (patch.stage !== undefined && !STAGES.includes(patch.stage)) return false;
+  if (patch.msgVariant !== undefined && patch.msgVariant !== null && !['A', 'B'].includes(patch.msgVariant)) return false;
   let s = searches.get(searchId);
   if (!s?.leads.get(leadId)) {
     await reopenSearch(searchId); // re-hidrata (no-op se não existe no banco)
@@ -99,7 +104,6 @@ export async function updateLead(searchId, leadId, patch = {}) {
   touch(s);
   const fields = {};
   if (patch.stage !== undefined) {
-    if (!STAGES.includes(patch.stage)) return false;
     lead.stage = patch.stage; fields.stage = patch.stage;
   }
   if (patch.notes !== undefined) { lead.notes = String(patch.notes); fields.notes = lead.notes; }
@@ -110,7 +114,6 @@ export async function updateLead(searchId, leadId, patch = {}) {
     lead.estimatedValue = Number.isFinite(v) ? v : null; fields.estimatedValue = lead.estimatedValue;
   }
   if (patch.msgVariant !== undefined) {
-    if (patch.msgVariant !== null && !['A', 'B'].includes(patch.msgVariant)) return false;
     lead.msgVariant = patch.msgVariant; fields.msgVariant = patch.msgVariant;
   }
   if (patch.interactions !== undefined) {

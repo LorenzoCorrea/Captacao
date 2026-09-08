@@ -51,12 +51,18 @@ function mensagemFalhaOsm(e) {
 // ─── FASE 1 — síncrona: pinos no mapa em ~1–2s ──────────────────────────────
 router.post('/api/search', async (req, res) => {
   const { niche, city = 'São Paulo', lat = -23.5505, lng = -46.6333, radiusKm = 5 } = req.body ?? {};
-  if (!niche?.trim()) {
+  if (typeof niche !== 'string' || !niche.trim()) {
     return res.status(400).json({ error: 'Informe o nicho (ex: "salão de estética").' });
   }
   // Coordenadas inválidas virariam NaN dentro da query do Overpass e voltariam
   // como um 502 confuso — melhor um 400 claro aqui.
-  if (!Number.isFinite(+lat) || !Number.isFinite(+lng) || Math.abs(+lat) > 90 || Math.abs(+lng) > 180) {
+  if (typeof city !== 'string') {
+    return res.status(400).json({ error: 'Informe uma cidade válida.' });
+  }
+  const validCoordinate = (value, max) =>
+    (typeof value === 'number' || (typeof value === 'string' && value.trim() !== '')) &&
+    Number.isFinite(Number(value)) && Math.abs(Number(value)) <= max;
+  if (!validCoordinate(lat, 90) || !validCoordinate(lng, 180)) {
     return res.status(400).json({ error: 'Coordenadas inválidas — escolha a cidade pela lista de sugestões.' });
   }
   const radius = clamp(radiusKm, 0.5, 30);

@@ -8,9 +8,11 @@ import pg from 'pg';
 
 const { Pool } = pg;
 const url = process.env.DATABASE_URL;
-export const dbEnabled = Boolean(url);
+// Configuração não significa conexão pronta. Só anuncia persistência após
+// preparar o schema; se o boot falhar, todas as operações usam o fallback.
+export let dbEnabled = false;
 
-const pool = dbEnabled
+const pool = url
   ? new Pool({ connectionString: url, max: 5, idleTimeoutMillis: 30000, connectionTimeoutMillis: 8000 })
   : null;
 // Erro assíncrono de um cliente ocioso não pode derrubar o processo.
@@ -82,12 +84,14 @@ async function createDatabaseIfMissing() {
 }
 
 export async function initDb() {
+  dbEnabled = false;
   if (!pool) {
     console.log('[db] DATABASE_URL ausente — rodando em memória (sem persistência).');
     return false;
   }
   try {
     await pool.query(DDL);
+    dbEnabled = true;
     console.log('[db] schema pronto — persistência ATIVADA.');
     return true;
   } catch (e) {
@@ -96,6 +100,7 @@ export async function initDb() {
       try {
         await createDatabaseIfMissing();
         await pool.query(DDL);
+        dbEnabled = true;
         console.log('[db] schema pronto — persistência ATIVADA.');
         return true;
       } catch (e2) {
@@ -111,7 +116,7 @@ export async function initDb() {
 // Grava a busca e todos os leads de uma vez (transação). Devolve a Promise para
 // que updates posteriores (enriquecimento/estágio) esperem o INSERT terminar.
 export async function saveSearch(search, meta = {}) {
-  if (!pool) return;
+  if (!dbEnabled) return;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -150,7 +155,7 @@ export async function saveSearch(search, meta = {}) {
 }
 
 export async function saveEnrichment(searchId, lead) {
-  if (!pool) return;
+  if (!dbEnabled) return;
   try {
     await pool.query(
       `UPDATE leads SET enrichment=$3, enrichment_status=$4, updated_at=now() WHERE search_id=$1 AND lead_id=$2`,
@@ -160,7 +165,7 @@ export async function saveEnrichment(searchId, lead) {
 }
 
 export async function saveStage(searchId, leadId, stage) {
-  if (!pool) return;
+  if (!dbEnabled) return;
   try {
     await pool.query(`UPDATE leads SET stage=$3, updated_at=now() WHERE search_id=$1 AND lead_id=$2`, [searchId, leadId, stage]);
   } catch (e) { console.error('[db] saveStage:', e.message); }
@@ -168,7 +173,7 @@ export async function saveStage(searchId, leadId, stage) {
 
 // Atualiza os campos editáveis do lead (CRM): stage, notas, follow-up, tags, valor.
 export async function saveLeadFields(searchId, leadId, fields = {}) {
-  if (!pool) return;
+  if (!dbEnabled) return;
   const map = { stage: 'stage', notes: 'notes', followUpAt: 'follow_up_at', tags: 'tags', estimatedValue: 'estimated_value', interactions: 'interactions', msgVariant: 'msg_variant' };
   const sets = []; const vals = []; let i = 1;
   for (const [k, col] of Object.entries(map)) {
@@ -196,7 +201,7 @@ function rowToLead(r) {
 
 // Fallback para export/webhook quando a sessão já saiu da memória (TTL/restart).
 export async function loadSearch(searchId) {
-  if (!pool) return null;
+  if (!dbEnabled) return null;
   try {
     const s = await pool.query('SELECT * FROM searches WHERE id=$1', [searchId]);
     if (!s.rowCount) return null;
@@ -212,7 +217,7 @@ export async function loadSearch(searchId) {
 
 // Estatísticas de conversão (geral + por nicho + por cidade) para o dashboard.
 export async function statsConversao() {
-  if (!pool) return null;
+  if (!dbEnabled) return null;
   const agg = `count(l.*)::int total,
                count(*) FILTER (WHERE l.stage='ganho')::int ganho,
                count(*) FILTER (WHERE l.stage='contatado')::int contatado,
@@ -253,7 +258,7 @@ export async function statsConversao() {
 // follow-ups vencidos + contatados sem resposta há 3+ dias e sem retorno
 // agendado. A venda está no 4º toque; isso aqui é o que impede o lead esfriar.
 export async function todayLeads() {
-  if (!pool) return null;
+  if (!dbEnabled) return null;
   const today = new Date().toISOString().slice(0, 10); // follow_up_at é text YYYY-MM-DD
   try {
     const r = await pool.query(
@@ -276,7 +281,7 @@ export async function todayLeads() {
 
 // Histórico de buscas (com contagem de leads e enriquecidos).
 export async function listSearches(limit = 50) {
-  if (!pool) return [];
+  if (!dbEnabled) return [];
   try {
     const r = await pool.query(
       `SELECT s.id, s.niche, s.city, s.found, s.created_at,
