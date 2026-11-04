@@ -12,7 +12,12 @@ const app = express();
 app.use(express.json());
 app.use(searchRouter);
 
-await initDb();
+// No boot da máquina, API e Postgres sobem sem ordem garantida: sem repetir, a API ficaria em memória até reiniciar.
+if (!(await initDb()) && process.env.DATABASE_URL) {
+  const retry = setInterval(async () => {
+    if (await initDb()) clearInterval(retry);
+  }, 10000);
+}
 
 const PORT = process.env.PORT ?? 3001;
 app.listen(PORT, () => {
