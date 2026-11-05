@@ -58,4 +58,38 @@ services:
     volumes:
       - ./.htpasswd:/etc/nginx/.htpasswd:ro
 
-# Sem volumes — o estado mora todo no PostgreSQL (que está fora deste compose).
+  # ── Gateway do WhatsApp: sem porta publicada, só o Captação fala com ele ────
+  evolution:
+    image: evoapicloud/evolution-api:2.4.0-rc2
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:?defina no .env}
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: ${EVOLUTION_DATABASE_URI:?defina no .env}
+      DATABASE_CONNECTION_CLIENT_NAME: evolution
+      CACHE_REDIS_ENABLED: "false"
+      CACHE_LOCAL_ENABLED: "true"
+      TELEMETRY_ENABLED: "false"
+      LOG_LEVEL: ERROR,WARN
+    volumes:
+      - evolution_instances:/evolution/instances
+
+  # ── Roteador de modelos de IA; o painel só abre neste computador ────────────
+  router9:
+    image: decolua/9router:0.5.104
+    restart: unless-stopped
+    environment:
+      DATA_DIR: /app/data
+      NEXT_TELEMETRY_DISABLED: "1"
+      INITIAL_PASSWORD: ${ROUTER9_PASSWORD:?defina no .env}
+    ports:
+      - "127.0.0.1:20128:20128"
+    volumes:
+      - router9_data:/app/data
+
+volumes:
+  evolution_instances:
+  router9_data:
+
