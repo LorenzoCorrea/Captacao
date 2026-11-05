@@ -74,6 +74,19 @@ test('respostas de tópico são compostas sem repetição e recusam desconhecido
   assert.deepEqual(Object.keys(ANSWERS).sort(), [...TOPICS].sort());
 });
 
+test('a apresentação geral não é colada em outra resposta', () => {
+  assert.equal(answerFor(['price', 'how_it_works']), ANSWERS.price);
+  assert.equal(answerFor(['how_it_works', 'price']), ANSWERS.price);
+  assert.equal(answerFor(['how_it_works']), ANSWERS.how_it_works);
+  assert.equal(answerFor(['how_it_works', 'price', 'deadline']), `${ANSWERS.price}\n\n${ANSWERS.deadline}`);
+});
+
+test('prazo é prometido como "até 4 dias corridos"', () => {
+  assert.match(OFFER.prazo, /^até 4 dias corridos/);
+  for (const text of [ANSWERS.price, ANSWERS.deadline]) assert.match(text, /até 4 dias corridos/);
+  assert.doesNotMatch([...Object.values(ANSWERS), ...Object.values(FIXED)].join(' '), /(?<!até )4 dias corridos/);
+});
+
 test('textos fixos trazem os valores e o aviso de juros', () => {
   assert.match(FIXED.accepted, /R\$ 165/);
   assert.match(FIXED.accepted, /dados de pagamento/);

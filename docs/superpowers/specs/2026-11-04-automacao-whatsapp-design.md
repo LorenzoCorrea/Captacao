@@ -55,7 +55,7 @@ Esta tabela é a única fonte do que o bot pode afirmar.
 |---|---|
 | Produto | Landing page focada no comércio do cliente |
 | Preço | R$ 550, com site e hospedagem inclusos |
-| Prazo | 4 dias corridos, contados a partir do sinal |
+| Prazo | Até 4 dias corridos, contados a partir do sinal |
 | Sinal | 30% no Pix (R$ 165). O trabalho só começa depois dele |
 | Saldo | R$ 385, no Pix ou no cartão |
 | Parcelamento | Disponível no cartão, com juros, por link do Mercado Pago gerado por Lorenzo. O bot não informa parcelas |

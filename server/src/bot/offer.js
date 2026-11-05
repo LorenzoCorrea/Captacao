@@ -2,7 +2,7 @@
 // valores: assim, um erro do modelo não vira um preço errado na conversa.
 export const OFFER = {
   preco: 'R$ 550, com o site pronto e a hospedagem inclusos',
-  prazo: '4 dias corridos depois do sinal',
+  prazo: 'até 4 dias corridos depois do sinal',
   sinal: 'sinal de 30% no Pix (R$ 165)',
   saldo: 'o restante (R$ 385) pode ser no Pix ou no cartão',
   parcelamento: 'dá para parcelar no cartão, com juros',
@@ -56,7 +56,9 @@ const MAX_TOPICS = 2;
 
 export function answerFor(topics) {
   if (!Array.isArray(topics) || !topics.length) return null;
-  const unique = [...new Set(topics)];
+  // A apresentação geral puxa a conversa e não faz sentido colada numa resposta específica.
+  const specific = topics.filter((t) => t !== 'how_it_works');
+  const unique = [...new Set(specific.length ? specific : topics)];
   if (unique.length > MAX_TOPICS || !unique.every((t) => Object.hasOwn(ANSWERS, t))) return null;
   return unique.map((t) => ANSWERS[t]).join('\n\n');
 }
