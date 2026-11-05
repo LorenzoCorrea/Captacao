@@ -52,7 +52,8 @@ async function capture(now, config, state, deps) {
         const phone = mobileFromLead(lead.phone) ?? mobileFromLead(found?.mobilePhone);
         if (phone) {
           if (!(await db.botGetByPhoneKey(phoneKey(phone)))) fresh.push({ lead, phone });
-        } else if (!k?.enrichmentStatus || k.enrichmentStatus === 'pending') {
+        } else if (!k?.enrichmentStatus || k.enrichmentStatus === 'pending' || k.enrichment?.partial) {
+          // partial = o buscador bloqueou: não é um "não achou" de verdade.
           // Sem celular no mapa: procura na internet; o achado entra na captação do dia seguinte.
           if (enrichLeft-- > 0) toEnrich.push(lead);
         }
