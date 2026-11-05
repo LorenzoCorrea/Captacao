@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { waLink, montarMensagem, variantOf, telefoneWhats } from '../lib/whatsapp.js';
 import { igHandle, igUrl } from '../lib/instagram.js';
 import { checkSend, registerSend, getUsage, loadLimits, fmtEspera } from '../lib/limits.js';
+import { syncSettings } from '../lib/settings.js';
 
 // "Modo disparo" — abordagem em sequência, com humano no loop. Abre cada lead
 // com a mensagem pronta; ao confirmar, o lead vai para "Contatado" e avança.
@@ -17,6 +18,8 @@ export default function DispatchMode({ leads, onContacted, onClose }) {
   const [i, setI] = useState(0);
   const [copiado, setCopiado] = useState(false);
   const [usage, setUsage] = useState(getUsage);
+  // Outro aparelho pode já ter usado parte do limite de hoje.
+  useEffect(() => { syncSettings().then(() => setUsage(getUsage())); }, []);
   const [, tick] = useState(0); // relógio: atualiza a contagem regressiva do espaçamento
 
   const done = i >= fila.length;

@@ -11,7 +11,7 @@ import { toCSV, toXLSX } from '../export/exporter.js';
 import { previewHtml } from '../preview/preview.js';
 import { propostaPdf } from '../export/proposta.js';
 import { hojeLocal } from '../date.js';
-import { listSearches, statsConversao, todayLeads, dbEnabled, dbStatus } from '../db.js';
+import { listSearches, statsConversao, todayLeads, dbEnabled, dbStatus, loadKnownLeads, loadSettings, saveSetting, incrementUsage } from '../db.js';
 
 const router = Router();
 const slug = (s) =>
@@ -82,12 +82,13 @@ router.post('/api/search', async (req, res) => {
       ({ found, leads } = await buscarEstabelecimentos(params));
     }
 
-    const searchId = createSearch(leads, { city, niche: params.niche, lat: params.lat, lng: params.lng, radiusKm: params.radiusKm, found });
+    const known = await loadKnownLeads(leads.map((l) => l.id));
+    const searchId = createSearch(leads, { city, niche: params.niche, lat: params.lat, lng: params.lng, radiusKm: params.radiusKm, found }, known);
     res.json({
       searchId,
       query: params,
       stats: { found, withoutWebsite: leads.length },
-      leads: leads.map((l) => ({ ...l, enrichmentStatus: 'pending', enrichment: null, stage: 'novo' })),
+      leads: (await getSearchLeads(searchId)).leads,
     });
   } catch (e) {
     console.error('Falha na busca OSM:', e);
@@ -277,6 +278,32 @@ router.get('/api/searches', async (_req, res) => {
 
 // Diz se a persistência está ativa (DATABASE_URL configurada e pool aberto).
 router.get('/api/status', (_req, res) => res.json(dbStatus()));
+
+// Configurações compartilhadas entre aparelhos.
+const validSetting = {
+  msgConfig: (v) => v === null || (typeof v === 'object' && !Array.isArray(v)),
+  limits: (v) => v !== null && typeof v === 'object' && !Array.isArray(v) &&
+    ['whatsapp', 'instagram', 'minSpacingMin'].every((k) => v[k] === undefined || (Number.isFinite(v[k]) && v[k] >= 0)),
+  lastSearchId: (v) => v === null || (typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v)),
+};
+
+router.get('/api/settings', async (_req, res) => {
+  res.json({ settings: await loadSettings() });
+});
+
+router.put('/api/settings/:key', async (req, res) => {
+  const valid = Object.hasOwn(validSetting, req.params.key) ? validSetting[req.params.key] : null;
+  if (!valid) return res.status(404).json({ error: 'Configuração desconhecida.' });
+  if (!req.body || !('value' in req.body) || !valid(req.body.value)) return res.status(400).json({ error: 'Valor inválido.' });
+  await saveSetting(req.params.key, req.body.value);
+  res.json({ ok: true });
+});
+
+router.post('/api/usage', async (req, res) => {
+  const canal = req.body?.canal;
+  if (canal !== 'whatsapp' && canal !== 'instagram') return res.status(400).json({ error: 'Canal inválido.' });
+  res.json({ usage: await incrementUsage(canal, hojeLocal(), Date.now()) });
+});
 
 // Painel "Hoje": follow-ups vencidos + contatados parados, de todas as buscas.
 // items = null quando o banco está desligado (o front cai pro modo memória).

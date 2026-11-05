@@ -1,4 +1,5 @@
 import { hojeLocal as hoje } from './date.js';
+import { pushSetting, registerUsage } from './settings.js';
 
 // Proteção anti-ban ("modo aquecimento").
 //
@@ -38,7 +39,11 @@ const gravar = (k, v) => {
 };
 
 export const loadLimits = () => ler(CFG_KEY, DEFAULT_LIMITS);
-export const saveLimits = (cfg) => gravar(CFG_KEY, { ...DEFAULT_LIMITS, ...cfg });
+export const saveLimits = (cfg) => {
+  const next = { ...DEFAULT_LIMITS, ...cfg };
+  gravar(CFG_KEY, next);
+  pushSetting('limits', next);
+};
 
 // Contadores do dia. Vira o dia -> zera (sem precisar de cron nem servidor).
 export function getUsage() {
@@ -51,6 +56,7 @@ export function registerSend(canal) {
   const u = getUsage();
   const next = { ...u, [canal]: (u[canal] ?? 0) + 1, lastAt: Date.now() };
   gravar(USE_KEY, next);
+  registerUsage(canal);
   return next;
 }
 

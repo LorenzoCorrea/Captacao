@@ -1,3 +1,5 @@
+import { pushSetting } from './settings.js';
+
 // Monta o link wa.me com a mensagem de abordagem já preenchida e personalizada
 // por nicho. A mensagem é EDITÁVEL pela tela (componente MessageSettings) e fica
 // salva no navegador (localStorage); aqui mora o conteúdo padrão de fábrica.
@@ -48,10 +50,12 @@ export function loadMsgConfig() {
 
 export function saveMsgConfig(cfg) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)); } catch { /* ignora */ }
+  pushSetting('msgConfig', cfg);
 }
 
 export function resetMsgConfig() {
   try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignora */ }
+  pushSetting('msgConfig', null);
 }
 
 // Conversões entre o array de benefícios e o texto editável (1 regra por linha:

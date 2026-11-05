@@ -115,6 +115,12 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS tags text[] DEFAULT '{}';
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS estimated_value numeric;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS interactions jsonb DEFAULT '[]';
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS msg_variant text;
+-- Configurações compartilhadas entre aparelhos (mensagens, limites, contadores).
+CREATE TABLE IF NOT EXISTS app_settings (
+  key        text PRIMARY KEY,
+  value      jsonb,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 `;
 
 // O container do Postgres pode ter sido criado com outro POSTGRES_DB (ex.:
@@ -184,18 +190,19 @@ async function writeSearch(search, meta) {
     // INSERT em lote (multi-VALUES): com o Postgres do outro lado da Tailscale,
     // 150 inserts sequenciais custariam segundos; em lote é 1 round-trip.
     const leads = [...search.leads.values()];
-    const CHUNK = 200; // 15 params/linha → bem abaixo do limite de 65535 do protocolo
+    const CHUNK = 200; // 21 params/linha → bem abaixo do limite de 65535 do protocolo
     for (let off = 0; off < leads.length; off += CHUNK) {
       const chunk = leads.slice(off, off + CHUNK);
       const vals = [];
       const rows = chunk.map((l, i) => {
-        vals.push(search.id, l.id, l.name, l.address, l.phone, l.lat, l.lng, l.hasWebsite ?? false, l.source ?? null, l.niche ?? null, l.rating ?? null, l.reviewsCount ?? null, l.enrichment ?? null, l.enrichmentStatus, l.stage);
-        const b = i * 15;
-        return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9},$${b + 10},$${b + 11},$${b + 12},$${b + 13},$${b + 14},$${b + 15})`;
+        const row = [search.id, l.id, l.name, l.address, l.phone, l.lat, l.lng, l.hasWebsite ?? false, l.source ?? null, l.niche ?? null, l.rating ?? null, l.reviewsCount ?? null, l.enrichment ?? null, l.enrichmentStatus, l.stage,
+          l.notes ?? null, l.followUpAt ?? null, l.tags ?? [], l.estimatedValue ?? null, JSON.stringify(l.interactions ?? []), l.msgVariant ?? null];
+        vals.push(...row);
+        return `(${row.map((_, n) => `$${i * row.length + n + 1}`).join(',')})`;
       });
       if (!rows.length) continue;
       await client.query(
-        `INSERT INTO leads (search_id, lead_id, name, address, phone, lat, lng, has_website, source, niche, rating, reviews_count, enrichment, enrichment_status, stage)
+        `INSERT INTO leads (search_id, lead_id, name, address, phone, lat, lng, has_website, source, niche, rating, reviews_count, enrichment, enrichment_status, stage, notes, follow_up_at, tags, estimated_value, interactions, msg_variant)
          VALUES ${rows.join(',')}
          ON CONFLICT (search_id, lead_id) DO NOTHING`,
         vals
@@ -212,14 +219,14 @@ async function writeSearch(search, meta) {
 
 export async function saveEnrichment(searchId, lead) {
   return persist('saveEnrichment', () => pool.query(
-    `UPDATE leads SET enrichment=$3, enrichment_status=$4, updated_at=now() WHERE search_id=$1 AND lead_id=$2`,
-    [searchId, lead.id, lead.enrichment ?? null, lead.enrichmentStatus]
+    `UPDATE leads SET enrichment=$2, enrichment_status=$3, updated_at=now() WHERE lead_id=$1`,
+    [lead.id, lead.enrichment ?? null, lead.enrichmentStatus]
   ));
 }
 
 export async function saveStage(searchId, leadId, stage) {
   return persist('saveStage', () => pool.query(
-    `UPDATE leads SET stage=$3, updated_at=now() WHERE search_id=$1 AND lead_id=$2`, [searchId, leadId, stage]
+    `UPDATE leads SET stage=$2, updated_at=now() WHERE lead_id=$1`, [leadId, stage]
   ));
 }
 
@@ -231,10 +238,67 @@ export async function saveLeadFields(searchId, leadId, fields = {}) {
     if (fields[k] !== undefined) { sets.push(`${col}=$${i++}`); vals.push(fields[k]); }
   }
   if (!sets.length) return;
-  vals.push(searchId, leadId);
+  vals.push(leadId);
+  // Por empresa, não por busca: a mesma empresa em duas buscas é um lead só.
   return persist('saveLeadFields', () => pool.query(
-    `UPDATE leads SET ${sets.join(', ')}, updated_at=now() WHERE search_id=$${i} AND lead_id=$${i + 1}`, vals
+    `UPDATE leads SET ${sets.join(', ')}, updated_at=now() WHERE lead_id=$${i}`, vals
   ));
+}
+
+// Estado já conhecido de empresas que apareceram em buscas anteriores.
+export async function loadKnownLeads(ids) {
+  if (!dbEnabled || !ids.length) return new Map();
+  try {
+    const r = await pool.query(
+      'SELECT DISTINCT ON (lead_id) * FROM leads WHERE lead_id = ANY($1) ORDER BY lead_id, updated_at DESC', [ids]
+    );
+    return new Map(r.rows.map((row) => [row.lead_id, rowToLead(row)]));
+  } catch (e) {
+    console.error('[db] loadKnownLeads:', e.message);
+    return new Map();
+  }
+}
+
+export async function loadSettings() {
+  if (!dbEnabled) return null;
+  try {
+    const r = await pool.query('SELECT key, value FROM app_settings');
+    return Object.fromEntries(r.rows.map((row) => [row.key, row.value]));
+  } catch (e) {
+    console.error('[db] loadSettings:', e.message);
+    return null;
+  }
+}
+
+export async function saveSetting(key, value) {
+  return persist('saveSetting', () => pool.query(
+    `INSERT INTO app_settings (key, value) VALUES ($1, $2::jsonb)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [key, JSON.stringify(value)]
+  ));
+}
+
+// Conta o envio de forma atômica: dois aparelhos não podem furar o limite anti-ban.
+export async function incrementUsage(canal, date, at) {
+  if (!dbEnabled) return null;
+  try {
+    const r = await pool.query(
+      `INSERT INTO app_settings (key, value)
+       VALUES ('usage', jsonb_build_object('date', $1::text, $2::text, 1, 'lastAt', $3::bigint))
+       ON CONFLICT (key) DO UPDATE SET updated_at = now(), value =
+         CASE WHEN app_settings.value->>'date' = $1::text
+           THEN jsonb_set(jsonb_set(app_settings.value, ARRAY[$2::text],
+                  to_jsonb(COALESCE((app_settings.value->>$2::text)::int, 0) + 1)),
+                  '{lastAt}', to_jsonb($3::bigint))
+           ELSE EXCLUDED.value END
+       RETURNING value`,
+      [date, canal, at]
+    );
+    return r.rows[0].value;
+  } catch (e) {
+    console.error('[db] incrementUsage:', e.message);
+    return null;
+  }
 }
 
 // Busca na base local de estabelecimentos. Devolve null quando ela não existe ou
@@ -298,10 +362,10 @@ export async function loadSearch(searchId) {
 // Estatísticas de conversão (geral + por nicho + por cidade) para o dashboard.
 export async function statsConversao() {
   if (!dbEnabled) return null;
-  const agg = `count(l.*)::int total,
-               count(*) FILTER (WHERE l.stage='ganho')::int ganho,
-               count(*) FILTER (WHERE l.stage='contatado')::int contatado,
-               count(*) FILTER (WHERE l.stage='qualificado')::int qualificado`;
+  const agg = `count(DISTINCT l.lead_id)::int total,
+               count(DISTINCT l.lead_id) FILTER (WHERE l.stage='ganho')::int ganho,
+               count(DISTINCT l.lead_id) FILTER (WHERE l.stage='contatado')::int contatado,
+               count(DISTINCT l.lead_id) FILTER (WHERE l.stage='qualificado')::int qualificado`;
   try {
     const geral = await pool.query(
       `SELECT count(l.*)::int total,
@@ -309,10 +373,10 @@ export async function statsConversao() {
               count(*) FILTER (WHERE l.stage='contatado')::int contatado,
               count(*) FILTER (WHERE l.stage='qualificado')::int qualificado,
               count(*) FILTER (WHERE l.stage='descartado')::int descartado,
-              count(DISTINCT l.search_id)::int buscas,
+              (SELECT count(*)::int FROM searches) buscas,
               COALESCE(sum(l.estimated_value) FILTER (WHERE l.stage NOT IN ('descartado','ganho')), 0)::float pipeline_value,
               COALESCE(sum(l.estimated_value) FILTER (WHERE l.stage='ganho'), 0)::float won_value
-       FROM leads l`
+       FROM (SELECT DISTINCT ON (lead_id) * FROM leads ORDER BY lead_id, updated_at DESC) l`
     );
     const porNicho = await pool.query(
       `SELECT s.niche AS chave, ${agg}
@@ -342,10 +406,13 @@ export async function todayLeads() {
   const today = hojeLocal(); // follow_up_at é text YYYY-MM-DD
   try {
     const r = await pool.query(
-      `SELECT l.*, s.city AS search_city, s.niche AS search_niche
-       FROM leads l JOIN searches s ON s.id = l.search_id
-       WHERE (l.follow_up_at IS NOT NULL AND l.follow_up_at <= $1 AND l.stage NOT IN ('ganho','descartado'))
-          OR (l.stage = 'contatado' AND l.follow_up_at IS NULL AND l.updated_at < now() - interval '3 days')
+      `SELECT * FROM (
+         SELECT DISTINCT ON (l.lead_id) l.*, s.city AS search_city, s.niche AS search_niche
+         FROM leads l JOIN searches s ON s.id = l.search_id
+         WHERE (l.follow_up_at IS NOT NULL AND l.follow_up_at <= $1 AND l.stage NOT IN ('ganho','descartado'))
+            OR (l.stage = 'contatado' AND l.follow_up_at IS NULL AND l.updated_at < now() - interval '3 days')
+         ORDER BY l.lead_id, l.updated_at DESC
+       ) l
        ORDER BY l.follow_up_at NULLS LAST, l.updated_at ASC
        LIMIT 100`,
       [today]

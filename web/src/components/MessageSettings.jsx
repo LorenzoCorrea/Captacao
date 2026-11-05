@@ -4,6 +4,7 @@ import {
   beneficiosToText, beneficiosFromText, montarMensagem,
 } from '../lib/whatsapp.js';
 import { loadLimits, saveLimits, getUsage, DEFAULT_LIMITS, AQUECIMENTO } from '../lib/limits.js';
+import { syncSettings } from '../lib/settings.js';
 
 // Editor da mensagem de abordagem do WhatsApp. A config fica no navegador
 // (localStorage) — cada um ajusta o pitch sem mexer no código.
@@ -17,13 +18,18 @@ export default function MessageSettings({ open, onClose }) {
 
   useEffect(() => {
     if (!open) return;
-    const cfg = loadMsgConfig();
-    setTemplate(cfg.template);
-    setTemplateB(cfg.templateB ?? '');
-    setBeneficios(beneficiosToText(cfg.beneficios));
-    setPadrao(cfg.beneficioPadrao);
-    setLimits(loadLimits());
-    setUsage(getUsage());
+    let vivo = true;
+    syncSettings().then(() => {
+      if (!vivo) return;
+      const cfg = loadMsgConfig();
+      setTemplate(cfg.template);
+      setTemplateB(cfg.templateB ?? '');
+      setBeneficios(beneficiosToText(cfg.beneficios));
+      setPadrao(cfg.beneficioPadrao);
+      setLimits(loadLimits());
+      setUsage(getUsage());
+    });
+    return () => { vivo = false; };
   }, [open]);
 
   if (!open) return null;

@@ -14,6 +14,7 @@ import { igHandle } from './lib/instagram.js';
 import { variantOf, telefoneWhats } from './lib/whatsapp.js';
 import { lerJson } from './lib/api.js';
 import { hojeLocal, addDias } from './lib/date.js';
+import { syncSettings, rememberSearch } from './lib/settings.js';
 import { useEnrichmentStream } from './hooks/useEnrichmentStream.js';
 
 const CENTRO_PADRAO = [-30.0427211, -51.1626625]; // Porto Alegre (bairro Bom Jesus)
@@ -57,19 +58,20 @@ export default function App() {
   // reabrir a última busca (ainda em memória do back OU no banco quando ativo).
   // Sem isso, F5 perde tudo — estágios do Kanban, notas, follow-ups, etc.
   useEffect(() => {
-    const sid = localStorage.getItem('captacao.lastSearchId');
-    if (!sid) return;
     (async () => {
+      await syncSettings();
+      const sid = localStorage.getItem('captacao.lastSearchId');
+      if (!sid) return;
       try {
         const r = await fetch(`/api/search/${sid}/leads`);
-        if (!r.ok) { localStorage.removeItem('captacao.lastSearchId'); return; }
+        if (!r.ok) { rememberSearch(null); return; }
         const data = await lerJson(r);
         setSearch(data);
         setLeads(data.leads);
       } catch {
         // Busca antiga não recuperável: limpa e segue em silêncio (é só o
         // restore automático do F5, não uma ação que o usuário pediu).
-        localStorage.removeItem('captacao.lastSearchId');
+        rememberSearch(null);
       }
     })();
   }, []);
@@ -91,7 +93,7 @@ export default function App() {
       const data = await lerJson(r);
       setSearch(data);
       setLeads(data.leads);
-      localStorage.setItem('captacao.lastSearchId', data.searchId);
+      rememberSearch(data.searchId);
     } catch (e) {
       setSearchError(
         e.name === 'TimeoutError'
@@ -204,7 +206,7 @@ export default function App() {
       setLeads(data.leads);
       setSelectedId(null);
       setHistoryOpen(false);
-      localStorage.setItem('captacao.lastSearchId', searchId);
+      rememberSearch(searchId);
     } catch (err) {
       setSearchError(err.message); // erro inline, consistente com o resto da UI
     }

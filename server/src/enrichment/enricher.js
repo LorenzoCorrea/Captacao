@@ -32,7 +32,29 @@ const touch = (s) => (s.lastActivity = Date.now());
 // continuam respeitando o limite total de chamadas simultâneas ao DDG.
 let globalRunning = 0;
 
-export function createSearch(leads, meta = {}) {
+// Campos de CRM e contatos que acompanham a empresa, em qualquer busca.
+const SHARED_FIELDS = ['stage', 'notes', 'followUpAt', 'tags', 'estimatedValue', 'interactions', 'msgVariant'];
+
+function fromKnown(known) {
+  if (!known) return {};
+  const state = Object.fromEntries(SHARED_FIELDS.map((k) => [k, known[k]]));
+  // not_found pode ter vindo de um bloqueio da busca: vale tentar de novo.
+  if (known.enrichmentStatus === 'done') {
+    state.enrichment = known.enrichment;
+    state.enrichmentStatus = 'done';
+  }
+  return state;
+}
+
+function syncOtherSessions(source, leadId, fields) {
+  for (const s of searches.values()) {
+    if (s === source) continue;
+    const other = s.leads.get(leadId);
+    if (other) for (const k of fields) other[k] = source.leads.get(leadId)[k];
+  }
+}
+
+export function createSearch(leads, meta = {}, known = new Map()) {
   const { city, niche } = meta;
   const id = crypto.randomUUID();
   const session = {
@@ -41,7 +63,7 @@ export function createSearch(leads, meta = {}) {
     niche: niche ?? '',
     query: { niche: niche ?? '', city: city ?? '', lat: meta.lat, lng: meta.lng, radiusKm: meta.radiusKm },
     found: meta.found ?? null,
-    leads: new Map(leads.map((l) => [l.id, { ...l, enrichment: null, enrichmentStatus: 'pending', stage: 'novo', notes: '', followUpAt: null, tags: [], estimatedValue: null, interactions: [] }])),
+    leads: new Map(leads.map((l) => [l.id, { ...l, enrichment: null, enrichmentStatus: 'pending', stage: 'novo', notes: '', followUpAt: null, tags: [], estimatedValue: null, interactions: [], ...fromKnown(known.get(l.id)) }])),
     clients: new Set(),
     queue: [],
     inFlight: new Set(),
@@ -55,7 +77,7 @@ export function createSearch(leads, meta = {}) {
   session.dbReady = db.saveSearch(session, meta).catch((e) => console.error('[db]', e.message));
 
   if (BACKGROUND) {
-    session.queue = [...session.leads.keys()];
+    session.queue = [...session.leads.values()].filter((l) => l.enrichmentStatus === 'pending').map((l) => l.id);
     pump(session);
   }
   return id;
@@ -124,6 +146,7 @@ export async function updateLead(searchId, leadId, patch = {}) {
       : [];
     fields.interactions = JSON.stringify(lead.interactions);
   }
+  syncOtherSessions(s, leadId, SHARED_FIELDS);
   if (Object.keys(fields).length && s.dbReady) {
     s.dbReady.then(() => db.saveLeadFields(searchId, leadId, fields)).catch(() => {});
   }
@@ -257,6 +280,7 @@ async function runOne(session, lead) {
   lead.enrichment = enrichment;
   lead.enrichmentStatus = achou ? 'done' : 'not_found';
 
+  syncOtherSessions(session, lead.id, ['enrichment', 'enrichmentStatus']);
   broadcast(session, 'enrichment', payloadOf(lead));
   session.dbReady.then(() => db.saveEnrichment(session.id, lead)).catch(() => {});
   if (allSettled(session)) broadcast(session, 'done', { searchId: session.id });
