@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS bot_conversations (
 ALTER TABLE bot_conversations ADD COLUMN IF NOT EXISTS lid text;
 CREATE INDEX IF NOT EXISTS idx_bot_conversations_lid ON bot_conversations(lid);
 ALTER TABLE bot_conversations ADD COLUMN IF NOT EXISTS followup_at timestamptz;
+ALTER TABLE bot_conversations ADD COLUMN IF NOT EXISTS followups integer NOT NULL DEFAULT 0;
 CREATE TABLE IF NOT EXISTS bot_messages (
   id         text PRIMARY KEY,
   lead_id    text NOT NULL,
@@ -565,13 +566,13 @@ export const botIncrementDiscount = async (leadId) =>
 export async function botDigest(since) {
   const rows = await botRows(
     `WITH f AS (
-       SELECT c.name, c.niche, c.status,
+       SELECT c.name, c.niche, c.status, c.followups,
          (SELECT min(created_at) FROM bot_messages m WHERE m.lead_id = c.lead_id AND m.source = 'bot') AS first_out,
          (SELECT min(created_at) FROM bot_messages m WHERE m.lead_id = c.lead_id AND m.source = 'lead') AS first_in
        FROM bot_conversations c)
      SELECT name, niche, first_out >= $1 AS contacted, first_in >= $1 AS replied,
-       (status = 'active' AND first_out IS NOT NULL AND first_in IS NULL) AS waiting
-     FROM f WHERE first_out >= $1 OR first_in >= $1 OR (status = 'active' AND first_out IS NOT NULL AND first_in IS NULL)
+       (status = 'active' AND first_out IS NOT NULL AND first_in IS NULL AND followups < 2) AS waiting
+     FROM f WHERE first_out >= $1 OR first_in >= $1 OR (status = 'active' AND first_out IS NOT NULL AND first_in IS NULL AND followups < 2)
      ORDER BY first_out`,
     [since]
   );
@@ -584,19 +585,23 @@ export async function botMarkAuto(ids) {
   if (ids.length) await pool.query(`UPDATE bot_messages SET source = 'auto' WHERE id = ANY($1) AND source = 'lead'`, [ids]);
 }
 
-// Um único lembrete para quem nunca respondeu (resposta automática não conta).
+// Lembretes para quem nunca respondeu (resposta automática não conta). sentBefore[n]: prazo do lembrete n.
 export const botDueFollowUp = async (sentBefore) => (await botRows(
   `SELECT c.* FROM bot_conversations c
-   WHERE c.status = 'active' AND c.followup_at IS NULL
+   CROSS JOIN LATERAL (SELECT min(created_at) AS first_out FROM bot_messages m WHERE m.lead_id = c.lead_id AND m.source = 'bot') f
+   WHERE c.status = 'active' AND c.followups < cardinality($1::timestamptz[])
      AND NOT EXISTS (SELECT 1 FROM bot_messages m WHERE m.lead_id = c.lead_id AND m.source = 'lead')
-     AND (SELECT min(created_at) FROM bot_messages m WHERE m.lead_id = c.lead_id AND m.source = 'bot') < $1
-   ORDER BY c.created_at LIMIT 1`,
+     AND f.first_out < ($1::timestamptz[])[c.followups + 1]
+   ORDER BY f.first_out LIMIT 1`,
   [sentBefore]
 ))[0] ?? null;
 
-// Marca antes de enviar: um reinício no meio nunca manda o lembrete duas vezes.
-export async function botMarkFollowUp(leadId) {
-  const r = await pool.query(`UPDATE bot_conversations SET followup_at = now() WHERE lead_id = $1 AND status = 'active' AND followup_at IS NULL`, [leadId]);
+// Marca antes de enviar: um reinício no meio nunca manda o mesmo lembrete duas vezes.
+export async function botMarkFollowUp(leadId, step) {
+  const r = await pool.query(
+    `UPDATE bot_conversations SET followups = followups + 1, followup_at = now() WHERE lead_id = $1 AND status = 'active' AND followups = $2`,
+    [leadId, step]
+  );
   return r.rowCount === 1;
 }
 

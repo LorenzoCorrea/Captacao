@@ -295,15 +295,41 @@ test('dias úteis para trás pulam o fim de semana', () => {
   assert.deepEqual(businessDaysAgo(new Date(2026, 10, 5, 10), 2), new Date(2026, 10, 3, 10));
 });
 
-test('lembrete: vem antes de lead novo, gasta cota e sai uma vez', async () => {
-  const { log, deps } = setup({ queued: [q] });
-  const due = { lead_id: 'F', phone: '5551990000000', phone_key: '5190000000', name: 'Fulano', status: 'active' };
-  let marked = false;
-  deps.db.botDueFollowUp = async () => (marked ? null : due);
-  deps.db.botMarkFollowUp = async () => { if (marked) return false; marked = true; return true; };
-  deps.db.botGet = async (id) => (id === 'F' ? { ...due } : null);
-  await tick(WED_10, deps);
+const WED_15 = new Date(2026, 10, 4, 15, 0, 0);
+const due = (followups = 0) => ({ lead_id: 'F', phone: '5551990000000', phone_key: '5190000000', name: 'Fulano', status: 'active', followups });
+
+function withFollowUp(deps, conv) {
+  const seen = { cutoffs: null, marked: [] };
+  deps.db.botDueFollowUp = async (cutoffs) => { seen.cutoffs = cutoffs; return seen.marked.length ? null : conv; };
+  deps.db.botMarkFollowUp = async (id, step) => { if (step !== conv.followups) return false; seen.marked.push(step); return true; };
+  const get = deps.db.botGet;
+  deps.db.botGet = async (id) => (id === 'F' ? { ...conv } : get(id));
+  return seen;
+}
+
+test('lembrete: só à tarde, com cota própria e antes do lead novo', async () => {
+  const { log, deps } = setup({ queued: [q], usage: { whatsapp: 5 } });
+  const seen = withFollowUp(deps, due(0));
+  await tick(WED_15, deps);
   assert.deepEqual(log.sent, [FIXED.followUp]);
-  assert.deepEqual(log.usage, ['whatsapp']);
-  assert.equal(log.statuses.length, 0, 'o lead da fila espera a próxima vez');
+  assert.deepEqual(log.usage, ['followup'], 'não gasta a vaga de lead novo');
+  assert.deepEqual(seen.marked, [0]);
+  // Prazos: 1º lembrete para quem foi chamado até terça; 2º para quem foi chamado até a sexta anterior.
+  assert.deepEqual(seen.cutoffs, [new Date(2026, 10, 4), new Date(2026, 9, 31)]);
+});
+
+test('lembrete: de manhã não sai; a manhã é dos leads novos', async () => {
+  const { log, deps } = setup({ queued: [q] });
+  const seen = withFollowUp(deps, due(0));
+  await tick(WED_10, deps);
+  assert.equal(seen.cutoffs, null);
+  assert.equal(log.sent.length, 1);
+  assert.notEqual(log.sent[0], FIXED.followUp);
+});
+
+test('segundo lembrete é o último e se despede', async () => {
+  const { log, deps } = setup();
+  withFollowUp(deps, due(1));
+  await tick(WED_15, deps);
+  assert.deepEqual(log.sent, [FIXED.followUpLast]);
 });

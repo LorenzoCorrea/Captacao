@@ -45,6 +45,7 @@ export const FIXED = {
   gatekeeper: 'Claro! Pode encaminhar para o responsável, por favor? Se ele quiser saber mais, é só me chamar por aqui. Obrigado!',
   busy: 'Tranquilo, sem pressa! Quando puder, é só me chamar por aqui.',
   followUp: 'Oi! Passando rapidinho para saber se viu minha mensagem. Se fizer sentido, te explico como funciona por aqui mesmo 😊',
+  followUpLast: 'Oi, tudo bem? Vou parar de te chamar por aqui para não incomodar. Se em algum momento fizer sentido ter um site, é só me mandar uma mensagem 👍',
 };
 
 // O benefício muda com o ramo; `kw` casa por trecho do nicho sem acento.

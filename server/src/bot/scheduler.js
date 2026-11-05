@@ -20,11 +20,10 @@ function canSendNow(now, { sendFrom = '09:00', sendTo = '18:00', weekdaysOnly = 
   return current >= minutes(sendFrom) && current < minutes(sendTo);
 }
 
-function withinLimits(now, limits, usage) {
-  const today = usage?.date === hojeLocal(now) ? usage : { whatsapp: 0, lastAt: 0 };
-  if ((today.whatsapp ?? 0) >= Number(limits?.whatsapp ?? 5)) return false;
-  return now.getTime() - (today.lastAt ?? 0) >= Number(limits?.minSpacingMin ?? 8) * 60000;
-}
+const usageToday = (now, usage) => (usage?.date === hojeLocal(now) ? usage : { whatsapp: 0, followup: 0, lastAt: 0 });
+
+// O espaçamento vale para todo envio, novo ou lembrete.
+const spaced = (now, limits, today) => now.getTime() - (today.lastAt ?? 0) >= Number(limits?.minSpacingMin ?? 8) * 60000;
 
 async function capture(now, config, state, deps) {
   const today = hojeLocal(now);
@@ -67,16 +66,28 @@ export function businessDaysAgo(now, days) {
   return d;
 }
 
-const FOLLOW_UP_DAYS = 2;
+// Cadência anti-ban: 1º lembrete no dia útil seguinte, 2º e último 3 dias úteis depois do primeiro envio.
+// Lembretes só à tarde: a manhã fica para os leads novos.
+const FOLLOW_UP_AFTER_DAYS = [1, 3];
+const FOLLOW_UP_TEXTS = [FIXED.followUp, FIXED.followUpLast];
+const FOLLOW_UP_HOUR = 14;
+const MAX_FOLLOW_UPS_PER_DAY = 10;
 
-// O lembrete usa a mesma cota e o mesmo espaçamento dos envios novos (anti-ban).
+// Primeiro envio feito até o fim do dia de `businessDaysAgo`.
+const sentUpTo = (now, days) => {
+  const d = businessDaysAgo(now, days);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+};
+
 async function sendFollowUp(now, conv, deps) {
   const { db, gateway } = deps;
-  if (!(await db.botMarkFollowUp(conv.lead_id))) return;
+  const step = conv.followups ?? 0;
+  if (!(await db.botMarkFollowUp(conv.lead_id, step))) return;
   try {
     if ((await gateway.state()) !== 'open') return deps.disableBot('whatsapp_disconnected');
-    await db.incrementUsage('whatsapp', hojeLocal(now), now.getTime());
-    await sendAndRecord(conv, FIXED.followUp, deps, { allow: ['active'] });
+    // Cota própria: lembrete não tira a vaga de um lead novo.
+    await db.incrementUsage('followup', hojeLocal(now), now.getTime());
+    await sendAndRecord(conv, FOLLOW_UP_TEXTS[step], deps, { allow: ['active'] });
   } catch (e) {
     console.error('[bot] falha no lembrete:', e.message);
     await db.botTransition(conv.lead_id, ['active'], 'paused', 'send_failed');
@@ -85,10 +96,14 @@ async function sendFollowUp(now, conv, deps) {
 }
 
 async function sendNext(now, config, settings, deps) {
-  if (!canSendNow(now, config) || !withinLimits(now, settings.limits, settings.usage)) return;
+  const today = usageToday(now, settings.usage);
+  if (!canSendNow(now, config) || !spaced(now, settings.limits, today)) return;
   const { db, gateway } = deps;
-  const due = await db.botDueFollowUp(businessDaysAgo(now, FOLLOW_UP_DAYS));
-  if (due) return sendFollowUp(now, due, deps);
+  if (now.getHours() >= FOLLOW_UP_HOUR && (today.followup ?? 0) < MAX_FOLLOW_UPS_PER_DAY) {
+    const due = await db.botDueFollowUp(FOLLOW_UP_AFTER_DAYS.map((days) => sentUpTo(now, days)));
+    if (due) return sendFollowUp(now, due, deps);
+  }
+  if ((today.whatsapp ?? 0) >= Number(settings.limits?.whatsapp ?? 5)) return;
   const conv = await db.botNextQueued();
   if (!conv || !(await db.botClaim(conv))) return;
 
