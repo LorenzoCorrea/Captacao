@@ -60,7 +60,7 @@ Esta tabela é a única fonte do que o bot pode afirmar.
 | Saldo | R$ 385, no Pix ou no cartão |
 | Parcelamento | Disponível no cartão, com juros, por link do Mercado Pago gerado por Lorenzo. O bot não informa parcelas |
 | Desconto | Não há |
-| Domínio | Expira a cada 1 ano, e o bot avisa isso na proposta |
+| Domínio | Expira a cada 1 ano. A primeira mensagem não cita a oferta; o aviso vai junto de todo preço e do aceite |
 | Renovação | R$ 50 por ano, para domínio e hospedagem |
 | Manutenção nos 2 primeiros meses após a entrega | Grátis e sem limite de pedidos, pronta até o próximo dia útil |
 | Refazer tudo nesses 2 meses | R$ 100 (trocar layout ou estrutura). Em caso de dúvida, passa para Lorenzo |

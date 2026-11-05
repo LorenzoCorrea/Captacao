@@ -1,14 +1,14 @@
 // Única fonte do que o bot pode afirmar. A IA usa os marcadores e nunca escreve
 // valores: assim, um erro do modelo não vira um preço errado na conversa.
 export const OFFER = {
-  preco: 'R$ 550, com site e hospedagem inclusos',
-  prazo: '4 dias corridos a partir do sinal',
-  sinal: 'sinal de 30% no Pix (R$ 165), e o trabalho só começa depois dele',
-  saldo: 'saldo de R$ 385 no Pix ou no cartão',
-  parcelamento: 'parcelamento no cartão, com juros',
-  renovacao: 'o domínio expira a cada 1 ano, e a renovação custa R$ 50 por ano, para domínio e hospedagem',
-  manutencao: 'manutenções grátis e sem limite nos 2 primeiros meses após a entrega, prontas até o próximo dia útil; depois disso, R$ 50 por dia útil de trabalho, pagos antes',
-  refazer: 'refazer tudo, trocando layout ou estrutura, custa R$ 100 nos 2 primeiros meses',
+  preco: 'R$ 550, já com o site e a hospedagem',
+  prazo: '4 dias corridos depois do sinal',
+  sinal: '30% de sinal no Pix (R$ 165), e começo depois disso',
+  saldo: 'o restante (R$ 385) no Pix ou no cartão',
+  parcelamento: 'dá para parcelar no cartão, com juros',
+  renovacao: 'O domínio expira a cada 1 ano, e a renovação fica R$ 50 por ano, com a hospedagem',
+  manutencao: 'nos 2 primeiros meses é grátis e sem limite, pronto até o próximo dia útil. Depois, R$ 50 por dia útil de trabalho, pagos antes',
+  refazer: 'refazer tudo, trocando layout ou estrutura, fica R$ 100 nos 2 primeiros meses',
 };
 
 // O nome vem do OpenStreetMap, editável por qualquer pessoa: não pode levar preço, link ou Pix.
@@ -21,8 +21,8 @@ export function safeName(name) {
 }
 
 const FIRST = {
-  A: 'Olá, tudo bem? Aqui é o Lorenzo, eu crio sites para comércios. Procurei {nome} e não encontrei um site próprio. Faço uma landing page focada no seu negócio por {preco}, com entrega em {prazo}. Vale avisar: {renovacao}. Posso te contar como funciona? Se preferir não receber mensagens, é só responder "não quero".',
-  B: 'Oi! Aqui é o Lorenzo. Crio landing pages para comércios, e vi que {nome} ainda não aparece com um site próprio. Um site ajuda quem procura no Google a encontrar vocês e chamar direto. Fica {preco}, com entrega em {prazo}. Só para ficar claro: {renovacao}. Quer saber mais? Se não tiver interesse, responda "não quero" e não envio mais nada.',
+  A: 'Oi, tudo bem? Aqui é o Lorenzo, faço sites para comércios. Não encontrei um site de {nome} e acho que posso ajudar. Posso te contar como funciona? Se não fizer sentido, é só avisar que não te chamo mais.',
+  B: 'Oi! Sou o Lorenzo, faço sites para comércios. Vi que {nome} ainda não tem um site próprio. Posso te explicar como funciona? Se não tiver interesse, é só me avisar que não te chamo mais.',
 };
 
 export function firstMessage(variant, name) {
@@ -32,24 +32,24 @@ export function firstMessage(variant, name) {
 
 // Respostas críticas não passam pela IA.
 export const FIXED = {
-  accepted: `Que ótimo! Para começar, funciona assim: ${OFFER.sinal}. Depois, ${OFFER.saldo}. Já te passo os dados de pagamento por aqui.`,
-  installments: `Tenho sim: ${OFFER.parcelamento}. Já te passo as condições por aqui.`,
-  discount: `Não trabalho com desconto. O valor é ${OFFER.preco}, e também temos ${OFFER.parcelamento}.`,
+  accepted: `Fechado! Para começar são ${OFFER.sinal}. Depois, ${OFFER.saldo}. ${OFFER.renovacao}. Já te passo os dados de pagamento por aqui.`,
+  installments: 'Dá sim, no cartão, com juros. Já te passo as condições por aqui.',
+  discount: `Desconto eu não consigo fazer. O valor é ${OFFER.preco}, e ${OFFER.parcelamento}.`,
   handoff: 'Deixa eu ver isso direitinho e já te respondo por aqui.',
-  botQuestion: 'Boa pergunta! Esta parte do atendimento é automatizada, mas eu acompanho tudo e já assumo a conversa por aqui. — Lorenzo',
-  goodbye: 'Tudo bem, não vou mais enviar mensagens. Obrigado pela atenção e bom trabalho!',
+  botQuestion: 'Esta parte do atendimento é automatizada, mas eu acompanho tudo e já assumo a conversa por aqui. — Lorenzo',
+  goodbye: 'Sem problema, não te chamo mais. Obrigado e bom trabalho!',
 };
 
 // Únicas respostas livres do bot: a IA escolhe o tópico e nunca escreve o texto.
 export const ANSWERS = {
-  how_it_works: `Funciona assim: crio uma landing page focada no seu comércio, por ${OFFER.preco}. A entrega é em ${OFFER.prazo}. Para começar, é o ${OFFER.sinal}. Quer que eu faça a sua?`,
-  price: `O valor é ${OFFER.preco}. Quer que eu faça a sua?`,
-  deadline: `A entrega é em ${OFFER.prazo}.`,
-  payment: `Para começar, é o ${OFFER.sinal}. Depois, ${OFFER.saldo}. Também tenho ${OFFER.parcelamento}.`,
-  domain: `Sobre o domínio: ${OFFER.renovacao}.`,
-  maintenance: `Sobre manutenção: ${OFFER.manutencao}.`,
-  redo: `Caso queira mudar tudo depois: ${OFFER.refazer}.`,
-  included: `Está incluso a landing page focada no seu comércio e a hospedagem, por ${OFFER.preco}.`,
+  how_it_works: `Faço uma página só do seu comércio, pronta para os clientes te encontrarem. Fica ${OFFER.preco}, e entrego em ${OFFER.prazo}. ${OFFER.renovacao}. Quer que eu faça a sua?`,
+  price: `Fica ${OFFER.preco}. ${OFFER.renovacao}. Quer que eu faça a sua?`,
+  deadline: `Entrego em ${OFFER.prazo}.`,
+  payment: `São ${OFFER.sinal}. Depois, ${OFFER.saldo}. Também ${OFFER.parcelamento}.`,
+  domain: `${OFFER.renovacao}.`,
+  maintenance: `Sobre alterações: ${OFFER.manutencao}.`,
+  redo: `Se quiser mudar tudo depois: ${OFFER.refazer}.`,
+  included: `Inclui a página do seu comércio e a hospedagem: ${OFFER.preco}. ${OFFER.renovacao}.`,
 };
 export const TOPICS = Object.keys(ANSWERS);
 const MAX_TOPICS = 2;
