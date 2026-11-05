@@ -28,7 +28,7 @@ O sucesso é o sistema rodar sozinho, sem custo de software ou serviços, com po
 - O bot falar junto com Lorenzo ou depois de pausado.
 - Chamar de novo quem pediu para sair.
 - Disfarçar a automação para evitar detecção, ou trocar de número para driblar um ban.
-- O bot afirmar que é uma pessoa.
+- O bot negar que é automático ou afirmar ser humano quando perguntado.
 
 ## Restrições
 
@@ -154,7 +154,7 @@ O Kanban acompanha: primeiro envio vai para `contatado`, `ready_to_close` para `
 
 ### Transparência
 
-A primeira mensagem diz que quem escreve é o assistente virtual de Lorenzo. Modelos gratuitos podem usar os dados recebidos para treinamento, então o histórico enviado contém só o necessário: nome do comércio e mensagens da conversa.
+As mensagens saem em nome de Lorenzo, em primeira pessoa, sem citar automação na apresentação (decisão de Lorenzo). Se o lead perguntar se fala com robô, IA ou uma pessoa, o bot responde com texto fixo que o atendimento é automatizado, pausa e avisa Lorenzo. Modelos gratuitos podem usar os dados recebidos para treinamento, então o histórico enviado contém só o necessário: nome do comércio e mensagens da conversa.
 
 ## Ordem de entrada em produção
 

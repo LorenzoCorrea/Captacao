@@ -11,6 +11,10 @@ const normalize = (text) => String(text ?? '').normalize('NFD').replace(/\p{Diac
 const OPT_OUT = /^(nao quero( mais)?|nao tenho interesse|sem interesse|nao me interessa|pare|parar|chega|sair|remover|remova|cancelar|descadastrar|(pare|para) de (me )?(mandar|enviar)( mais)?( mensage(m|ns))?|nao (me )?(mande|envie)( mais)?( mensage(m|ns))?)( obrigad[oa])?$/;
 export const isOptOut = (text) => OPT_OUT.test(normalize(text));
 
+// Quem pergunta se fala com um robô recebe a verdade, sem passar pela IA.
+const BOT_QUESTION = /\b(robo|bot|chatbot|chatgpt|gpt|inteligencia artificial|automatic[oa]|(uma|um|com|e) ia|pessoa (de verdade|real)|humano|humana|voce mesmo|e voce mesmo|atendente virtual|assistente virtual|maquina)\b/;
+export const isBotQuestion = (text) => BOT_QUESTION.test(normalize(text));
+
 // O webhook aguarda o envio em curso para não confundir a mensagem do bot com uma de Lorenzo.
 const sending = new Map();
 export const pendingSend = (phoneKey) => sending.get(phoneKey) ?? Promise.resolve();
@@ -35,6 +39,7 @@ const REASONS = {
   discount_insist: 'insistiu em desconto',
   human_requested: 'pediu para falar com você',
   unknown: 'fez uma pergunta que o bot não soube responder',
+  asked_if_bot: 'perguntou se é um robô: o bot disse que o atendimento é automatizado e você assume',
 };
 
 async function optOut(conv, deps, { speak }) {
@@ -54,6 +59,7 @@ function decide(intent, reply, discountAsks) {
       return discountAsks >= 2
         ? { text: FIXED.handoff, status: 'paused', reason: 'discount_insist' }
         : { text: FIXED.discount };
+    case 'asked_if_bot': return { text: FIXED.botQuestion, status: 'paused', reason: 'asked_if_bot' };
     case 'human_requested':
     case 'unknown': return { text: FIXED.handoff, status: 'paused', reason: intent };
     default: {
@@ -126,6 +132,12 @@ export async function handleInbound({ conv, id, text, hasText }, deps) {
 
   if (hasText && isOptOut(text)) {
     await optOut(conv, deps, { speak: conv.status === 'active' });
+    return;
+  }
+  if (hasText && conv.status === 'active' && isBotQuestion(text)) {
+    await sendAndRecord(conv, FIXED.botQuestion, deps);
+    await db.botSetStatus(conv.lead_id, 'paused', 'asked_if_bot');
+    await notify(`${label(conv)} ${REASONS.asked_if_bot}.`);
     return;
   }
   if (!hasText && conv.status === 'active') {

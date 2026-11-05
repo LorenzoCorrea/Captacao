@@ -23,10 +23,11 @@ test('oferta tem os valores do spec', () => {
   assert.match(OFFER.renovacao, /R\$ 50 por ano/);
   assert.match(OFFER.refazer, /R\$ 100/);
 });
-test('primeira mensagem se identifica, oferece saída e aceita nome com número', () => {
+test('primeira mensagem fala como Lorenzo, oferece saída e aceita nome com número', () => {
   for (const variant of ['A', 'B']) {
     const text = firstMessage(variant, 'Barbearia 24h');
-    assert.match(text, /assistente virtual do Lorenzo/);
+    assert.match(text, /Lorenzo/);
+    assert.doesNotMatch(text, /assistente virtual/i);
     assert.match(text, /não quero/);
     assert.match(text, /Barbearia 24h/);
     assert.match(text, /R\$ 550/);
@@ -35,6 +36,7 @@ test('primeira mensagem se identifica, oferece saída e aceita nome com número'
 });
 test('textos fixos não trazem dados de pagamento além da oferta', () => {
   assert.match(FIXED.accepted, /R\$ 165/);
-  assert.match(FIXED.accepted, /Lorenzo/);
+  assert.match(FIXED.accepted, /dados de pagamento/);
+  assert.match(FIXED.botQuestion, /automatizada/);
   assert.doesNotMatch(Object.values(FIXED).join(' '), /https?:|chave/i);
 });

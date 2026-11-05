@@ -18,6 +18,7 @@ const REASON = {
   installments: 'Quer parcelar: gere o link',
   discount_insist: 'Insistiu em desconto',
   human_requested: 'Pediu para falar com você',
+  asked_if_bot: 'Perguntou se é um robô',
   unknown: 'O bot não soube responder',
   turn_limit: 'Chegou ao limite de respostas',
   ai_unavailable: 'A IA ficou indisponível',

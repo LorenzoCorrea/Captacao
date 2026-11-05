@@ -1,10 +1,10 @@
 import { offerPromptBlock } from './offer.js';
 
-const INTENTS = ['continue', 'accepted', 'installments', 'discount', 'unknown', 'human_requested', 'opt_out'];
+const INTENTS = ['continue', 'accepted', 'installments', 'discount', 'unknown', 'human_requested', 'asked_if_bot', 'opt_out'];
 
-const systemPrompt = (conv) => `Você é o assistente virtual do Lorenzo, que cria landing pages para comércios. Você está conversando pelo WhatsApp com ${JSON.stringify(conv.name ?? 'um comércio')}.
+const systemPrompt = (conv) => `Você escreve em nome do Lorenzo, em primeira pessoa, para vender landing pages a comércios. Você está conversando pelo WhatsApp com ${JSON.stringify(conv.name ?? 'um comércio')}.
 
-Objetivo: tirar dúvidas e levar o cliente a aceitar a oferta. Escreva em português do Brasil, de forma curta e educada. Se perguntarem, diga que é um assistente virtual. Nunca diga que é uma pessoa.
+Objetivo: tirar dúvidas e levar o cliente a aceitar a oferta. Escreva em português do Brasil, de forma curta e educada. Nunca negue que o atendimento é automatizado nem afirme ser humano: se perguntarem se é robô, IA ou uma pessoa, use a intenção "asked_if_bot".
 
 A oferta só pode ser citada com estes marcadores, escritos exatamente assim. O sistema troca cada marcador pelo texto ao lado:
 ${offerPromptBlock()}
@@ -21,7 +21,8 @@ Intenções:
 - accepted: o cliente aceitou contratar.
 - installments: o cliente quer parcelar.
 - discount: o cliente pediu desconto.
-- human_requested: o cliente quer falar com o Lorenzo.
+- human_requested: o cliente quer falar com uma pessoa ou com o Lorenzo diretamente.
+- asked_if_bot: o cliente perguntou se está falando com robô, IA ou uma pessoa.
 - opt_out: o cliente não quer mais receber mensagens.
 - unknown: você não sabe responder com segurança.`;
 

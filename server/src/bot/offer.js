@@ -36,8 +36,8 @@ export function renderReply(raw) {
 }
 
 const FIRST = {
-  A: 'Olá, tudo bem? Sou o assistente virtual do Lorenzo, que cria sites para comércios. Procurei {nome} e não encontrei um site próprio. O Lorenzo faz uma landing page focada no seu negócio por {preco}, com entrega em {prazo}. Vale avisar: {renovacao}. Posso te contar como funciona? Se preferir não receber mensagens, é só responder "não quero".',
-  B: 'Oi! Aqui é o assistente virtual do Lorenzo. Ele cria landing pages para comércios, e vi que {nome} ainda não aparece com um site próprio. Um site ajuda quem procura no Google a encontrar vocês e chamar direto. Fica {preco}, com entrega em {prazo}, e {renovacao}. Quer saber mais? Se não tiver interesse, responda "não quero" e não envio mais nada.',
+  A: 'Olá, tudo bem? Aqui é o Lorenzo, eu crio sites para comércios. Procurei {nome} e não encontrei um site próprio. Faço uma landing page focada no seu negócio por {preco}, com entrega em {prazo}. Vale avisar: {renovacao}. Posso te contar como funciona? Se preferir não receber mensagens, é só responder "não quero".',
+  B: 'Oi! Aqui é o Lorenzo. Crio landing pages para comércios, e vi que {nome} ainda não aparece com um site próprio. Um site ajuda quem procura no Google a encontrar vocês e chamar direto. Fica {preco}, com entrega em {prazo}. Só para ficar claro: {renovacao}. Quer saber mais? Se não tiver interesse, responda "não quero" e não envio mais nada.',
 };
 
 export function firstMessage(variant, name) {
@@ -47,10 +47,11 @@ export function firstMessage(variant, name) {
 
 // Respostas críticas não passam pela IA.
 export const FIXED = {
-  accepted: `Que ótimo! Para começar, funciona assim: ${OFFER.sinal}. Depois, ${OFFER.saldo}. O Lorenzo já vai entrar nesta conversa com os dados de pagamento.`,
-  installments: `Temos sim: ${OFFER.parcelamento}. O Lorenzo já vai entrar nesta conversa para te passar as condições.`,
-  discount: `Não trabalhamos com desconto. O valor é ${OFFER.preco}, e também temos ${OFFER.parcelamento}.`,
-  handoff: 'Vou chamar o Lorenzo para te responder direitinho. Ele já entra nesta conversa.',
+  accepted: `Que ótimo! Para começar, funciona assim: ${OFFER.sinal}. Depois, ${OFFER.saldo}. Já te passo os dados de pagamento por aqui.`,
+  installments: `Tenho sim: ${OFFER.parcelamento}. Já te passo as condições por aqui.`,
+  discount: `Não trabalho com desconto. O valor é ${OFFER.preco}, e também temos ${OFFER.parcelamento}.`,
+  handoff: 'Deixa eu ver isso direitinho e já te respondo por aqui.',
+  botQuestion: 'Boa pergunta! Esta parte do atendimento é automatizada, mas eu acompanho tudo e já assumo a conversa por aqui. — Lorenzo',
   goodbye: 'Tudo bem, não vou mais enviar mensagens. Obrigado pela atenção e bom trabalho!',
 };
 

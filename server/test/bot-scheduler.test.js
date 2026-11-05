@@ -95,7 +95,7 @@ test('envia com identificação, conta o uso e ativa a conversa', async () => {
   const { log, deps } = setup({ queued: [q], state: { lastCaptureDate: '2026-11-04' } });
   await tick(WED_10, deps);
   assert.equal(log.sent.length, 1);
-  assert.match(log.sent[0], /assistente virtual do Lorenzo/);
+  assert.match(log.sent[0], /Lorenzo/);
   assert.match(log.sent[0], /Aurora/);
   assert.deepEqual(log.usage, ['whatsapp']);
   assert.deepEqual(log.statuses, [['A', 'active', null]]);

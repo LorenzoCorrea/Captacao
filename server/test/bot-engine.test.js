@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { replyToLead, handleInbound, isOptOut, MAX_AI_TURNS } from '../src/bot/engine.js';
+import { replyToLead, handleInbound, isOptOut, isBotQuestion, MAX_AI_TURNS } from '../src/bot/engine.js';
 import { FIXED, OFFER } from '../src/bot/offer.js';
 import { parseAiContent } from '../src/bot/ai.js';
 
@@ -172,6 +172,26 @@ test('intent opt_out vinda da IA segue a mesma saída', async () => {
   await replyToLead(conv, deps);
   assert.deepEqual(log.sent, [FIXED.goodbye]);
   assert.equal(conv.status, 'opted_out');
+});
+
+test('isBotQuestion reconhece a pergunta sem confundir conversa normal', () => {
+  for (const t of ['é robô?', 'isso é um bot?', 'estou falando com uma IA?', 'é inteligência artificial?', 'você é uma pessoa de verdade?', 'é você mesmo, Lorenzo?', 'é automático?', 'é o chatgpt?', 'é humano?']) assert.equal(isBotQuestion(t), true, t);
+  for (const t of ['eu ia te ligar', 'quanto fica?', 'meu site é de robótica', 'trabalho com automação']) assert.equal(isBotQuestion(t), false, t);
+});
+
+test('perguntou se é robô: diz a verdade, pausa, avisa e não chama a IA', async () => {
+  const { conv, log, deps } = setup(async () => { throw new Error('não deveria chamar'); });
+  await handleInbound({ conv, id: 'b1', text: 'é robô?', hasText: true }, deps);
+  assert.deepEqual(log.sent, [FIXED.botQuestion]);
+  assert.deepEqual([conv.status, conv.reason], ['paused', 'asked_if_bot']);
+  assert.equal(log.notes.length, 1);
+});
+
+test('intent asked_if_bot da IA segue a mesma resposta fixa', async () => {
+  const { conv, log, deps } = setup({ reply: 'Sou o Lorenzo em pessoa', intent: 'asked_if_bot' });
+  await replyToLead(conv, deps);
+  assert.deepEqual(log.sent, [FIXED.botQuestion]);
+  assert.deepEqual([conv.status, conv.reason], ['paused', 'asked_if_bot']);
 });
 
 test('parseAiContent aceita JSON em bloco e recusa formato inválido', () => {
