@@ -3,11 +3,11 @@ html, body, #root { height: 100%; margin: 0; }
 body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1f2328; }
 
 /* ── Layout: lista à esquerda, mapa à direita (estilo busca imobiliária) ── */
-.app { display: grid; grid-template-columns: 400px 1fr; height: 100%; }
-.map-wrap { min-width: 0; }
+.app { display: grid; grid-template-columns: 400px 1fr; grid-template-rows: minmax(0, 1fr); height: 100%; }
+.map-wrap { min-width: 0; min-height: 0; }
 .map { height: 100%; width: 100%; }
 
-.sidebar { display: flex; flex-direction: column; border-right: 1px solid #e2e2e2; min-width: 0; }
+.sidebar { display: flex; flex-direction: column; border-right: 1px solid #e2e2e2; min-width: 0; min-height: 0; overflow-y: auto; }
 .sidebar-header { padding: 16px 16px 12px; border-bottom: 1px solid #eee; }
 .sidebar-header h1 { margin: 0 0 12px; font-size: 20px; }
 .sidebar-header h1 span { color: #1f6feb; }
@@ -395,7 +395,7 @@ body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1f
 
 /* ── Responsivo simples: empilha em telas estreitas ── */
 @media (max-width: 760px) {
-  .app { grid-template-columns: 1fr; grid-template-rows: 45% 55%; }
+  .app { grid-template-columns: 1fr; grid-template-rows: minmax(0, 45%) minmax(0, 55%); }
   .sidebar { order: 2; border-right: 0; border-top: 1px solid #e2e2e2; }
   .map-wrap { order: 1; }
 }
@@ -403,8 +403,7 @@ body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1f
 /* Conversas do bot */
 .bot-panel { max-width: 860px; }
 @media (max-width: 760px) {
-  .app--conversas { grid-template-rows: 80% 20%; }
-  .app--conversas .sidebar { overflow-y: auto; }
+  .app--conversas { grid-template-rows: minmax(0, 80%) minmax(0, 20%); }
   .bot-panel { padding: 12px 16px; }
 }
 .bot-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin: 8px 0; }
