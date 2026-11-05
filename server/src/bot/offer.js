@@ -34,7 +34,7 @@ export function firstMessage(variant, name) {
 export const FIXED = {
   accepted: `Que ótimo! O site fica R$ 550. Para eu começar, é só o ${OFFER.sinal}, e ${OFFER.saldo}. Só lembrando: ${OFFER.renovacao}. Já te passo os dados de pagamento por aqui.`,
   installments: 'Dá sim, no cartão, com juros. Já te passo as condições por aqui.',
-  discount: `Desconto eu não consigo fazer, mas ${OFFER.parcelamento}, se ajudar. O site fica ${OFFER.preco}.`,
+  discount: `Desconto eu não consigo fazer, mas ${OFFER.parcelamento}, se ajudar. O valor é ${OFFER.preco}.`,
   handoff: 'Deixa eu ver isso direitinho e já te respondo por aqui.',
   botQuestion: 'Esta parte do atendimento é automatizada, mas eu acompanho tudo e já assumo a conversa por aqui. — Lorenzo',
   goodbye: 'Sem problema, não te chamo mais. Obrigado e bom trabalho!',
@@ -49,7 +49,7 @@ export const ANSWERS = {
   domain: `Sim: ${OFFER.renovacao}.`,
   maintenance: `Sobre alterações: ${OFFER.manutencao}.`,
   redo: `Se quiser mudar tudo depois: ${OFFER.refazer}.`,
-  included: `Inclui o site do seu comércio e a hospedagem: ${OFFER.preco}. Só para você saber: ${OFFER.renovacao}.`,
+  included: `Por R$ 550 você recebe o site do seu comércio pronto e a hospedagem. Só para você saber: ${OFFER.renovacao}.`,
 };
 export const TOPICS = Object.keys(ANSWERS);
 const MAX_TOPICS = 2;
