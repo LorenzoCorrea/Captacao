@@ -163,13 +163,18 @@ export async function handleInbound({ conv, id, text, hasText }, deps) {
     await optOut(conv, deps, { speak: conv.status === 'active' });
     return;
   }
-  if (hasText && isBotQuestion(text)) {
-    if (!(await db.botTransition(conv.lead_id, ['active'], 'paused', 'asked_if_bot'))) return;
+  if (hasText && isBotQuestion(text) && await db.botTransition(conv.lead_id, ['active'], 'paused', 'asked_if_bot')) {
     await sendAndRecord(conv, FIXED.botQuestion, deps).catch((e) => console.error('[bot] resposta não enviada:', e.message));
     await notify(`${label(conv)} ${REASONS.asked_if_bot}.`);
     return;
   }
   if (!hasText && await db.botTransition(conv.lead_id, ['active'], 'paused', 'media')) {
     await notify(`${label(conv)} enviou áudio ou mídia. O bot pausou para você responder.`);
+    return;
+  }
+  // Com o bot calado, o lead não pode ficar esperando sem Lorenzo saber. Depois que ele responde, já está no chat.
+  if (['paused', 'ready_to_close'].includes(conv.status) && !(await db.botHistory(conv.lead_id)).some((m) => m.source === 'owner')) {
+    const said = hasText ? `"${String(text).slice(0, 150)}"` : 'um áudio ou mídia';
+    await notify(`${label(conv)} escreveu e está esperando você: ${said}`);
   }
 }

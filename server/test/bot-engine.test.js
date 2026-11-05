@@ -311,3 +311,22 @@ test('accepted depois do preço: usa o histórico e manda o aceite curto', async
   assert.match(log.sent[0], /^Que bom, fico feliz!/);
   assert.doesNotMatch(log.sent[0], /R\$ 550/);
 });
+
+test('bot calado: lead que escreve avisa Lorenzo até ele assumir', async () => {
+  for (const status of ['paused', 'ready_to_close']) {
+    const { conv, log, deps } = setup(null, { status });
+    await handleInbound({ conv, id: 'w1', text: 'Tem desconto?', hasText: true }, deps);
+    assert.equal(log.notes.length, 1, status);
+    assert.match(log.notes[0], /esperando você: "Tem desconto\?"/);
+    assert.deepEqual(log.sent, [], 'o bot continua calado');
+    log.msgs.push({ id: 'own', direction: 'out', source: 'owner', body: 'oi, aqui é o Lorenzo' });
+    await handleInbound({ conv, id: 'w2', text: 'ok', hasText: true }, deps);
+    assert.equal(log.notes.length, 1, 'Lorenzo já assumiu');
+  }
+});
+
+test('conversa ativa: mensagem comum não gera aviso', async () => {
+  const { conv, log, deps } = setup(null);
+  await handleInbound({ conv, id: 'w1', text: 'quanto custa?', hasText: true }, deps);
+  assert.equal(log.notes.length, 0);
+});
