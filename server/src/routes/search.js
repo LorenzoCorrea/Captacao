@@ -277,7 +277,7 @@ router.get('/api/searches', async (_req, res) => {
 });
 
 // Diz se a persistência está ativa (DATABASE_URL configurada e pool aberto).
-router.get('/api/status', (_req, res) => res.json(dbStatus()));
+router.get('/api/status', (_req, res) => res.json({ ...dbStatus(), previewBaseUrl: process.env.PUBLIC_PREVIEW_URL || '' }));
 
 // Configurações compartilhadas entre aparelhos.
 const validSetting = {

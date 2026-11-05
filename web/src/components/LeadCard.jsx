@@ -3,6 +3,7 @@ import { mailtoLink } from '../lib/email.js';
 import { igHandle, igUrl, fmtSeguidores } from '../lib/instagram.js';
 import { leadScore, scoreTier } from '../lib/score.js';
 import { hojeLocal as hoje } from '../lib/date.js';
+import { previewUrl } from '../lib/preview.js';
 
 const stop = (ev) => ev.stopPropagation();
 const fmtMoney = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
@@ -86,7 +87,7 @@ export default function LeadCard({ lead, selected, onSelect, onOpenDetails, sear
         <button type="button" className="details-btn" onClick={(ev) => { stop(ev); onOpenDetails?.(lead.id); }}>📝 Detalhes</button>
         {searchId && (
           // Prévia de site personalizada: mostre ao lead o negócio dele num site pronto
-          <a className="details-btn" href={`/previa/${searchId}/${encodeURIComponent(lead.id)}`} target="_blank" rel="noreferrer" onClick={stop}>
+          <a className="details-btn" href={previewUrl(searchId, lead.id)} target="_blank" rel="noreferrer" onClick={stop}>
             🖥️ Prévia
           </a>
         )}

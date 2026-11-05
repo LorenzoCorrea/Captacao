@@ -15,6 +15,7 @@ import { variantOf, telefoneWhats } from './lib/whatsapp.js';
 import { lerJson } from './lib/api.js';
 import { hojeLocal, addDias } from './lib/date.js';
 import { syncSettings, rememberSearch } from './lib/settings.js';
+import { setPreviewBase } from './lib/preview.js';
 import { useEnrichmentStream } from './hooks/useEnrichmentStream.js';
 
 const CENTRO_PADRAO = [-30.0427211, -51.1626625]; // Porto Alegre (bairro Bom Jesus)
@@ -44,7 +45,7 @@ export default function App() {
       try {
         const r = await fetch('/api/status');
         const s = await lerJson(r);
-        if (vivo) setDbState(s);
+        if (vivo) { setDbState(s); setPreviewBase(s.previewBaseUrl); }
       } catch {
         if (vivo) setDbState({ apiOffline: true });
       }

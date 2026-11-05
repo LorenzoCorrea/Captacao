@@ -51,5 +51,11 @@ services:
     # acessa só `http://IP_DO_ZIMA` sem precisar de :porta.
     ports:
       - "80:80"
+      # Só para publicar as prévias (ex.: tailscale funnel); não sai deste computador.
+      - "127.0.0.1:8080:8080"
+
+    # Crie antes de subir: sh scripts/create-login.sh USUARIO
+    volumes:
+      - ./.htpasswd:/etc/nginx/.htpasswd:ro
 
 # Sem volumes — o estado mora todo no PostgreSQL (que está fora deste compose).
