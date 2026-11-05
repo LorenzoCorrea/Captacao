@@ -59,16 +59,24 @@ test('grupo, status e contato sem conversa são ignorados', async () => {
   assert.deepEqual([log.msgs, log.sent, log.notes], [[], [], []]);
 });
 
-test('identificador lid usa o número alternativo; sem ele, ignora', async () => {
+test('identificador lid usa o número alternativo e depois é reconhecido sozinho', async () => {
   const { log, deps } = setup();
   await handleWebhook(fixture('lid'), deps);
   assert.equal(log.msgs.length, 1);
+  const known = fixture('lid');
+  known.data.key.id = 'L2';
+  delete known.data.key.remoteJidAlt;
+  await handleWebhook(known, deps);
+  assert.equal(log.msgs.length, 2);
+});
+
+test('lid desconhecido sem número não vira conversa e só avisa', async () => {
+  const { log, deps } = setup();
   const unknown = fixture('lid');
-  unknown.data.key.id = 'L2';
   delete unknown.data.key.remoteJidAlt;
   await handleWebhook(unknown, deps);
-  assert.equal(log.msgs.length, 1);
-  assert.deepEqual(log.sent, []);
+  assert.deepEqual([log.msgs, log.sent, log.disabled], [[], [], []]);
+  assert.equal(log.notes.length, 1);
 });
 
 test('áudio de lead pausa a conversa', async () => {
