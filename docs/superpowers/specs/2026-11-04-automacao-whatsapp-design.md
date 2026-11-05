@@ -114,8 +114,8 @@ A cada mensagem recebida por webhook autenticado:
 
 O filtro de saída é a garantia contra erro de oferta, e deve ter testes:
 
-- Todo valor monetário, percentual e prazo citado precisa estar na lista da oferta.
-- Bloqueia links, chave Pix, e-mail, CPF ou CNPJ, e qualquer telefone.
+- A IA não escreve valores: usa marcadores como `{preco}`, que o código troca pelo texto fixo da oferta. Qualquer dígito ou número por extenso escrito por ela bloqueia o envio.
+- Bloqueia links, menção a Pix ou chave fora dos marcadores, e-mail e marcadores desconhecidos.
 - Bloqueia respostas vazias ou acima do limite de tamanho.
 - Falhou no filtro: nada é enviado, a conversa pausa com o motivo, e Lorenzo é avisado.
 
