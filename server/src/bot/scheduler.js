@@ -150,6 +150,26 @@ export async function sendDigest(now, deps) {
   if (text) await deps.notify(text);
 }
 
+export function isThirdBusinessDay(now) {
+  let count = 0;
+  for (let day = 1; day <= now.getDate(); day++) {
+    const weekday = new Date(now.getFullYear(), now.getMonth(), day).getDay();
+    if (weekday !== 0 && weekday !== 6) count++;
+  }
+  const today = now.getDay();
+  return today !== 0 && today !== 6 && count === 3;
+}
+
+// shortcut: feriados contam como dia útil; se a data importar, usar um calendário de feriados.
+export async function monthlyPurge(now, deps) {
+  if (!deps.dbEnabled() || !isThirdBusinessDay(now)) return;
+  const month = hojeLocal(now).slice(0, 7);
+  if ((await deps.settings())?.botPurgedMonth === month) return;
+  const { bot, evolution } = await deps.purgeMessages(new Date(now.getFullYear(), now.getMonth(), 1));
+  await deps.savePurgedMonth(month);
+  await deps.notify(`Limpeza do mês: apaguei ${bot} mensagens de conversas encerradas e ${evolution} cópias antigas do WhatsApp. Quem pediu para sair continua bloqueado.`);
+}
+
 export function startScheduler(deps) {
   let running = false;
   setInterval(async () => {
@@ -164,6 +184,11 @@ export function startScheduler(deps) {
       await sendDigest(new Date(), deps);
     } catch (e) {
       console.error('[bot] resumo:', e.message);
+    }
+    try {
+      await monthlyPurge(new Date(), deps);
+    } catch (e) {
+      console.error('[bot] limpeza:', e.message);
     } finally {
       running = false;
     }

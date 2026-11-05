@@ -578,6 +578,16 @@ export async function botDigest(since) {
   return { contacted: pick('contacted'), replied: pick('replied'), waiting: rows.filter((r) => r.waiting).length };
 }
 
+// Limpeza mensal: só os textos de conversas paradas. Saídas e o registro de quem já foi abordado ficam para sempre.
+export async function botPurgeMessages(before) {
+  const r = await pool.query(
+    `DELETE FROM bot_messages m USING bot_conversations c
+     WHERE m.lead_id = c.lead_id AND c.status NOT IN ('queued', 'sending', 'active') AND c.updated_at < $1`,
+    [before]
+  );
+  return r.rowCount;
+}
+
 export const botQueuedCount = async () =>
   (await botRows(`SELECT count(*)::int AS n FROM bot_conversations WHERE status = 'queued'`))[0].n;
 

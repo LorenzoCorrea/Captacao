@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { tick, digestText, sendDigest } from '../src/bot/scheduler.js';
+import { tick, digestText, sendDigest, isThirdBusinessDay, monthlyPurge } from '../src/bot/scheduler.js';
 
 // Quarta-feira, 10h no fuso local.
 const WED_10 = new Date(2026, 10, 4, 10, 0, 0);
@@ -257,4 +257,32 @@ test('resumo: a cada 5 min e só com novidade', async () => {
   assert.equal(calls, 0, 'antes de 5 min');
   await sendDigest(new Date(WED_10.getTime() + 5 * 60000), deps);
   assert.deepEqual(notes, ['Lorenzo, chamei 1 lead: X (y). Ainda espero resposta de 1.']);
+});
+
+test('3º dia útil: pula fim de semana', () => {
+  // Dezembro de 2026 começa numa terça: 1, 2, 3 → dia 3. Agosto de 2026 começa num sábado: 3, 4, 5 → dia 5.
+  assert.equal(isThirdBusinessDay(new Date(2026, 11, 3, 10)), true);
+  assert.equal(isThirdBusinessDay(new Date(2026, 11, 2, 10)), false);
+  assert.equal(isThirdBusinessDay(new Date(2026, 7, 5, 10)), true);
+  assert.equal(isThirdBusinessDay(new Date(2026, 7, 3, 10)), false);
+});
+
+test('limpeza: uma vez por mês, apagando o que é anterior ao mês', async () => {
+  const calls = [];
+  const notes = [];
+  const settings = {};
+  const deps = {
+    dbEnabled: () => true,
+    settings: async () => settings,
+    savePurgedMonth: async (m) => { settings.botPurgedMonth = m; },
+    purgeMessages: async (before) => { calls.push(before); return { bot: 4, evolution: 30 }; },
+    notify: async (t) => notes.push(t),
+  };
+  await monthlyPurge(new Date(2026, 11, 2, 10), deps);
+  assert.equal(calls.length, 0, 'ainda não é o 3º dia útil');
+  await monthlyPurge(new Date(2026, 11, 3, 10), deps);
+  await monthlyPurge(new Date(2026, 11, 3, 10, 1), deps);
+  assert.equal(calls.length, 1, 'só uma vez no mês');
+  assert.deepEqual(calls[0], new Date(2026, 11, 1));
+  assert.match(notes[0], /4 mensagens.*30 cópias/);
 });

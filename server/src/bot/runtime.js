@@ -1,3 +1,4 @@
+import pg from 'pg';
 import * as db from '../db.js';
 import { askAi } from './ai.js';
 import { DEFAULT_BOT_CONFIG } from './config.js';
@@ -12,6 +13,20 @@ const DISABLED_TEXT = {
   send_failed: 'houve falha no envio',
   owner_unresolved: 'não consegui identificar o contato de uma resposta sua',
 };
+
+// A Evolution guarda cópia de toda mensagem do número; o bot não lê esse histórico.
+async function purgeEvolution(before) {
+  if (!process.env.EVOLUTION_DATABASE_URI) return 0;
+  const client = new pg.Client({ connectionString: process.env.EVOLUTION_DATABASE_URI });
+  await client.connect();
+  try {
+    // Mídia e atualizações saem junto (ON DELETE CASCADE).
+    const r = await client.query('DELETE FROM "Message" WHERE "messageTimestamp" < $1', [Math.floor(before.getTime() / 1000)]);
+    return r.rowCount;
+  } finally {
+    await client.end();
+  }
+}
 
 export function createRuntime() {
   const gateway = createGateway();
@@ -42,6 +57,8 @@ export function createRuntime() {
     dbEnabled: () => db.dbEnabled,
     saveState: (state) => db.saveSetting('botState', state),
     saveDigestAt: (at) => db.saveSetting('botDigestAt', at),
+    savePurgedMonth: (month) => db.saveSetting('botPurgedMonth', month),
+    purgeMessages: async (before) => ({ bot: await db.botPurgeMessages(before), evolution: await purgeEvolution(before) }),
     search: buscarEstabelecimentos,
     loadKnown: db.loadKnownLeads,
     createSearch: (leads, meta) => createSearch(leads, meta, new Map(), { enrich: false }),
