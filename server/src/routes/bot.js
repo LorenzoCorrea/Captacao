@@ -33,7 +33,10 @@ export async function handleWebhook(payload, deps) {
   if (!key?.id || /@(g\.us|broadcast|newsletter)$/.test(key.remoteJid ?? '')) return;
   const number = numberFromKey(key);
   if (!number) {
-    console.warn('[bot] mensagem sem número identificável foi ignorada');
+    console.warn('[bot] mensagem sem número identificável');
+    // Se a resposta for de Lorenzo, não dá para saber qual conversa pausar.
+    if (key.fromMe) await deps.disableBot('owner_unresolved');
+    else await deps.notify('Chegou uma mensagem de um contato que não consegui identificar. Confira no celular.');
     return;
   }
   const { db } = deps;
@@ -45,9 +48,10 @@ export async function handleWebhook(payload, deps) {
   if (key.fromMe) {
     // O eco do envio do bot pode chegar antes de o id ser gravado.
     await pendingSend(conv.phone_key).catch(() => {});
-    if (await db.botHasMessage(key.id)) return;
-    await db.botAddMessage({ id: key.id, leadId: conv.lead_id, direction: 'out', source: 'owner', body: content.hasText ? content.text : '[mídia]' });
-    if (conv.status === 'active') await db.botSetStatus(conv.lead_id, 'paused', 'owner_replied');
+    const source = await db.botMessageSource(key.id);
+    if (source === 'bot') return;
+    if (!source) await db.botAddMessage({ id: key.id, leadId: conv.lead_id, direction: 'out', source: 'owner', body: content.hasText ? content.text : '[mídia]' });
+    await db.botTransition(conv.lead_id, ['queued', 'sending', 'active'], 'paused', 'owner_replied');
     return;
   }
   await handleInbound({ conv, id: key.id, ...content }, deps);
@@ -105,7 +109,7 @@ export function createBotRouter(deps) {
     res.json({
       mode: isLive() ? 'live' : 'simulate',
       config,
-      connection: await gateway.state(),
+      connection: await gateway.linkState(),
       sentToday: usage.whatsapp ?? 0,
       dailyLimit: Number(settings.limits?.whatsapp ?? 5),
     });
@@ -117,22 +121,21 @@ export function createBotRouter(deps) {
   }));
 
   router.post('/api/bot/conversations/:leadId/pause', withConversation(async (conv, _req, res) => {
-    if (!['queued', 'active', 'ready_to_close'].includes(conv.status)) return res.status(409).json({ error: 'Esta conversa não pode ser pausada.' });
-    await db.botSetStatus(conv.lead_id, 'paused', 'manual');
+    if (!(await db.botTransition(conv.lead_id, ['queued', 'sending', 'active', 'ready_to_close'], 'paused', 'manual'))) return res.status(409).json({ error: 'Esta conversa não pode ser pausada.' });
     res.json({ ok: true });
   }));
 
   router.post('/api/bot/conversations/:leadId/resume', withConversation(async (conv, _req, res) => {
-    if (!['paused', 'ready_to_close'].includes(conv.status)) return res.status(409).json({ error: 'Esta conversa não pode voltar para o bot.' });
+    const blocked = await db.botIsOptedOut(conv.phone_key) || !(await db.botTransition(conv.lead_id, ['paused', 'ready_to_close'], 'active'));
+    if (blocked) return res.status(409).json({ error: 'Esta conversa não pode voltar para o bot.' });
     await db.botClearAiFailure(conv.lead_id);
-    await db.botSetStatus(conv.lead_id, 'active');
     res.json({ ok: true });
   }));
 
   router.post('/api/bot/conversations/:leadId/finish', withConversation(async (conv, req, res) => {
     if (typeof req.body?.won !== 'boolean') return res.status(400).json({ error: 'Informe se o negócio foi fechado.' });
-    if (conv.status === 'opted_out') return res.status(409).json({ error: 'Este contato pediu para sair.' });
-    await db.botSetStatus(conv.lead_id, 'closed', req.body.won ? 'won' : 'lost');
+    const open = ['queued', 'sending', 'active', 'paused', 'ready_to_close', 'failed'];
+    if (!(await db.botTransition(conv.lead_id, open, 'closed', req.body.won ? 'won' : 'lost'))) return res.status(409).json({ error: 'Esta conversa já foi encerrada.' });
     await deps.setStage(conv, req.body.won ? 'ganho' : 'descartado');
     res.json({ ok: true });
   }));

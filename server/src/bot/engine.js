@@ -1,4 +1,4 @@
-import { FIXED, renderReply } from './offer.js';
+import { FIXED, answerFor } from './offer.js';
 
 export const MAX_AI_TURNS = 10;
 const RETRY_MS = 5 * 60 * 1000;
@@ -8,20 +8,26 @@ const normalize = (text) => String(text ?? '').normalize('NFD').replace(/\p{Diac
   .replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
 
 // A mensagem inteira precisa ser um pedido de saída: "não quero pagar agora" segue na conversa.
-const OPT_OUT = /^(nao quero( mais)?|nao tenho interesse|sem interesse|nao me interessa|pare|parar|chega|sair|remover|remova|cancelar|descadastrar|(pare|para) de (me )?(mandar|enviar)( mais)?( mensage(m|ns))?|nao (me )?(mande|envie)( mais)?( mensage(m|ns))?)( obrigad[oa])?$/;
+const OPT_OUT = /^((por favor|pode) )?(nao quero( mais)?( receber)?( mais)?( mensage(m|ns))?|nao tenho interesse( no momento| agora)?|sem interesse|nao me interessa|pare|para|parar|chega|sair|stop|remover|remova|cancelar|descadastrar|me (tira|tire|remove|remova) da (sua )?lista|(pare|para) de (me )?(mandar|enviar|chamar)( mais)?( mensage(m|ns))?|nao (me )?(mande|envie|chame)( mais)?( mensage(m|ns))?)( mais)?( obrigad[oa])?$/;
 export const isOptOut = (text) => OPT_OUT.test(normalize(text));
 
 // Quem pergunta se fala com um robô recebe a verdade, sem passar pela IA.
-const BOT_QUESTION = /\b(robo|bot|chatbot|chatgpt|gpt|inteligencia artificial|automatic[oa]|(uma|um|com|e) ia|pessoa (de verdade|real)|humano|humana|voce mesmo|e voce mesmo|atendente virtual|assistente virtual|maquina)\b/;
+const BOT_QUESTION = /\b(robo|bot|chatbot|chatgpt|gpt|inteligencia artificial|e automatic[oa]|(uma|um|com|e) ia$|(uma|um|com) ia\b|pessoa (de verdade|real)|humano|humana|(voce|vc) mesmo|lorenzo mesmo|quem (esta|ta) falando|quem fala|e gente|tem alguem ai|atendente virtual|assistente virtual)\b/;
 export const isBotQuestion = (text) => BOT_QUESTION.test(normalize(text));
 
 // O webhook aguarda o envio em curso para não confundir a mensagem do bot com uma de Lorenzo.
 const sending = new Map();
 export const pendingSend = (phoneKey) => sending.get(phoneKey) ?? Promise.resolve();
 
-export function sendAndRecord(conv, text, { db, gateway }) {
+// Com "allow", relê o estado e a lista de saída logo antes de enviar. Devolve null se não enviou.
+export function sendAndRecord(conv, text, { db, gateway }, { allow } = {}) {
+  const previous = sending.get(conv.phone_key) ?? Promise.resolve();
   const run = (async () => {
-    await (sending.get(conv.phone_key) ?? Promise.resolve()).catch(() => {});
+    await previous.catch(() => {});
+    if (allow) {
+      const fresh = await db.botGet(conv.lead_id);
+      if (!allow.includes(fresh?.status) || await db.botIsOptedOut(conv.phone_key)) return null;
+    }
     const id = await gateway.send(conv.phone, text);
     await db.botAddMessage({ id, leadId: conv.lead_id, direction: 'out', source: 'bot', body: text });
     return id;
@@ -42,16 +48,19 @@ const REASONS = {
   asked_if_bot: 'perguntou se é um robô: o bot disse que o atendimento é automatizado e você assume',
 };
 
+// A saída é gravada antes da despedida: uma falha no envio não pode manter a conversa ativa.
 async function optOut(conv, deps, { speak }) {
   const { db, setStage, notify } = deps;
-  await db.botOptOut(conv.phone_key);
-  if (speak) await sendAndRecord(conv, FIXED.goodbye, deps);
-  else await notify(`${label(conv)} pediu para não receber mais mensagens.`);
-  await db.botSetStatus(conv.lead_id, 'opted_out');
+  await db.botMarkOptOut(conv.lead_id, conv.phone_key);
+  if (speak) {
+    await sendAndRecord(conv, FIXED.goodbye, deps).catch((e) => console.error('[bot] despedida não enviada:', e.message));
+  } else {
+    await notify(`${label(conv)} pediu para não receber mais mensagens.`);
+  }
   await setStage?.(conv, 'descartado');
 }
 
-function decide(intent, reply, discountAsks) {
+function decide({ intent, topics }, discountAsks) {
   switch (intent) {
     case 'accepted': return { text: FIXED.accepted, status: 'ready_to_close' };
     case 'installments': return { text: FIXED.installments, status: 'paused', reason: 'installments' };
@@ -60,26 +69,35 @@ function decide(intent, reply, discountAsks) {
         ? { text: FIXED.handoff, status: 'paused', reason: 'discount_insist' }
         : { text: FIXED.discount };
     case 'asked_if_bot': return { text: FIXED.botQuestion, status: 'paused', reason: 'asked_if_bot' };
-    case 'human_requested':
-    case 'unknown': return { text: FIXED.handoff, status: 'paused', reason: intent };
-    default: {
-      const rendered = renderReply(reply);
-      return rendered.ok ? { text: rendered.text } : { block: `filter:${rendered.reason}` };
+    case 'human_requested': return { text: FIXED.handoff, status: 'paused', reason: 'human_requested' };
+    case 'continue': {
+      const text = answerFor(topics);
+      if (text) return { text };
     }
+    // falls through
+    default: return { text: FIXED.handoff, status: 'paused', reason: 'unknown' };
   }
 }
 
-async function registerFailure(conv, error, { db, notify, now }) {
+async function registerAiFailure(conv, error, { db, notify, now }) {
   const at = now();
   const first = conv.ai_first_fail ? new Date(conv.ai_first_fail) : at;
-  console.error('[bot] falha ao responder:', error.message);
+  console.error('[bot] falha na IA:', error.message);
   if (at - first >= GIVE_UP_MS) {
     await db.botClearAiFailure(conv.lead_id);
-    await db.botSetStatus(conv.lead_id, 'paused', 'ai_unavailable');
-    await notify(`Bot pausou ${label(conv)}: a IA ou o envio estão indisponíveis há 1 hora.`);
+    await db.botTransition(conv.lead_id, ['active'], 'paused', 'ai_unavailable');
+    await notify(`Bot pausou ${label(conv)}: a IA está indisponível há 1 hora.`);
     return;
   }
   await db.botSetAiFailure(conv.lead_id, first, new Date(at.getTime() + RETRY_MS));
+}
+
+// Depois de um erro de envio não se sabe se a mensagem saiu: nunca reenvia.
+async function sendFailure(conv, error, { db, disableBot, notify }) {
+  console.error('[bot] falha no envio:', error.message);
+  await db.botTransition(conv.lead_id, ['active'], 'paused', 'send_failed');
+  await notify(`Falha ao responder ${label(conv)}. Confira a conversa no celular.`);
+  await disableBot('send_failed');
 }
 
 export async function replyToLead(conv, deps) {
@@ -88,60 +106,69 @@ export async function replyToLead(conv, deps) {
   if (current?.status !== 'active') return;
 
   if (current.ai_turns >= MAX_AI_TURNS) {
-    await db.botSetStatus(conv.lead_id, 'paused', 'turn_limit');
+    await db.botTransition(conv.lead_id, ['active'], 'paused', 'turn_limit');
     await notify(`Bot pausou ${label(conv)}: a conversa chegou a ${MAX_AI_TURNS} respostas.`);
     return;
   }
 
+  const history = await db.botHistory(conv.lead_id);
+  let answer;
   try {
-    const answer = await ai(await db.botHistory(conv.lead_id), current);
-    await db.botClearAiFailure(conv.lead_id);
-    await db.botIncrementTurn(conv.lead_id);
-
-    // Lorenzo pode ter assumido enquanto a IA gerava a resposta.
-    if ((await db.botGet(conv.lead_id))?.status !== 'active') return;
-
-    if (answer.intent === 'opt_out') return await optOut(current, deps, { speak: true });
-    const discountAsks = answer.intent === 'discount' ? await db.botIncrementDiscount(conv.lead_id) : 0;
-    const decision = decide(answer.intent, answer.reply, discountAsks);
-
-    if (decision.block) {
-      await db.botSetStatus(conv.lead_id, 'paused', decision.block);
-      await notify(`Bot pausou ${label(conv)}: a resposta da IA foi bloqueada pelo filtro. Responda você.`);
-      return;
-    }
-
-    await sendAndRecord(current, decision.text, deps);
-    if (decision.status) await db.botSetStatus(conv.lead_id, decision.status, decision.reason ?? null);
-    if (decision.status === 'ready_to_close') {
-      await setStage?.(current, 'qualificado');
-      await notify(`${label(current)} aceitou. Envie os dados de pagamento do sinal e feche.`);
-    } else if (decision.status === 'paused') {
-      await notify(`${label(current)} ${REASONS[decision.reason] ?? 'precisa de você'}.`);
-    }
+    answer = await ai(history, current);
   } catch (e) {
-    await registerFailure(current, e, deps);
+    await registerAiFailure(current, e, deps);
+    return;
+  }
+  if (current.ai_first_fail) await db.botClearAiFailure(conv.lead_id);
+
+  // Lorenzo pode ter assumido, ou o lead pode ter escrito de novo, enquanto a IA respondia.
+  if ((await db.botGet(conv.lead_id))?.status !== 'active') return;
+  const latest = await db.botHistory(conv.lead_id);
+  if (latest.at(-1)?.id !== history.at(-1)?.id) return;
+
+  if (answer.intent === 'opt_out') return optOut(current, deps, { speak: true });
+
+  const discountAsks = answer.intent === 'discount' ? (current.discount_asks ?? 0) + 1 : 0;
+  const decision = decide(answer, discountAsks);
+
+  // Decisões que encerram a vez do bot são gravadas antes do envio.
+  if (decision.status && !(await db.botTransition(conv.lead_id, ['active'], decision.status, decision.reason ?? null))) return;
+
+  try {
+    const id = await sendAndRecord(current, decision.text, deps, { allow: [decision.status ?? 'active'] });
+    if (!id) return;
+    await db.botIncrementTurn(conv.lead_id);
+    if (answer.intent === 'discount') await db.botIncrementDiscount(conv.lead_id);
+  } catch (e) {
+    await sendFailure(current, e, deps);
+    return;
+  }
+
+  if (decision.status === 'ready_to_close') {
+    await setStage?.(current, 'qualificado');
+    await notify(`${label(current)} aceitou. Envie os dados de pagamento do sinal e feche.`);
+  } else if (decision.status === 'paused') {
+    await notify(`${label(current)} ${REASONS[decision.reason] ?? 'precisa de você'}.`);
   }
 }
 
 export async function handleInbound({ conv, id, text, hasText }, deps) {
   const { db, notify } = deps;
-  const isNew = await db.botAddMessage({ id, leadId: conv.lead_id, direction: 'in', source: 'lead', body: hasText ? text : '[mídia]' });
-  if (!isNew) return;
+  // Webhook repetido depois de uma falha segue adiante: as transições abaixo são idempotentes.
+  await db.botAddMessage({ id, leadId: conv.lead_id, direction: 'in', source: 'lead', body: hasText ? text : '[mídia]' });
   if (conv.status === 'opted_out') return;
 
   if (hasText && isOptOut(text)) {
     await optOut(conv, deps, { speak: conv.status === 'active' });
     return;
   }
-  if (hasText && conv.status === 'active' && isBotQuestion(text)) {
-    await sendAndRecord(conv, FIXED.botQuestion, deps);
-    await db.botSetStatus(conv.lead_id, 'paused', 'asked_if_bot');
+  if (hasText && isBotQuestion(text)) {
+    if (!(await db.botTransition(conv.lead_id, ['active'], 'paused', 'asked_if_bot'))) return;
+    await sendAndRecord(conv, FIXED.botQuestion, deps).catch((e) => console.error('[bot] resposta não enviada:', e.message));
     await notify(`${label(conv)} ${REASONS.asked_if_bot}.`);
     return;
   }
-  if (!hasText && conv.status === 'active') {
-    await db.botSetStatus(conv.lead_id, 'paused', 'media');
+  if (!hasText && await db.botTransition(conv.lead_id, ['active'], 'paused', 'media')) {
     await notify(`${label(conv)} enviou áudio ou mídia. O bot pausou para você responder.`);
   }
 }

@@ -9,8 +9,9 @@ const SAT_10 = new Date(2026, 10, 7, 10, 0, 0);
 
 const lead = (id, phone, hasWebsite = false) => ({ id, name: `Lead ${id}`, phone, hasWebsite, niche: 'barbearia' });
 
-function setup({ config = {}, queued = [], leads = [], usage = {}, limits = {}, state = {} } = {}) {
-  const log = { sent: [], statuses: [], replies: [], captures: 0, created: [], enqueued: [], usage: [], disabled: [], stages: [], notes: [] };
+function setup({ config = {}, queued = [], leads = [], usage = {}, limits = {}, state = {}, known = new Map() } = {}) {
+  queued = queued.map((c) => ({ ...c }));
+  const log = { recovered: [], sent: [], statuses: [], replies: [], captures: 0, created: [], enqueued: [], usage: [], disabled: [], stages: [], notes: [] };
   const queue = [...queued];
   const settings = {
     botConfig: { enabled: true, cities: [{ name: 'POA', lat: -30, lng: -51 }], radiusKm: 5, niches: ['barbearia'], sendFrom: '09:00', sendTo: '18:00', weekdaysOnly: true, ...config },
@@ -26,15 +27,24 @@ function setup({ config = {}, queued = [], leads = [], usage = {}, limits = {}, 
       botNextQueued: async () => queue[0] ?? null,
       botEnqueue: async (c) => { log.enqueued.push(c); return true; },
       botGetByPhoneKey: async () => null,
-      botSetStatus: async (id, status, reason) => {
+      botClaim: async (conv) => { if (queue[0] !== conv) return false; conv.status = 'sending'; return true; },
+      botTransition: async (id, from, status, reason) => {
+        const conv = queue[0];
+        if (!conv || conv.lead_id !== id || !from.includes(conv.status)) return false;
+        conv.status = status;
         log.statuses.push([id, status, reason ?? null]);
         if (status !== 'queued') queue.shift();
+        return true;
       },
+      botGet: async (id) => (queue[0]?.lead_id === id ? { ...queue[0] } : null),
+      botIsOptedOut: async () => false,
+      botRecoverSending: async () => log.recovered,
       botAddMessage: async () => true,
       botQueuedCount: async () => queue.length,
       incrementUsage: async (canal) => { log.usage.push(canal); return {}; },
     },
     search: async () => { log.captures++; return { found: leads.length, leads }; },
+    loadKnown: async () => known,
     createSearch: (l) => { log.created.push(l.map((x) => x.id)); return '11111111-1111-1111-1111-111111111111'; },
     gateway: {
       state: async () => 'open', isOnWhatsApp: async () => true,
@@ -72,6 +82,14 @@ test('capta uma vez por dia só celular sem site', async () => {
   assert.equal(log.captures, 1);
   assert.deepEqual(log.created, [['osm:1']]);
   assert.deepEqual(log.enqueued.map((c) => [c.leadId, c.phone, c.phoneKey]), [['osm:1', '5551991234567', '5191234567']]);
+});
+
+test('não aborda lead que Lorenzo já trabalhou no CRM', async () => {
+  const leads = [lead('osm:1', '(51) 99123-4567'), lead('osm:2', '(51) 99123-1111'), lead('osm:3', '(51) 99123-2222')];
+  const known = new Map([['osm:1', { stage: 'descartado' }], ['osm:2', { stage: 'ganho' }], ['osm:3', { stage: 'novo' }]]);
+  const { log, deps } = setup({ leads, known });
+  await tick(WED_10, deps);
+  assert.deepEqual(log.enqueued.map((c) => c.leadId), ['osm:3']);
 });
 
 test('não captura quem já tem conversa', async () => {
@@ -139,12 +157,61 @@ test('número fora do WhatsApp vira failed sem contar no limite', async () => {
   assert.deepEqual([log.sent, log.usage], [[], []]);
 });
 
+test('pausa durante a reserva: nada sai', async () => {
+  const { log, deps } = setup({ queued: [q], state: { lastCaptureDate: '2026-11-04' } });
+  const isOn = deps.gateway.isOnWhatsApp;
+  deps.gateway.isOnWhatsApp = async (p) => {
+    const conv = await deps.db.botNextQueuedRef();
+    conv.status = 'paused';
+    return isOn(p);
+  };
+  deps.db.botNextQueuedRef = async () => log.claimed;
+  const claim = deps.db.botClaim;
+  deps.db.botClaim = async (c) => { log.claimed = c; return claim(c); };
+  await tick(WED_10, deps);
+  assert.deepEqual(log.sent, []);
+  assert.deepEqual(log.statuses, []);
+});
+
+test('outro processo já reservou: não envia', async () => {
+  const { log, deps } = setup({ queued: [q], state: { lastCaptureDate: '2026-11-04' } });
+  deps.db.botClaim = async () => false;
+  await tick(WED_10, deps);
+  assert.deepEqual(log.sent, []);
+});
+
+test('conta o uso antes de enviar; falha ao contar impede o envio e devolve à fila', async () => {
+  const { log, deps } = setup({ queued: [q], state: { lastCaptureDate: '2026-11-04' } });
+  deps.db.incrementUsage = async () => { throw new Error('banco'); };
+  await tick(WED_10, deps);
+  assert.deepEqual(log.sent, []);
+  assert.deepEqual(log.statuses, [['A', 'queued', null]]);
+});
+
+test('envio interrompido em reinício pausa para revisão e avisa', async () => {
+  const { log, deps } = setup({ state: { lastCaptureDate: '2026-11-04' } });
+  log.recovered = [{ lead_id: 'Z', name: 'Zeta', phone: '55' }];
+  await tick(WED_10, deps);
+  assert.equal(log.notes.length, 1);
+  assert.match(log.notes[0], /Zeta/);
+});
+
+test('desligar no meio da rotina interrompe as respostas restantes', async () => {
+  const { log, deps, settings } = setup({ queued: [q], state: { lastCaptureDate: '2026-11-04' } });
+  deps.db.botDueReplies = async () => [{ lead_id: 'P1' }, { lead_id: 'P2' }];
+  deps.reply = async (c) => { log.replies.push(c.lead_id); settings.botConfig.enabled = false; };
+  await tick(WED_10, deps);
+  assert.deepEqual(log.replies, ['P1']);
+  assert.deepEqual(log.sent, []);
+});
+
 test('desconectado desliga em vez de enviar', async () => {
   const { log, deps } = setup({ queued: [q], state: { lastCaptureDate: '2026-11-04' } });
   deps.gateway.state = async () => 'close';
   await tick(WED_10, deps);
   assert.deepEqual(log.disabled, ['whatsapp_disconnected']);
   assert.equal(log.sent.length, 0);
+  assert.deepEqual(log.statuses, [['A', 'queued', null]]);
 });
 
 test('erro no envio desliga o bot e não conta uso', async () => {
@@ -152,8 +219,8 @@ test('erro no envio desliga o bot e não conta uso', async () => {
   deps.gateway.send = async () => { throw new Error('gateway'); };
   await tick(WED_10, deps);
   assert.deepEqual(log.disabled, ['send_failed']);
-  assert.deepEqual(log.usage, []);
-  assert.deepEqual(log.statuses, []);
+  assert.deepEqual(log.usage, ['whatsapp']);
+  assert.deepEqual(log.statuses, [['A', 'paused', 'send_failed']]);
 });
 
 test('responde pendências, inclusive as anteriores a um reinício e à noite', async () => {

@@ -11,28 +11,13 @@ export const OFFER = {
   refazer: 'refazer tudo, trocando layout ou estrutura, custa R$ 100 nos 2 primeiros meses',
 };
 
-const NUMBER_WORDS = /\b(dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|catorze|quatorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|cento|duzent\w+|trezent\w+|quatrocent\w+|quinhent\w+|seiscent\w+|setecent\w+|oitocent\w+|novecent\w+|mil|metade|dobro|grátis|gratuit\w+)\b/iu;
-const LINK = /(https?:\/\/|www\.|\b[a-z0-9-]+\.(com|net|org|br|io|app|me|ly)\b)/i;
-const EMAIL = /\S+@\S+/;
-const MAX_LENGTH = 1000;
+// O nome vem do OpenStreetMap, editável por qualquer pessoa: não pode levar preço, link ou Pix.
+const UNSAFE_NAME = /(https?:|www\.|\w\.\w{2,}|r\$|\bpix\b|\bchave\b|[{}@])/i;
+const MAX_NAME = 60;
 
-// Valida o texto cru da IA antes de expandir: os marcadores são os únicos valores aceitos.
-export function renderReply(raw) {
-  const text = String(raw ?? '').trim();
-  const fail = (reason) => ({ ok: false, reason });
-  if (!text) return fail('empty');
-  if (text.length > MAX_LENGTH) return fail('length');
-  for (const [, name] of text.matchAll(/\{([^{}]*)\}/g)) {
-    if (!Object.hasOwn(OFFER, name)) return fail('placeholder');
-  }
-  const free = text.replace(/\{[^{}]*\}/g, '');
-  if (/[{}]/.test(free)) return fail('placeholder');
-  if (/\d/.test(free)) return fail('digit');
-  if (NUMBER_WORDS.test(free)) return fail('number-word');
-  if (EMAIL.test(free)) return fail('email');
-  if (LINK.test(free)) return fail('link');
-  if (/\b(pix|chave)\b/i.test(free)) return fail('pix');
-  return { ok: true, text: text.replace(/\{([^{}]*)\}/g, (_, name) => OFFER[name]) };
+export function safeName(name) {
+  const text = String(name ?? '').trim();
+  return !text || text.length > MAX_NAME || UNSAFE_NAME.test(text) ? 'seu comércio' : text;
 }
 
 const FIRST = {
@@ -42,7 +27,7 @@ const FIRST = {
 
 export function firstMessage(variant, name) {
   const template = FIRST[variant] ?? FIRST.A;
-  return template.replace(/\{([^{}]*)\}/g, (_, key) => (key === 'nome' ? name : OFFER[key]));
+  return template.replace(/\{([^{}]*)\}/g, (_, key) => (key === 'nome' ? safeName(name) : OFFER[key]));
 }
 
 // Respostas críticas não passam pela IA.
@@ -55,6 +40,23 @@ export const FIXED = {
   goodbye: 'Tudo bem, não vou mais enviar mensagens. Obrigado pela atenção e bom trabalho!',
 };
 
-export function offerPromptBlock() {
-  return Object.entries(OFFER).map(([name, text]) => `{${name}}: ${text}`).join('\n');
+// Únicas respostas livres do bot: a IA escolhe o tópico e nunca escreve o texto.
+export const ANSWERS = {
+  how_it_works: `Funciona assim: crio uma landing page focada no seu comércio, por ${OFFER.preco}. A entrega é em ${OFFER.prazo}. Para começar, é o ${OFFER.sinal}. Quer que eu faça a sua?`,
+  price: `O valor é ${OFFER.preco}. Quer que eu faça a sua?`,
+  deadline: `A entrega é em ${OFFER.prazo}.`,
+  payment: `Para começar, é o ${OFFER.sinal}. Depois, ${OFFER.saldo}. Também tenho ${OFFER.parcelamento}.`,
+  domain: `Sobre o domínio: ${OFFER.renovacao}.`,
+  maintenance: `Sobre manutenção: ${OFFER.manutencao}.`,
+  redo: `Caso queira mudar tudo depois: ${OFFER.refazer}.`,
+  included: `Está incluso a landing page focada no seu comércio e a hospedagem, por ${OFFER.preco}.`,
+};
+export const TOPICS = Object.keys(ANSWERS);
+const MAX_TOPICS = 2;
+
+export function answerFor(topics) {
+  if (!Array.isArray(topics) || !topics.length) return null;
+  const unique = [...new Set(topics)];
+  if (unique.length > MAX_TOPICS || !unique.every((t) => Object.hasOwn(ANSWERS, t))) return null;
+  return unique.map((t) => ANSWERS[t]).join('\n\n');
 }

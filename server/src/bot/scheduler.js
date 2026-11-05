@@ -37,10 +37,16 @@ async function capture(now, config, state, deps) {
   for (const city of config.cities ?? []) {
     for (const niche of config.niches ?? []) {
       const { leads } = await deps.search({ niche, city: city.name, lat: city.lat, lng: city.lng, radiusKm: config.radiusKm ?? 5 });
+      const candidates = leads
+        .filter((lead) => !lead.hasWebsite)
+        .map((lead) => ({ lead, phone: mobileFromLead(lead.phone) }))
+        .filter((c) => c.phone);
+      // Lead que já mudou de estágio foi trabalhado por Lorenzo e não recebe abordagem fria.
+      const known = await deps.loadKnown(candidates.map((c) => c.lead.id));
       const fresh = [];
-      for (const lead of leads) {
-        const phone = lead.hasWebsite ? null : mobileFromLead(lead.phone);
-        if (phone && !(await db.botGetByPhoneKey(phoneKey(phone)))) fresh.push({ lead, phone });
+      for (const c of candidates) {
+        const stage = known.get(c.lead.id)?.stage;
+        if ((!stage || stage === 'novo') && !(await db.botGetByPhoneKey(phoneKey(c.phone)))) fresh.push(c);
       }
       if (!fresh.length) continue;
       const searchId = deps.createSearch(fresh.map((f) => f.lead), { city: city.name, niche, lat: city.lat, lng: city.lng, radiusKm: config.radiusKm ?? 5, found: leads.length });
@@ -56,37 +62,66 @@ async function sendNext(now, config, settings, deps) {
   if (!canSendNow(now, config) || !withinLimits(now, settings.limits, settings.usage)) return;
   const { db, gateway } = deps;
   const conv = await db.botNextQueued();
-  if (!conv) return;
-  if ((await gateway.state()) !== 'open') return deps.disableBot('whatsapp_disconnected');
+  if (!conv || !(await db.botClaim(conv))) return;
+
+  let id;
   try {
+    if ((await gateway.state()) !== 'open') {
+      await db.botTransition(conv.lead_id, ['sending'], 'queued');
+      return deps.disableBot('whatsapp_disconnected');
+    }
     if (!(await gateway.isOnWhatsApp(conv.phone))) {
-      await db.botSetStatus(conv.lead_id, 'failed', 'not_on_whatsapp');
+      await db.botTransition(conv.lead_id, ['sending'], 'failed', 'not_on_whatsapp');
       return;
     }
-    const variant = conv.lead_id.length % 2 === 0 ? 'A' : 'B';
-    await sendAndRecord(conv, firstMessage(variant, conv.name), deps);
   } catch (e) {
-    console.error('[bot] falha no envio:', e.message);
+    console.error('[bot] falha no gateway:', e.message);
+    await db.botTransition(conv.lead_id, ['sending'], 'queued');
     return deps.disableBot('send_failed');
   }
-  await db.incrementUsage('whatsapp', hojeLocal(now), now.getTime());
-  await db.botSetStatus(conv.lead_id, 'active');
-  await deps.setStage(conv, 'contatado');
+  try {
+    // Conta antes de enviar: sem o registro, o limite anti-ban deixaria de valer.
+    await db.incrementUsage('whatsapp', hojeLocal(now), now.getTime());
+  } catch (e) {
+    console.error('[bot] falha ao contar o envio:', e.message);
+    await db.botTransition(conv.lead_id, ['sending'], 'queued');
+    return;
+  }
+  try {
+    const variant = conv.lead_id.length % 2 === 0 ? 'A' : 'B';
+    id = await sendAndRecord(conv, firstMessage(variant, conv.name), deps, { allow: ['sending'] });
+  } catch (e) {
+    console.error('[bot] falha no envio:', e.message);
+    // A mensagem pode ter saído: nunca reenvia sozinho.
+    await db.botTransition(conv.lead_id, ['sending'], 'paused', 'send_failed');
+    return deps.disableBot('send_failed');
+  }
+  if (!id) return;
+  if (await db.botTransition(conv.lead_id, ['sending'], 'active')) await deps.setStage(conv, 'contatado');
 }
+
+const isEnabled = async (deps) => (await deps.settings())?.botConfig?.enabled === true;
 
 export async function tick(now, deps) {
   if (!deps.dbEnabled()) return;
-  const settings = await deps.settings();
-  const config = settings?.botConfig;
-  if (!config?.enabled) return;
+  for (const conv of await deps.db.botRecoverSending()) {
+    await deps.notify(`O envio para ${conv.name ?? 'um lead'} (${conv.phone}) foi interrompido e pode ter saído. A conversa ficou pausada: confira no celular.`);
+  }
+  if (!(await isEnabled(deps))) return;
 
-  for (const conv of await deps.db.botDueReplies(WAIT_TO_REPLY_SEC)) await deps.reply(conv);
+  for (const conv of await deps.db.botDueReplies(WAIT_TO_REPLY_SEC)) {
+    if (!(await isEnabled(deps))) return;
+    await deps.reply(conv);
+  }
+  const settings = await deps.settings();
+  if (!settings?.botConfig?.enabled) return;
   try {
-    await capture(now, config, settings.botState ?? {}, deps);
+    await capture(now, settings.botConfig, settings.botState ?? {}, deps);
   } catch (e) {
     console.error('[bot] falha na captação:', e.message);
   }
-  await sendNext(now, config, await deps.settings(), deps);
+  const latest = await deps.settings();
+  if (latest?.botConfig?.enabled) await sendNext(now, latest.botConfig, latest, deps);
 }
 
 export function startScheduler(deps) {

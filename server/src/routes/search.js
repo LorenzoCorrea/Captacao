@@ -302,7 +302,9 @@ router.put('/api/settings/:key', async (req, res) => {
 router.post('/api/usage', async (req, res) => {
   const canal = req.body?.canal;
   if (canal !== 'whatsapp' && canal !== 'instagram') return res.status(400).json({ error: 'Canal inválido.' });
-  res.json({ usage: await incrementUsage(canal, hojeLocal(), Date.now()) });
+  // O contador local do navegador segue valendo se o banco falhar.
+  const usage = await incrementUsage(canal, hojeLocal(), Date.now()).catch(() => null);
+  res.json({ usage });
 });
 
 // Painel "Hoje": follow-ups vencidos + contatados parados, de todas as buscas.

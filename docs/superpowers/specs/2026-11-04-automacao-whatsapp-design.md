@@ -107,17 +107,12 @@ A cada mensagem recebida por webhook autenticado:
 4. Se a conversa não está `active`, só grava.
 5. Espera 30 s para juntar mensagens seguidas do mesmo lead.
 6. Chama a IA com a oferta e o histórico. O texto do lead é tratado como dado não confiável, e a IA não tem ferramentas.
-7. A IA responde um JSON com `reply` e `intent`. Os valores de `intent` são `continue`, `accepted`, `installments`, `discount`, `unknown`, `human_requested` e `opt_out`.
-8. A resposta passa pelo filtro de saída e só então é enviada.
+7. A IA responde um JSON com `intent` e `topics`. Os valores de `intent` são `continue`, `accepted`, `installments`, `discount`, `unknown`, `human_requested`, `asked_if_bot` e `opt_out`.
+8. O código escolhe o texto pronto, relê o estado e só então envia.
 
 ### Regras por código
 
-O filtro de saída é a garantia contra erro de oferta, e deve ter testes:
-
-- A IA não escreve valores: usa marcadores como `{preco}`, que o código troca pelo texto fixo da oferta. Qualquer dígito ou número por extenso escrito por ela bloqueia o envio.
-- Bloqueia links, menção a Pix ou chave fora dos marcadores, e-mail e marcadores desconhecidos.
-- Bloqueia respostas vazias ou acima do limite de tamanho.
-- Falhou no filtro: nada é enviado, a conversa pausa com o motivo, e Lorenzo é avisado.
+A IA não escreve texto: ela só classifica a mensagem em uma intenção e até dois tópicos, e o código envia as respostas prontas de `server/src/bot/offer.js`. Tópico desconhecido ou caso fora da lista passa para Lorenzo. O estado é gravado antes do envio, e um erro de envio nunca gera reenvio: a conversa pausa e o bot desliga.
 
 A saída por `intent`:
 

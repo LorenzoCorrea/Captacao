@@ -18,13 +18,24 @@ test('dados do bot no Postgres real', { skip: !url }, async () => {
     assert.equal(await db.botEnqueue(conv), false, 'repetido');
     assert.equal((await db.botNextQueued()).lead_id, conv.leadId);
 
-    await db.botOptOut('5100000000');
+    await db.botEnqueue({ leadId: 'osm:node/9', phone: '5551900000000', phoneKey: '5100000000', name: 'x', niche: 'y' });
+    await db.botMarkOptOut('osm:node/9', '5100000000');
+    assert.equal((await db.botGet('osm:node/9')).status, 'opted_out');
+    assert.equal(await db.botIsOptedOut('5100000000'), true);
+    await sql.query(`DELETE FROM bot_conversations WHERE lead_id = 'osm:node/9'`);
     assert.equal(await db.botEnqueue({ ...conv, leadId: 'osm:node/2', phoneKey: '5100000000' }), false, 'optout');
 
     assert.equal(await db.botAddMessage({ id: 'm1', leadId: conv.leadId, direction: 'out', source: 'bot', body: 'oi' }), true);
     assert.equal(await db.botAddMessage({ id: 'm1', leadId: conv.leadId, direction: 'out', source: 'bot', body: 'oi' }), false, 'id repetido');
 
-    await db.botSetStatus(conv.leadId, 'active');
+    assert.equal(await db.botClaim({ lead_id: conv.leadId }), true);
+    assert.equal(await db.botClaim({ lead_id: conv.leadId }), false, 'só um reserva');
+    assert.deepEqual((await db.botRecoverSending()).map((c) => c.lead_id), [conv.leadId]);
+    assert.equal((await db.botGet(conv.leadId)).reason, 'send_interrupted');
+    assert.equal(await db.botTransition(conv.leadId, ['queued'], 'active'), false, 'transição condicional');
+    assert.equal(await db.botTransition(conv.leadId, ['paused'], 'active'), true);
+    assert.equal(await db.botMessageSource('m1'), 'bot');
+    assert.equal(await db.botMessageSource('nada'), null);
     assert.equal((await db.botDueReplies(0)).length, 0, 'última é do bot');
     await db.botAddMessage({ id: 'm2', leadId: conv.leadId, direction: 'in', source: 'lead', body: 'quanto?' });
     assert.equal((await db.botDueReplies(3600)).length, 0, 'ainda dentro da espera');
@@ -38,7 +49,8 @@ test('dados do bot no Postgres real', { skip: !url }, async () => {
     assert.equal((await db.botDueReplies(0)).length, 1);
     assert.equal(await db.botIncrementTurn(conv.leadId), 1);
 
-    await db.botSetStatus(conv.leadId, 'paused', 'owner_replied');
+    assert.equal(await db.botIsOptedOut(conv.phoneKey), false);
+    await db.botTransition(conv.leadId, ['active'], 'paused', 'owner_replied');
     const paused = await db.botGet(conv.leadId);
     assert.deepEqual([paused.status, paused.reason], ['paused', 'owner_replied']);
     assert.equal((await db.botDueReplies(0)).length, 0, 'pausada não responde');

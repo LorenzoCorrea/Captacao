@@ -32,8 +32,11 @@ export function createGateway() {
       const data = await evolution(`/chat/whatsappNumbers/${instance()}`, { method: 'POST', body: { numbers: [phone] } });
       return Boolean(data?.[0]?.exists);
     },
+    // Em simulação o bot age como conectado, mas a tela mostra o pareamento real.
     async state() {
-      if (!isLive()) return 'open';
+      return isLive() ? this.linkState() : 'open';
+    },
+    async linkState() {
       try {
         const data = await evolution(`/instance/connectionState/${instance()}`);
         return data?.instance?.state ?? 'close';

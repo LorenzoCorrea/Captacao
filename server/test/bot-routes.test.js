@@ -5,7 +5,7 @@ import { createBotRouter } from '../src/routes/bot.js';
 
 process.env.BOT_WEBHOOK_SECRET = 's';
 
-async function start(t, { status = 'paused', mode = 'simulate', connection = 'open' } = {}) {
+async function start(t, { status = 'paused', mode = 'simulate', connection = 'open', optedOut = false } = {}) {
   process.env.BOT_MODE = mode;
   const conv = { lead_id: 'osm:node/1', phone: '5551991234567', phone_key: '5191234567', name: 'Aurora', status, reason: 'manual', search_id: 's' };
   const log = { stages: [], saved: [], msgs: [], qr: 0 };
@@ -14,14 +14,19 @@ async function start(t, { status = 'paused', mode = 'simulate', connection = 'op
       botGet: async (id) => (id === conv.lead_id ? { ...conv } : null),
       botList: async () => [{ ...conv }],
       botHistory: async () => log.msgs,
-      botSetStatus: async (_, s, r = null) => { conv.status = s; conv.reason = r; },
+      botTransition: async (_, from, to, r = null) => {
+        if (!from.includes(conv.status)) return false;
+        conv.status = to; conv.reason = r;
+        return true;
+      },
+      botIsOptedOut: async () => optedOut,
+      botMarkOptOut: async () => { conv.status = 'opted_out'; },
       botAddMessage: async (m) => { log.msgs.push(m); return true; },
-      botOptOut: async () => {},
       botClearAiFailure: async () => {},
       saveSetting: async (k, v) => log.saved.push([k, v]),
     },
     settings: async () => ({ botConfig: { enabled: false, cities: [] }, limits: { whatsapp: 5 }, usage: { date: '2020-01-01', whatsapp: 3 } }),
-    gateway: { state: async () => connection, send: async () => 'x', connect: async () => { log.qr++; return { qr: 'data:image/png;base64,AAA' }; } },
+    gateway: { state: async () => connection, linkState: async () => connection, send: async () => 'x', connect: async () => { log.qr++; return { qr: 'data:image/png;base64,AAA' }; } },
     notify: async () => {},
     setStage: async (_, s) => log.stages.push(s),
     disableBot: async () => {},
@@ -62,6 +67,18 @@ for (const status of ['opted_out', 'closed']) {
     assert.equal((await call(`${conversation}/resume`)).status, 409);
   });
 }
+
+test('devolver ao bot é recusado para quem está na lista de saída', async (t) => {
+  const { conv, call, conversation } = await start(t, { optedOut: true });
+  assert.equal((await call(`${conversation}/resume`)).status, 409);
+  assert.equal(conv.status, 'paused');
+});
+
+test('pausar também segura o envio em curso', async (t) => {
+  const { conv, call, conversation } = await start(t, { status: 'sending' });
+  assert.equal((await call(`${conversation}/pause`)).status, 200);
+  assert.equal(conv.status, 'paused');
+});
 
 test('conversa inexistente retorna 404', async (t) => {
   const { call } = await start(t);

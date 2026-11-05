@@ -12,10 +12,16 @@ function setup(status = 'active') {
   const log = { msgs: [], notes: [], disabled: [], sent: [] };
   const db = {
     botGetByPhoneKey: async (k) => (k === conv.phone_key ? { ...conv } : null),
-    botHasMessage: async (id) => log.msgs.some((m) => m.id === id),
+    botGet: async () => ({ ...conv }),
+    botIsOptedOut: async () => false,
+    botMessageSource: async (id) => log.msgs.find((m) => m.id === id)?.source ?? null,
     botAddMessage: async (m) => { if (log.msgs.some((x) => x.id === m.id)) return false; log.msgs.push(m); return true; },
-    botSetStatus: async (_, s, r = null) => { conv.status = s; conv.reason = r; },
-    botOptOut: async () => {},
+    botTransition: async (_, from, to, r = null) => {
+      if (!from.includes(conv.status)) return false;
+      conv.status = to; conv.reason = r;
+      return true;
+    },
+    botMarkOptOut: async () => { conv.status = 'opted_out'; },
   };
   const deps = {
     db,
@@ -119,6 +125,41 @@ test('número desconectado desliga o bot e avisa', async () => {
   const { log, deps } = setup();
   await handleWebhook(fixture('connection-close'), deps);
   assert.deepEqual(log.disabled, ['whatsapp_disconnected']);
+});
+
+test('reenvio depois de falha ainda pausa a resposta de Lorenzo', async () => {
+  const { conv, log, deps } = setup();
+  log.msgs.push({ id: 'OUT1', source: 'owner' });
+  await handleWebhook(fixture('from-me'), deps);
+  assert.deepEqual([conv.status, conv.reason], ['paused', 'owner_replied']);
+});
+
+test('Lorenzo responde antes da primeira mensagem: conversa na fila também pausa', async () => {
+  const { conv, deps } = setup('queued');
+  await handleWebhook(fixture('from-me'), deps);
+  assert.deepEqual([conv.status, conv.reason], ['paused', 'owner_replied']);
+});
+
+test('resposta de Lorenzo durante um envio usa o estado atual', async () => {
+  const { conv, deps } = setup('queued');
+  let release;
+  deps.gateway.send = () => new Promise((resolve) => { release = () => resolve('OUT9'); });
+  const sendDone = sendAndRecord(conv, 'oi', deps);
+  await new Promise((r) => setImmediate(r));
+  const hook = handleWebhook(fixture('from-me'), deps);
+  await new Promise((r) => setImmediate(r));
+  conv.status = 'active';
+  release();
+  await Promise.all([sendDone, hook]);
+  assert.deepEqual([conv.status, conv.reason], ['paused', 'owner_replied']);
+});
+
+test('resposta de Lorenzo sem número identificável desliga o bot por segurança', async () => {
+  const { log, deps } = setup();
+  const lid = fixture('from-me');
+  lid.data.key.remoteJid = '111122223333@lid';
+  await handleWebhook(lid, deps);
+  assert.deepEqual(log.disabled, ['owner_unresolved']);
 });
 
 test('segredo errado recebe 401', async (t) => {

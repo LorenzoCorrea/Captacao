@@ -3,6 +3,7 @@ import { lerJson } from '../lib/api.js';
 
 const STATUS = {
   queued: '⏳ Na fila',
+  sending: '📤 Enviando',
   active: '🤖 Bot conversando',
   paused: '⏸ Pausada',
   ready_to_close: '✅ Aceitou: envie o pagamento',
@@ -21,16 +22,19 @@ const REASON = {
   asked_if_bot: 'Perguntou se é um robô',
   unknown: 'O bot não soube responder',
   turn_limit: 'Chegou ao limite de respostas',
+  send_failed: 'Falha no envio: confira no celular',
+  send_interrupted: 'Envio interrompido: confira no celular',
   ai_unavailable: 'A IA ficou indisponível',
   not_on_whatsapp: 'O número não usa WhatsApp',
   won: 'Negócio fechado',
   lost: 'Sem negócio',
 };
-const reasonText = (r) => (r?.startsWith('filter:') ? 'A resposta da IA foi bloqueada pelo filtro' : REASON[r] ?? r);
+const reasonText = (r) => REASON[r] ?? r;
 
 const DISABLED_REASON = {
   whatsapp_disconnected: 'o número desconectou',
   send_failed: 'houve falha no envio',
+  owner_unresolved: 'não identifiquei o contato de uma resposta sua',
 };
 
 async function api(path, method = 'GET', body) {
@@ -139,7 +143,7 @@ function Conversation({ item, simulate, onChanged, onError }) {
         {item.last_body && <span className="bot-last">Última: “{item.last_body}”</span>}
       </button>
       <div className="bot-row">
-        {['queued', 'active', 'ready_to_close'].includes(status) && <button type="button" onClick={() => act('pause')}>⏸ Pausar e assumir</button>}
+        {['queued', 'sending', 'active', 'ready_to_close'].includes(status) && <button type="button" onClick={() => act('pause')}>⏸ Pausar e assumir</button>}
         {['paused', 'ready_to_close'].includes(status) && <button type="button" onClick={() => act('resume')}>▶ Devolver ao bot</button>}
         {!['closed', 'opted_out'].includes(status) && !finishing && <button type="button" onClick={() => setFinishing(true)}>✅ Finalizar</button>}
         {finishing && (

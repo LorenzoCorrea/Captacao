@@ -1,22 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { replyToLead, handleInbound, isOptOut, isBotQuestion, MAX_AI_TURNS } from '../src/bot/engine.js';
-import { FIXED, OFFER } from '../src/bot/offer.js';
+import { replyToLead, handleInbound, isOptOut, isBotQuestion, MAX_AI_TURNS, sendAndRecord } from '../src/bot/engine.js';
+import { FIXED, ANSWERS } from '../src/bot/offer.js';
 import { parseAiContent } from '../src/bot/ai.js';
 
 function setup(aiResult, { status = 'active', ...over } = {}) {
   const conv = { lead_id: 'L', phone: '5551991234567', phone_key: '5191234567', name: 'Aurora', status, reason: null, ai_turns: 0, discount_asks: 0, ai_first_fail: null, search_id: 's', ...over };
-  const log = { sent: [], notes: [], stages: [], optouts: [], msgs: [] };
+  const log = { sent: [], notes: [], stages: [], optouts: [], msgs: [{ id: 'm0', direction: 'in', source: 'lead', body: 'oi' }], disabled: [] };
   const db = {
     botGet: async () => ({ ...conv }),
-    botSetStatus: async (_, s, r = null) => { conv.status = s; conv.reason = r; },
+    botTransition: async (_, from, to, reason = null) => {
+      if (!from.includes(conv.status)) return false;
+      conv.status = to; conv.reason = reason;
+      return true;
+    },
+    botMarkOptOut: async (_, key) => { log.optouts.push(key); conv.status = 'opted_out'; conv.reason = null; },
+    botIsOptedOut: async (key) => log.optouts.includes(key),
     botAddMessage: async (m) => { if (log.msgs.some((x) => x.id === m.id)) return false; log.msgs.push(m); return true; },
-    botHistory: async () => log.msgs,
+    botHistory: async () => [...log.msgs],
     botIncrementTurn: async () => ++conv.ai_turns,
     botIncrementDiscount: async () => ++conv.discount_asks,
     botSetAiFailure: async (_, first, next) => { conv.ai_first_fail = first; conv.ai_next_retry = next; },
     botClearAiFailure: async () => { conv.ai_first_fail = null; conv.ai_next_retry = null; },
-    botOptOut: async (k) => log.optouts.push(k),
   };
   const deps = {
     db,
@@ -24,22 +29,39 @@ function setup(aiResult, { status = 'active', ...over } = {}) {
     gateway: { send: async (_, text) => { log.sent.push(text); return `id-${log.sent.length}`; } },
     notify: async (text) => log.notes.push(text),
     setStage: async (_, stage) => log.stages.push(stage),
+    disableBot: async (r) => log.disabled.push(r),
     now: () => new Date('2026-11-05T12:00:00Z'),
   };
   return { conv, log, deps };
 }
+const ask = (topics) => ({ intent: 'continue', topics });
 
-test('continue: envia com a oferta expandida', async () => {
-  const { conv, log, deps } = setup({ reply: 'Fica {preco}.', intent: 'continue' });
+test('continue: envia só a resposta aprovada do tópico', async () => {
+  const { conv, log, deps } = setup(ask(['price']));
   await replyToLead(conv, deps);
-  assert.deepEqual(log.sent, [`Fica ${OFFER.preco}.`]);
+  assert.deepEqual(log.sent, [ANSWERS.price]);
   assert.equal(conv.status, 'active');
-  assert.equal(log.msgs[0].source, 'bot');
+  assert.equal(log.msgs.at(-1).source, 'bot');
+  assert.equal(conv.ai_turns, 1);
 });
 
-test('accepted: explica o sinal, aguarda fechamento e avisa uma vez', async () => {
-  const { conv, log, deps } = setup({ reply: 'qualquer coisa 999', intent: 'accepted' });
+test('tópico inexistente ou vazio: não inventa, chama Lorenzo e pausa', async () => {
+  for (const topics of [['desconto'], [], ['price', 'x']]) {
+    const { conv, log, deps } = setup(ask(topics));
+    await replyToLead(conv, deps);
+    assert.deepEqual(log.sent, [FIXED.handoff]);
+    assert.deepEqual([conv.status, conv.reason], ['paused', 'unknown']);
+    assert.equal(log.notes.length, 1);
+  }
+});
+
+test('accepted: grava o estado antes de enviar, explica o sinal e avisa uma vez', async () => {
+  const seen = [];
+  const { conv, log, deps } = setup({ intent: 'accepted', topics: [] });
+  const send = deps.gateway.send;
+  deps.gateway.send = (...a) => { seen.push(conv.status); return send(...a); };
   await replyToLead(conv, deps);
+  assert.deepEqual(seen, ['ready_to_close']);
   assert.deepEqual(log.sent, [FIXED.accepted]);
   assert.equal(conv.status, 'ready_to_close');
   assert.equal(log.notes.length, 1);
@@ -47,16 +69,15 @@ test('accepted: explica o sinal, aguarda fechamento e avisa uma vez', async () =
 });
 
 test('installments: avisa dos juros, pausa e pede o link', async () => {
-  const { conv, log, deps } = setup({ reply: '', intent: 'installments' });
+  const { conv, log, deps } = setup({ intent: 'installments', topics: [] });
   await replyToLead(conv, deps);
   assert.deepEqual(log.sent, [FIXED.installments]);
-  assert.match(FIXED.installments, /juros/);
   assert.deepEqual([conv.status, conv.reason], ['paused', 'installments']);
   assert.match(log.notes[0], /link/i);
 });
 
 test('discount: nega uma vez e, se insistir, pausa', async () => {
-  const { conv, log, deps } = setup({ reply: '', intent: 'discount' });
+  const { conv, log, deps } = setup({ intent: 'discount', topics: [] });
   await replyToLead(conv, deps);
   assert.deepEqual(log.sent, [FIXED.discount]);
   assert.equal(conv.status, 'active');
@@ -67,7 +88,7 @@ test('discount: nega uma vez e, se insistir, pausa', async () => {
 
 for (const intent of ['human_requested', 'unknown']) {
   test(`${intent}: chama Lorenzo e pausa`, async () => {
-    const { conv, log, deps } = setup({ reply: '', intent });
+    const { conv, log, deps } = setup({ intent, topics: [] });
     await replyToLead(conv, deps);
     assert.deepEqual(log.sent, [FIXED.handoff]);
     assert.deepEqual([conv.status, conv.reason], ['paused', intent]);
@@ -75,17 +96,9 @@ for (const intent of ['human_requested', 'unknown']) {
   });
 }
 
-test('resposta reprovada no filtro não é enviada', async () => {
-  const { conv, log, deps } = setup({ reply: 'Faço por 400 reais', intent: 'continue' });
-  await replyToLead(conv, deps);
-  assert.deepEqual(log.sent, []);
-  assert.deepEqual([conv.status, conv.reason], ['paused', 'filter:digit']);
-  assert.equal(log.notes.length, 1);
-});
-
 test('limite de respostas: não chama a IA, pausa e avisa', async () => {
   let called = false;
-  const { conv, log, deps } = setup(async () => { called = true; return { reply: 'oi', intent: 'continue' }; }, { ai_turns: MAX_AI_TURNS });
+  const { conv, log, deps } = setup(async () => { called = true; return ask(['price']); }, { ai_turns: MAX_AI_TURNS });
   assert.equal(MAX_AI_TURNS, 10);
   await replyToLead(conv, deps);
   assert.equal(called, false);
@@ -94,11 +107,12 @@ test('limite de respostas: não chama a IA, pausa e avisa', async () => {
   assert.equal(log.notes.length, 1);
 });
 
-test('IA fora: não envia e agenda nova tentativa em 5 minutos', async () => {
+test('IA fora: não envia, não conta turno e agenda nova tentativa em 5 minutos', async () => {
   const { conv, log, deps } = setup(async () => { throw new Error('429'); });
   await replyToLead(conv, deps);
   assert.deepEqual(log.sent, []);
   assert.equal(conv.status, 'active');
+  assert.equal(conv.ai_turns, 0);
   assert.equal(conv.ai_next_retry.toISOString(), '2026-11-05T12:05:00.000Z');
   assert.equal(log.notes.length, 0);
 });
@@ -112,51 +126,125 @@ test('IA fora por 1 hora: pausa e avisa', async () => {
 
 test('pausa durante a IA: nada é enviado', async () => {
   const holder = {};
-  const { conv, log, deps } = setup(async () => { conv_ref(holder).status = 'paused'; return { reply: 'oi', intent: 'continue' }; });
+  const { conv, log, deps } = setup(async () => { holder.conv.status = 'paused'; return ask(['price']); });
   holder.conv = conv;
   await replyToLead(conv, deps);
   assert.deepEqual(log.sent, []);
   assert.equal(conv.status, 'paused');
 });
-const conv_ref = (h) => h.conv;
+
+test('mensagem nova durante a IA: descarta a resposta e reavalia no próximo ciclo', async () => {
+  const holder = {};
+  const { conv, log, deps } = setup(async () => {
+    holder.log.msgs.push({ id: 'm1', direction: 'in', source: 'lead', body: 'me tira da lista' });
+    return ask(['price']);
+  });
+  holder.log = log;
+  await replyToLead(conv, deps);
+  assert.deepEqual(log.sent, []);
+  assert.equal(conv.ai_turns, 0);
+});
 
 test('conversa pausada: não chama a IA', async () => {
   let called = false;
-  const { conv, deps } = setup(async () => { called = true; return { reply: 'oi', intent: 'continue' }; }, { status: 'paused' });
+  const { conv, deps } = setup(async () => { called = true; return ask(['price']); }, { status: 'paused' });
   await replyToLead(conv, deps);
   assert.equal(called, false);
 });
 
-test('falha no envio: mantém ativa e tenta de novo', async () => {
-  const { conv, log, deps } = setup({ reply: 'oi', intent: 'continue' });
+test('falha no envio: sem repetir, pausa, desliga e não conta turno nem desconto', async () => {
+  const { conv, log, deps } = setup({ intent: 'discount', topics: [] });
   deps.gateway.send = async () => { throw new Error('gateway'); };
   await replyToLead(conv, deps);
-  assert.equal(log.msgs.length, 0);
-  assert.equal(conv.status, 'active');
-  assert.ok(conv.ai_next_retry);
+  assert.deepEqual([conv.status, conv.reason], ['paused', 'send_failed']);
+  assert.deepEqual(log.disabled, ['send_failed']);
+  assert.deepEqual([conv.ai_turns, conv.discount_asks, conv.ai_next_retry], [0, 0, undefined]);
+});
+
+test('falha ao enviar o aceite: estado mantido, sem repetir, e Lorenzo é avisado', async () => {
+  const { conv, log, deps } = setup({ intent: 'accepted', topics: [] });
+  deps.gateway.send = async () => { throw new Error('gateway'); };
+  await replyToLead(conv, deps);
+  assert.equal(conv.status, 'ready_to_close');
+  assert.deepEqual(log.disabled, ['send_failed']);
+  assert.ok(log.notes.length >= 1);
+  assert.equal(conv.ai_next_retry, undefined);
+});
+
+test('falha ao gravar depois de enviar não reenvia', async () => {
+  const { conv, log, deps } = setup(ask(['price']));
+  deps.db.botAddMessage = async () => { throw new Error('banco'); };
+  await replyToLead(conv, deps);
+  assert.equal(log.sent.length, 1);
+  assert.equal(conv.status, 'paused');
+  await replyToLead(conv, deps);
+  assert.equal(log.sent.length, 1);
+});
+
+test('sendAndRecord relê o estado depois de esperar outro envio', async () => {
+  const { conv, log, deps } = setup(null);
+  let release;
+  const slow = deps.gateway.send;
+  deps.gateway.send = (p, t) => new Promise((resolve) => { release = () => resolve(slow(p, t)); });
+  const first = sendAndRecord(conv, 'primeiro', deps);
+  await new Promise((r) => setImmediate(r));
+  const second = sendAndRecord(conv, 'segundo', deps, { allow: ['active'] });
+  conv.status = 'opted_out';
+  release();
+  await first;
+  assert.equal(await second, null);
+  assert.deepEqual(log.sent, ['primeiro']);
+});
+
+test('sendAndRecord não envia a quem está na lista de saída', async () => {
+  const { conv, log, deps } = setup(null);
+  log.optouts.push(conv.phone_key);
+  assert.equal(await sendAndRecord(conv, 'x', deps, { allow: ['active'] }), null);
+  assert.deepEqual(log.sent, []);
 });
 
 test('áudio ou imagem: pausa e avisa, sem IA', async () => {
-  const { conv, log, deps } = setup({ reply: 'oi', intent: 'continue' });
+  const { conv, log, deps } = setup(ask(['price']));
   await handleInbound({ conv, id: 'a1', text: '', hasText: false }, deps);
   assert.deepEqual([conv.status, conv.reason], ['paused', 'media']);
   assert.equal(log.notes.length, 1);
   assert.deepEqual(log.sent, []);
 });
 
-test('isOptOut distingue pedido de saída de conversa normal', () => {
-  for (const t of ['não quero', 'NAO QUERO', 'pare', 'sair', 'remover', 'Não quero, obrigado', 'não tenho interesse.', 'pare de me mandar mensagem']) assert.equal(isOptOut(t), true, t);
-  for (const t of ['não quero pagar agora, parcela?', 'quero sair do Instagram e ter site', 'como faço para parar de perder cliente?', 'sim']) assert.equal(isOptOut(t), false, t);
+test('reprocessar webhook depois de falha ainda aplica a pausa de mídia', async () => {
+  const { conv, deps } = setup(null);
+  await deps.db.botAddMessage({ id: 'a1', leadId: 'L', direction: 'in', source: 'lead', body: '[mídia]' });
+  await handleInbound({ conv, id: 'a1', text: '', hasText: false }, deps);
+  assert.equal(conv.status, 'paused');
 });
 
-test('pedido de saída: grava, despede uma vez e não chama a IA', async () => {
+test('isOptOut distingue pedido de saída de conversa normal', () => {
+  for (const t of ['não quero', 'NAO QUERO', 'pare', 'para', 'pode parar', 'sair', 'remover', 'stop', 'Não quero, obrigado', 'não tenho interesse.', 'não tenho interesse no momento', 'pare de me mandar mensagem', 'me tira da lista', 'não quero receber mensagens', 'não me chame mais', 'por favor não me mande mais mensagem']) assert.equal(isOptOut(t), true, t);
+  for (const t of ['não quero pagar agora, parcela?', 'quero sair do Instagram e ter site', 'como faço para parar de perder cliente?', 'sim', 'para quando fica pronto?', 'não quero site caro']) assert.equal(isOptOut(t), false, t);
+});
+
+test('pedido de saída: grava antes da despedida, despede uma vez e não chama a IA', async () => {
+  const seen = [];
   const { conv, log, deps } = setup(async () => { throw new Error('não deveria chamar'); });
+  const send = deps.gateway.send;
+  deps.gateway.send = (...a) => { seen.push(conv.status); return send(...a); };
   await handleInbound({ conv, id: 'o1', text: 'não quero', hasText: true }, deps);
-  await handleInbound({ conv, id: 'o1', text: 'não quero', hasText: true }, deps);
+  await handleInbound({ conv: { ...conv }, id: 'o1', text: 'não quero', hasText: true }, deps);
+  assert.deepEqual(seen, ['opted_out']);
   assert.deepEqual(log.optouts, ['5191234567']);
   assert.deepEqual(log.sent, [FIXED.goodbye]);
-  assert.equal(conv.status, 'opted_out');
   assert.deepEqual(log.stages, ['descartado']);
+});
+
+test('falha na despedida não reverte a saída nem desperta a IA', async () => {
+  let called = false;
+  const { conv, log, deps } = setup(async () => { called = true; return ask(['price']); });
+  deps.gateway.send = async () => { throw new Error('gateway'); };
+  await handleInbound({ conv, id: 'o1', text: 'pare', hasText: true }, deps);
+  assert.equal(conv.status, 'opted_out');
+  assert.deepEqual(log.optouts, ['5191234567']);
+  await replyToLead(conv, deps);
+  assert.equal(called, false);
 });
 
 test('saída com a conversa pausada grava sem falar por cima de Lorenzo', async () => {
@@ -168,35 +256,50 @@ test('saída com a conversa pausada grava sem falar por cima de Lorenzo', async 
 });
 
 test('intent opt_out vinda da IA segue a mesma saída', async () => {
-  const { conv, log, deps } = setup({ reply: '', intent: 'opt_out' });
+  const { conv, log, deps } = setup({ intent: 'opt_out', topics: [] });
   await replyToLead(conv, deps);
   assert.deepEqual(log.sent, [FIXED.goodbye]);
   assert.equal(conv.status, 'opted_out');
 });
 
 test('isBotQuestion reconhece a pergunta sem confundir conversa normal', () => {
-  for (const t of ['é robô?', 'isso é um bot?', 'estou falando com uma IA?', 'é inteligência artificial?', 'você é uma pessoa de verdade?', 'é você mesmo, Lorenzo?', 'é automático?', 'é o chatgpt?', 'é humano?']) assert.equal(isBotQuestion(t), true, t);
-  for (const t of ['eu ia te ligar', 'quanto fica?', 'meu site é de robótica', 'trabalho com automação']) assert.equal(isBotQuestion(t), false, t);
+  for (const t of ['é robô?', 'isso é um bot?', 'estou falando com uma IA?', 'é inteligência artificial?', 'você é uma pessoa de verdade?', 'é você mesmo, Lorenzo?', 'é vc mesmo?', 'é o Lorenzo mesmo?', 'quem está falando?', 'é gente?', 'tem alguém aí?', 'é automático?', 'é o chatgpt?', 'é humano?']) assert.equal(isBotQuestion(t), true, t);
+  for (const t of ['eu ia te ligar', 'quanto fica?', 'meu site é de robótica', 'trabalho com automação', 'aceita máquina de cartão?', 'vendo portão automático', 'liguei e ia falar']) assert.equal(isBotQuestion(t), false, t);
 });
 
-test('perguntou se é robô: diz a verdade, pausa, avisa e não chama a IA', async () => {
+test('perguntou se é robô: pausa antes, diz a verdade, avisa e não chama a IA', async () => {
+  const seen = [];
   const { conv, log, deps } = setup(async () => { throw new Error('não deveria chamar'); });
+  const send = deps.gateway.send;
+  deps.gateway.send = (...a) => { seen.push(conv.status); return send(...a); };
   await handleInbound({ conv, id: 'b1', text: 'é robô?', hasText: true }, deps);
+  assert.deepEqual(seen, ['paused']);
   assert.deepEqual(log.sent, [FIXED.botQuestion]);
   assert.deepEqual([conv.status, conv.reason], ['paused', 'asked_if_bot']);
   assert.equal(log.notes.length, 1);
 });
 
+test('falha ao responder "é robô?" não deixa a IA responder depois', async () => {
+  let called = false;
+  const { conv, deps } = setup(async () => { called = true; return ask(['price']); });
+  deps.gateway.send = async () => { throw new Error('gateway'); };
+  await handleInbound({ conv, id: 'b1', text: 'é robô?', hasText: true }, deps);
+  assert.equal(conv.status, 'paused');
+  await replyToLead(conv, deps);
+  assert.equal(called, false);
+});
+
 test('intent asked_if_bot da IA segue a mesma resposta fixa', async () => {
-  const { conv, log, deps } = setup({ reply: 'Sou o Lorenzo em pessoa', intent: 'asked_if_bot' });
+  const { conv, log, deps } = setup({ intent: 'asked_if_bot', topics: [] });
   await replyToLead(conv, deps);
   assert.deepEqual(log.sent, [FIXED.botQuestion]);
   assert.deepEqual([conv.status, conv.reason], ['paused', 'asked_if_bot']);
 });
 
 test('parseAiContent aceita JSON em bloco e recusa formato inválido', () => {
-  assert.deepEqual(parseAiContent('```json\n{"reply":"oi","intent":"continue"}\n```'), { reply: 'oi', intent: 'continue' });
+  assert.deepEqual(parseAiContent('```json\n{"intent":"continue","topics":["price"]}\n```'), { intent: 'continue', topics: ['price'] });
+  assert.deepEqual(parseAiContent('{"intent":"accepted"}'), { intent: 'accepted', topics: [] });
   assert.throws(() => parseAiContent('oi'));
-  assert.throws(() => parseAiContent('{"reply":"oi","intent":"vender"}'));
-  assert.throws(() => parseAiContent('{"intent":"continue"}'));
+  assert.throws(() => parseAiContent('{"intent":"vender","topics":[]}'));
+  assert.throws(() => parseAiContent('{"intent":"continue","topics":"price"}'));
 });

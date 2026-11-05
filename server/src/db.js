@@ -309,26 +309,22 @@ export async function saveSetting(key, value) {
 }
 
 // Conta o envio de forma atômica: dois aparelhos não podem furar o limite anti-ban.
+// Lança erro em falha: sem contar, o bot não envia.
 export async function incrementUsage(canal, date, at) {
   if (!dbEnabled) return null;
-  try {
-    const r = await pool.query(
-      `INSERT INTO app_settings (key, value)
-       VALUES ('usage', jsonb_build_object('date', $1::text, $2::text, 1, 'lastAt', $3::bigint))
-       ON CONFLICT (key) DO UPDATE SET updated_at = now(), value =
-         CASE WHEN app_settings.value->>'date' = $1::text
-           THEN jsonb_set(jsonb_set(app_settings.value, ARRAY[$2::text],
-                  to_jsonb(COALESCE((app_settings.value->>$2::text)::int, 0) + 1)),
-                  '{lastAt}', to_jsonb($3::bigint))
-           ELSE EXCLUDED.value END
-       RETURNING value`,
-      [date, canal, at]
-    );
-    return r.rows[0].value;
-  } catch (e) {
-    console.error('[db] incrementUsage:', e.message);
-    return null;
-  }
+  const r = await pool.query(
+    `INSERT INTO app_settings (key, value)
+     VALUES ('usage', jsonb_build_object('date', $1::text, $2::text, 1, 'lastAt', $3::bigint))
+     ON CONFLICT (key) DO UPDATE SET updated_at = now(), value =
+       CASE WHEN app_settings.value->>'date' = $1::text
+         THEN jsonb_set(jsonb_set(app_settings.value, ARRAY[$2::text],
+                to_jsonb(COALESCE((app_settings.value->>$2::text)::int, 0) + 1)),
+                '{lastAt}', to_jsonb($3::bigint))
+         ELSE EXCLUDED.value END
+     RETURNING value`,
+    [date, canal, at]
+  );
+  return r.rows[0].value;
 }
 
 // Busca na base local de estabelecimentos. Devolve null quando ela não existe ou
@@ -500,9 +496,21 @@ export const botList = () => botRows(
    FROM bot_conversations c ORDER BY c.updated_at DESC LIMIT 200`
 );
 
-export async function botSetStatus(leadId, status, reason = null) {
-  await pool.query('UPDATE bot_conversations SET status = $2, reason = $3, updated_at = now() WHERE lead_id = $1', [leadId, status, reason]);
+// Muda o estado só a partir dos estados esperados: pausa, saída e encerramento nunca são sobrescritos.
+export async function botTransition(leadId, from, to, reason = null) {
+  const r = await pool.query(
+    'UPDATE bot_conversations SET status = $3, reason = $4, updated_at = now() WHERE lead_id = $1 AND status = ANY($2)',
+    [leadId, from, to, reason]
+  );
+  return r.rowCount === 1;
 }
+
+export const botClaim = (conv) => botTransition(conv.lead_id, ['queued'], 'sending');
+
+// Envio interrompido por um reinício: pode ter saído, então só Lorenzo decide.
+export const botRecoverSending = () => botRows(
+  `UPDATE bot_conversations SET status = 'paused', reason = 'send_interrupted', updated_at = now() WHERE status = 'sending' RETURNING *`
+);
 
 export async function botAddMessage({ id, leadId, direction, source, body }) {
   const r = await pool.query(
@@ -516,8 +524,8 @@ export async function botAddMessage({ id, leadId, direction, source, body }) {
 export const botHistory = (leadId) =>
   botRows('SELECT id, direction, source, body, created_at FROM bot_messages WHERE lead_id = $1 ORDER BY created_at, id', [leadId]);
 
-export const botHasMessage = async (id) =>
-  (await botRows('SELECT 1 FROM bot_messages WHERE id = $1', [id])).length > 0;
+export const botMessageSource = async (id) =>
+  (await botRows('SELECT source FROM bot_messages WHERE id = $1', [id]))[0]?.source ?? null;
 
 // Conversas ativas cuja última mensagem é do lead e já passou da espera (junta mensagens seguidas).
 export const botDueReplies = (olderThanSec) => botRows(
@@ -546,6 +554,14 @@ export const botIncrementDiscount = async (leadId) =>
 export const botQueuedCount = async () =>
   (await botRows(`SELECT count(*)::int AS n FROM bot_conversations WHERE status = 'queued'`))[0].n;
 
-export async function botOptOut(phoneKey) {
-  await pool.query('INSERT INTO bot_optouts (phone_key) VALUES ($1) ON CONFLICT DO NOTHING', [phoneKey]);
+// Saída e estado na mesma instrução: não existe conversa ativa de quem pediu para sair.
+export async function botMarkOptOut(leadId, phoneKey) {
+  await pool.query(
+    `WITH saved AS (INSERT INTO bot_optouts (phone_key) VALUES ($2) ON CONFLICT DO NOTHING)
+     UPDATE bot_conversations SET status = 'opted_out', reason = NULL, updated_at = now() WHERE lead_id = $1`,
+    [leadId, phoneKey]
+  );
 }
+
+export const botIsOptedOut = async (phoneKey) =>
+  (await botRows('SELECT 1 FROM bot_optouts WHERE phone_key = $1', [phoneKey])).length > 0;

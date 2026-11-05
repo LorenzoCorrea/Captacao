@@ -1,28 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderReply, OFFER, firstMessage, FIXED } from '../src/bot/offer.js';
+import { OFFER, firstMessage, FIXED, ANSWERS, TOPICS, answerFor, safeName } from '../src/bot/offer.js';
 
-test('expande marcadores', () => {
-  assert.equal(renderReply('Fica {preco}.').text, 'Fica R$ 550, com site e hospedagem inclusos.');
-});
-for (const [bad, reason] of [
-  ['Faço por 400', 'digit'], ['Faço por quinhentos reais', 'number-word'], ['Em dois dias entrego', 'number-word'],
-  ['Veja https://x.com', 'link'], ['Veja x.com.br', 'link'], ['Escreva para a@b.com', 'email'],
-  ['Minha chave Pix é esta', 'pix'], ['Custa {desconto}', 'placeholder'], ['', 'empty'], ['a'.repeat(1001), 'length'],
-]) {
-  test(`bloqueia ${reason}: ${bad.slice(0, 20)}`, () => assert.deepEqual(renderReply(bad), { ok: false, reason }));
-}
-test('Pix só aparece vindo da oferta', () => {
-  assert.equal(renderReply('O {sinal}.').ok, true);
-  assert.match(renderReply('O {sinal}.').text, /30% no Pix \(R\$ 165\)/);
-});
-test('"um" e "uma" são permitidos', () => assert.equal(renderReply('Uma página para um comércio.').ok, true));
 test('oferta tem os valores do spec', () => {
   assert.match(OFFER.preco, /R\$ 550/);
+  assert.match(OFFER.sinal, /30% no Pix \(R\$ 165\)/);
   assert.match(OFFER.saldo, /R\$ 385/);
   assert.match(OFFER.renovacao, /R\$ 50 por ano/);
   assert.match(OFFER.refazer, /R\$ 100/);
+  assert.match(OFFER.prazo, /4 dias corridos/);
 });
+
 test('primeira mensagem fala como Lorenzo, oferece saída e aceita nome com número', () => {
   for (const variant of ['A', 'B']) {
     const text = firstMessage(variant, 'Barbearia 24h');
@@ -34,9 +22,39 @@ test('primeira mensagem fala como Lorenzo, oferece saída e aceita nome com núm
     assert.match(text, /expira a cada 1 ano/);
   }
 });
-test('textos fixos não trazem dados de pagamento além da oferta', () => {
+
+test('nome editável por terceiros não leva preço, link ou Pix na mensagem', () => {
+  for (const bad of ['Bar R$ 100', 'Bar www.golpe.com', 'golpe.com', 'Chave pix aqui', 'Bar {preco}', 'a@b.com', 'x'.repeat(61), '', null]) {
+    assert.equal(safeName(bad), 'seu comércio', String(bad));
+  }
+  assert.equal(safeName('Barbearia 24h'), 'Barbearia 24h');
+  assert.equal(safeName('Salão Dª Ana & Filhas'), 'Salão Dª Ana & Filhas');
+  assert.match(firstMessage('A', 'Bar www.golpe.com'), /Procurei seu comércio/);
+});
+
+test('nenhum texto do bot tem link, chave ou marcador solto', () => {
+  const all = [...Object.values(FIXED), ...Object.values(ANSWERS)].join(' ');
+  assert.doesNotMatch(all, /https?:|www\.|chave|[{}]/i);
+});
+
+test('respostas de tópico são compostas sem repetição e recusam desconhecidos', () => {
+  assert.equal(answerFor(['price']), ANSWERS.price);
+  assert.equal(answerFor(['price', 'price']), ANSWERS.price);
+  assert.equal(answerFor(['price', 'deadline']), `${ANSWERS.price}\n\n${ANSWERS.deadline}`);
+  assert.equal(answerFor(['constructor']), null);
+  assert.equal(answerFor(['price', 'desconto']), null);
+  assert.equal(answerFor([]), null);
+  assert.equal(answerFor('price'), null);
+  assert.equal(answerFor(['price', 'deadline', 'payment']), null, 'mais de dois: Lorenzo responde');
+  assert.deepEqual(Object.keys(ANSWERS).sort(), [...TOPICS].sort());
+});
+
+test('textos fixos trazem os valores e o aviso de juros', () => {
   assert.match(FIXED.accepted, /R\$ 165/);
   assert.match(FIXED.accepted, /dados de pagamento/);
+  assert.match(FIXED.installments, /juros/);
   assert.match(FIXED.botQuestion, /automatizada/);
-  assert.doesNotMatch(Object.values(FIXED).join(' '), /https?:|chave/i);
+  assert.match(ANSWERS.domain, /expira a cada 1 ano/);
+  assert.match(ANSWERS.maintenance, /2 primeiros meses/);
+  assert.match(ANSWERS.redo, /R\$ 100/);
 });

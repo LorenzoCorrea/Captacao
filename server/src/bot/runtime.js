@@ -7,6 +7,12 @@ import { buscarEstabelecimentos } from '../data/osmProvider.js';
 import { createSearch, updateLead } from '../enrichment/enricher.js';
 
 
+const DISABLED_TEXT = {
+  whatsapp_disconnected: 'o número desconectou',
+  send_failed: 'houve falha no envio',
+  owner_unresolved: 'não consegui identificar o contato de uma resposta sua',
+};
+
 export function createRuntime() {
   const gateway = createGateway();
 
@@ -23,7 +29,7 @@ export function createRuntime() {
   async function disableBot(reason) {
     const current = (await settings())?.botConfig ?? DEFAULT_BOT_CONFIG;
     await db.saveSetting('botConfig', { ...current, enabled: false, disabledReason: reason });
-    await notify(`O bot foi desligado: ${reason === 'whatsapp_disconnected' ? 'o número desconectou' : 'houve falha no envio'}.`);
+    await notify(`O bot foi desligado: ${DISABLED_TEXT[reason] ?? reason}.`);
   }
 
   const deps = {
@@ -36,6 +42,7 @@ export function createRuntime() {
     dbEnabled: () => db.dbEnabled,
     saveState: (state) => db.saveSetting('botState', state),
     search: buscarEstabelecimentos,
+    loadKnown: db.loadKnownLeads,
     createSearch: (leads, meta) => createSearch(leads, meta, new Map(), { enrich: false }),
     setStage: (conv, stage) => (conv.search_id ? updateLead(conv.search_id, conv.lead_id, { stage }) : Promise.resolve(false)),
   };
