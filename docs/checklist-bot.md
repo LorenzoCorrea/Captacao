@@ -16,7 +16,7 @@
 - [x] **3b. Melhorias a partir das conversas reais (05/11):** ignora respostas automáticas, novas respostas fixas, 1 lembrete após 2 dias úteis, benefício por nicho, oferta de prévia
   - [x] Funnel ligado no Zima (05/11): prévias em `https://SEU-HOST.SEU-TAILNET.ts.net/previa/...`, o resto responde 404
 - [x] **3c. Limpeza mensal** no 3º dia útil (textos de conversas paradas e cópias da Evolution)
-- [ ] **4. Restaurar o horário de envio** para 09:00–18:00 em dias úteis
+- [x] **4. Horário de envio** 09:00–18:00 em dias úteis (restaurado em 05/11). Lembretes: 1º no dia útil seguinte e 2º (despedida) 3 dias úteis depois, só a partir das 14h, com cota própria
 - [ ] **5. Definir cidades e nichos**
 - [ ] **6. Começar com 1 lead por dia**
 - [ ] **7. Trocar a chave do Gemini e as outras senhas**
