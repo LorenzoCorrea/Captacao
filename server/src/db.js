@@ -543,6 +543,9 @@ export const botIncrementTurn = async (leadId) =>
 export const botIncrementDiscount = async (leadId) =>
   (await botRows('UPDATE bot_conversations SET discount_asks = discount_asks + 1 WHERE lead_id = $1 RETURNING discount_asks', [leadId]))[0].discount_asks;
 
+export const botQueuedCount = async () =>
+  (await botRows(`SELECT count(*)::int AS n FROM bot_conversations WHERE status = 'queued'`))[0].n;
+
 export async function botOptOut(phoneKey) {
   await pool.query('INSERT INTO bot_optouts (phone_key) VALUES ($1) ON CONFLICT DO NOTHING', [phoneKey]);
 }

@@ -54,7 +54,7 @@ function syncOtherSessions(source, leadId, fields) {
   }
 }
 
-export function createSearch(leads, meta = {}, known = new Map()) {
+export function createSearch(leads, meta = {}, known = new Map(), { enrich = true } = {}) {
   const { city, niche } = meta;
   const id = crypto.randomUUID();
   const session = {
@@ -76,7 +76,7 @@ export function createSearch(leads, meta = {}, known = new Map()) {
   // garante que os UPDATEs de enriquecimento/estágio só rodem após o INSERT.
   session.dbReady = db.saveSearch(session, meta).catch((e) => console.error('[db]', e.message));
 
-  if (BACKGROUND) {
+  if (BACKGROUND && enrich) {
     session.queue = [...session.leads.values()].filter((l) => l.enrichmentStatus === 'pending').map((l) => l.id);
     pump(session);
   }
