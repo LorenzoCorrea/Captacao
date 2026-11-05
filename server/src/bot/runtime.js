@@ -1,11 +1,11 @@
 import * as db from '../db.js';
 import { askAi } from './ai.js';
+import { DEFAULT_BOT_CONFIG } from './config.js';
 import { createGateway } from './gateway.js';
 import { replyToLead } from './engine.js';
 import { buscarEstabelecimentos } from '../data/osmProvider.js';
 import { createSearch, updateLead } from '../enrichment/enricher.js';
 
-export const DEFAULT_BOT_CONFIG = { enabled: false, cities: [], radiusKm: 5, niches: [], sendFrom: '09:00', sendTo: '18:00', weekdaysOnly: true };
 
 export function createRuntime() {
   const gateway = createGateway();

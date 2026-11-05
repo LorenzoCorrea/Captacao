@@ -9,6 +9,7 @@ import DispatchMode from './components/DispatchMode.jsx';
 import LeadDetails from './components/LeadDetails.jsx';
 import HistoryPanel from './components/HistoryPanel.jsx';
 import TodayPanel from './components/TodayPanel.jsx';
+import ConversationsPanel from './components/ConversationsPanel.jsx';
 import { leadScore } from './lib/score.js';
 import { igHandle } from './lib/instagram.js';
 import { variantOf, telefoneWhats } from './lib/whatsapp.js';
@@ -234,7 +235,7 @@ export default function App() {
   }, [leads, filters, sortBy]);
 
   return (
-    <div className="app">
+    <div className={`app${view === 'conversas' ? ' app--conversas' : ''}`}>
       <aside className="sidebar">
         <header className="sidebar-header">
           <h1>
@@ -272,6 +273,9 @@ export default function App() {
             </button>
             <button type="button" className={view === 'today' ? 'active' : ''} onClick={() => setView('today')}>
               📅 Hoje
+            </button>
+            <button type="button" className={view === 'conversas' ? 'active' : ''} onClick={() => setView('conversas')}>
+              💬 Conversas
             </button>
           </div>
           <button type="button" className="msg-edit-btn" onClick={() => setMsgOpen(true)}>
@@ -365,6 +369,7 @@ export default function App() {
           <KanbanBoard leads={visibleLeads} selectedId={selectedId} onSelect={selectLead} onMove={moveLead} onDispatch={setDispatchLeads} />
         )}
         {view === 'stats' && <StatsPanel />}
+        {view === 'conversas' && <ConversationsPanel />}
         {view === 'today' && <TodayPanel leads={leads} searchId={search?.searchId} onPatch={patchLead} />}
       </main>
 
