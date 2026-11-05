@@ -138,6 +138,8 @@ CREATE TABLE IF NOT EXISTS bot_conversations (
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE bot_conversations ADD COLUMN IF NOT EXISTS lid text;
+CREATE INDEX IF NOT EXISTS idx_bot_conversations_lid ON bot_conversations(lid);
 CREATE TABLE IF NOT EXISTS bot_messages (
   id         text PRIMARY KEY,
   lead_id    text NOT NULL,
@@ -490,6 +492,13 @@ export const botGet = async (leadId) =>
 
 export const botGetByPhoneKey = async (key) =>
   (await botRows('SELECT * FROM bot_conversations WHERE phone_key = $1', [key]))[0] ?? null;
+
+export const botGetByLid = async (lid) =>
+  (await botRows('SELECT * FROM bot_conversations WHERE lid = $1', [lid]))[0] ?? null;
+
+export async function botSetLid(leadId, lid) {
+  await pool.query('UPDATE bot_conversations SET lid = $2 WHERE lead_id = $1', [leadId, lid]);
+}
 
 export const botList = () => botRows(
   `SELECT c.*, (SELECT body FROM bot_messages m WHERE m.lead_id = c.lead_id ORDER BY created_at DESC, id DESC LIMIT 1) AS last_body

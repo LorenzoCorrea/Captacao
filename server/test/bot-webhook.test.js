@@ -13,6 +13,8 @@ function setup(status = 'active') {
   const db = {
     botGetByPhoneKey: async (k) => (k === conv.phone_key ? { ...conv } : null),
     botGet: async () => ({ ...conv }),
+    botSetLid: async (_, lid) => { conv.lid = lid; },
+    botGetByLid: async (lid) => (lid === conv.lid ? { ...conv } : null),
     botIsOptedOut: async () => false,
     botMessageSource: async (id) => log.msgs.find((m) => m.id === id)?.source ?? null,
     botAddMessage: async (m) => { if (log.msgs.some((x) => x.id === m.id)) return false; log.msgs.push(m); return true; },
@@ -154,12 +156,28 @@ test('resposta de Lorenzo durante um envio usa o estado atual', async () => {
   assert.deepEqual([conv.status, conv.reason], ['paused', 'owner_replied']);
 });
 
-test('resposta de Lorenzo sem número identificável desliga o bot por segurança', async () => {
+test('resposta de Lorenzo em @lid já visto pausa só aquela conversa', async () => {
+  const { conv, log, deps } = setup();
+  await handleWebhook(fixture('lid'), deps);
+  assert.equal(conv.lid, '111122223333@lid');
+  await handleWebhook(fixture('lid-from-me'), deps);
+  assert.deepEqual([conv.status, conv.reason], ['paused', 'owner_replied']);
+  assert.deepEqual(log.disabled, []);
+  assert.equal(log.msgs.at(-1).source, 'owner');
+});
+
+test('resposta de Lorenzo em @lid desconhecido desliga o bot por segurança', async () => {
   const { log, deps } = setup();
-  const lid = fixture('from-me');
-  lid.data.key.remoteJid = '111122223333@lid';
-  await handleWebhook(lid, deps);
+  await handleWebhook(fixture('lid-from-me'), deps);
   assert.deepEqual(log.disabled, ['owner_unresolved']);
+});
+
+test('reação em @lid desconhecido não desliga o bot', async () => {
+  const { log, deps } = setup();
+  const e = fixture('lid-from-me');
+  e.data.message = { reactionMessage: { text: '👍' } };
+  await handleWebhook(e, deps);
+  assert.deepEqual(log.disabled, []);
 });
 
 test('segredo errado recebe 401', async (t) => {

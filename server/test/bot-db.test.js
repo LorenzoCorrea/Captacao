@@ -56,6 +56,9 @@ test('dados do bot no Postgres real', { skip: !url }, async () => {
     assert.equal((await db.botDueReplies(0)).length, 0, 'pausada não responde');
     assert.equal((await db.botGetByPhoneKey(conv.phoneKey)).lead_id, conv.leadId);
     assert.equal((await db.botList()).length, 1);
+    await db.botSetLid(conv.leadId, '111@lid');
+    assert.equal((await db.botGetByLid('111@lid')).lead_id, conv.leadId);
+    assert.equal(await db.botGetByLid('222@lid'), null);
 
     await sql.query('TRUNCATE searches CASCADE');
     assert.equal(await db.botEnqueue({ ...conv, leadId: 'osm:node/3', phoneKey: '5100000000' }), false, 'optout sobrevive');

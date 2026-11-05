@@ -31,19 +31,23 @@ export async function handleWebhook(payload, deps) {
 
   const { key, message } = payload.data ?? {};
   if (!key?.id || /@(g\.us|broadcast|newsletter)$/.test(key.remoteJid ?? '')) return;
+  const content = readMessage(message);
+  if (!content) return;
+
+  const { db } = deps;
   const number = numberFromKey(key);
-  if (!number) {
+  const lid = /@lid$/.test(key.remoteJid ?? '') ? key.remoteJid : null;
+  const conv = number ? await db.botGetByPhoneKey(phoneKey(number)) : lid && await db.botGetByLid(lid);
+  if (!number && !conv) {
     console.warn('[bot] mensagem sem número identificável');
     // Se a resposta for de Lorenzo, não dá para saber qual conversa pausar.
     if (key.fromMe) await deps.disableBot('owner_unresolved');
     else await deps.notify('Chegou uma mensagem de um contato que não consegui identificar. Confira no celular.');
     return;
   }
-  const { db } = deps;
-  const conv = await db.botGetByPhoneKey(phoneKey(number));
   if (!conv) return;
-  const content = readMessage(message);
-  if (!content) return;
+  // A resposta de Lorenzo pelo celular chega só com o @lid, sem o número.
+  if (number && lid && conv.lid !== lid) await db.botSetLid(conv.lead_id, lid);
 
   if (key.fromMe) {
     // O eco do envio do bot pode chegar antes de o id ser gravado.
