@@ -33,6 +33,8 @@ export function firstMessage(variant, name) {
 // Respostas críticas não passam pela IA.
 export const FIXED = {
   accepted: `Que ótimo! O site fica R$ 550. Para eu começar, é só o ${OFFER.sinal}, e ${OFFER.saldo}. Só lembrando: ${OFFER.renovacao}. Já te passo os dados de pagamento por aqui.`,
+  // Aceite depois de o lead já ter lido o preço: só o próximo passo.
+  acceptedShort: `Que bom, fico feliz! Já te mando os dados do Pix para o sinal de R$ 165 e, assim que cair, começo o seu site. E ${OFFER.saldo}.`,
   installments: 'Dá sim, no cartão, com juros. Já te passo as condições por aqui.',
   discount: `Desconto eu não consigo fazer, mas ${OFFER.parcelamento}, se ajudar. O valor é ${OFFER.preco}.`,
   handoff: 'Deixa eu ver isso direitinho e já te respondo por aqui.',
@@ -54,11 +56,28 @@ export const ANSWERS = {
 export const TOPICS = Object.keys(ANSWERS);
 const MAX_TOPICS = 2;
 
-export function answerFor(topics) {
+// O lead não é lembrado do que já leu: a primeira menção sai completa, as seguintes caem.
+const ONCE = [
+  [OFFER.renovacao, [` Só para você saber: ${OFFER.renovacao}.`, ` Só lembrando: ${OFFER.renovacao}.`]],
+  [OFFER.preco, [` O valor é ${OFFER.preco}.`]],
+  [OFFER.saldo, [` E ${OFFER.saldo}.`]],
+];
+
+export function trimRepeats(text, said = '') {
+  return ONCE.reduce((t, [fact, pieces]) => (said.includes(fact) ? pieces.reduce((acc, p) => acc.replace(p, ''), t) : t), text);
+}
+
+export function acceptedText(said = '') {
+  return said.includes(OFFER.preco) ? trimRepeats(FIXED.acceptedShort, said) : FIXED.accepted;
+}
+
+export function answerFor(topics, said = '') {
   if (!Array.isArray(topics) || !topics.length) return null;
   // A apresentação geral puxa a conversa e não faz sentido colada numa resposta específica.
   const specific = topics.filter((t) => t !== 'how_it_works');
   const unique = [...new Set(specific.length ? specific : topics)];
   if (unique.length > MAX_TOPICS || !unique.every((t) => Object.hasOwn(ANSWERS, t))) return null;
-  return unique.map((t) => ANSWERS[t]).join('\n\n');
+  const parts = [];
+  for (const t of unique) parts.push(trimRepeats(ANSWERS[t], said + parts.join(' ')));
+  return parts.join('\n\n');
 }

@@ -303,3 +303,11 @@ test('parseAiContent aceita JSON em bloco e recusa formato inválido', () => {
   assert.throws(() => parseAiContent('{"intent":"vender","topics":[]}'));
   assert.throws(() => parseAiContent('{"intent":"continue","topics":"price"}'));
 });
+
+test('accepted depois do preço: usa o histórico e manda o aceite curto', async () => {
+  const { conv, log, deps } = setup({ intent: 'accepted', topics: [] });
+  log.msgs.unshift({ id: 'b0', direction: 'out', source: 'bot', body: ANSWERS.price });
+  await replyToLead(conv, deps);
+  assert.match(log.sent[0], /^Que bom, fico feliz!/);
+  assert.doesNotMatch(log.sent[0], /R\$ 550/);
+});

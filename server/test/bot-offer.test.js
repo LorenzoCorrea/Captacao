@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { OFFER, firstMessage, FIXED, ANSWERS, TOPICS, answerFor, safeName } from '../src/bot/offer.js';
+import { OFFER, firstMessage, FIXED, ANSWERS, TOPICS, answerFor, safeName, trimRepeats, acceptedText } from '../src/bot/offer.js';
 
 test('oferta tem os valores do spec', () => {
   assert.match(OFFER.preco, /R\$ 550/);
@@ -95,4 +95,22 @@ test('textos fixos trazem os valores e o aviso de juros', () => {
   assert.match(ANSWERS.domain, /expira a cada 1 ano/);
   assert.match(ANSWERS.maintenance, /primeiros meses/);
   assert.match(ANSWERS.redo, /R\$ 100/);
+});
+
+test('não repete o que o lead já leu', () => {
+  const said = ANSWERS.price; // preço, sinal, prazo e renovação já ditos
+  assert.doesNotMatch(trimRepeats(ANSWERS.included, said), /expira/);
+  assert.doesNotMatch(trimRepeats(FIXED.discount, said), /O valor é/);
+  assert.match(trimRepeats(FIXED.discount, said), /parcelar/);
+  assert.equal(answerFor(['domain'], said), ANSWERS.domain, 'pergunta direta sobre o domínio responde mesmo assim');
+  assert.equal(answerFor(['price', 'included']).match(/expira/g).length, 1, 'nem dentro da mesma resposta');
+});
+
+test('aceite: completo se não viu o preço, curto se já viu', () => {
+  assert.equal(acceptedText(''), FIXED.accepted);
+  const short = acceptedText(ANSWERS.price);
+  assert.match(short, /R\$ 165/);
+  assert.match(short, /R\$ 385/);
+  assert.doesNotMatch(short, /R\$ 550|expira/);
+  assert.doesNotMatch(acceptedText(ANSWERS.price + ANSWERS.payment), /R\$ 385/, 'restante já dito');
 });

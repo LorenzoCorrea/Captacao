@@ -1,4 +1,4 @@
-import { FIXED, answerFor } from './offer.js';
+import { FIXED, answerFor, acceptedText, trimRepeats } from './offer.js';
 
 export const MAX_AI_TURNS = 10;
 const RETRY_MS = 5 * 60 * 1000;
@@ -60,18 +60,18 @@ async function optOut(conv, deps, { speak }) {
   await setStage?.(conv, 'descartado');
 }
 
-function decide({ intent, topics }, discountAsks) {
+function decide({ intent, topics }, discountAsks, said) {
   switch (intent) {
-    case 'accepted': return { text: FIXED.accepted, status: 'ready_to_close' };
+    case 'accepted': return { text: acceptedText(said), status: 'ready_to_close' };
     case 'installments': return { text: FIXED.installments, status: 'paused', reason: 'installments' };
     case 'discount':
       return discountAsks >= 2
         ? { text: FIXED.handoff, status: 'paused', reason: 'discount_insist' }
-        : { text: FIXED.discount };
+        : { text: trimRepeats(FIXED.discount, said) };
     case 'asked_if_bot': return { text: FIXED.botQuestion, status: 'paused', reason: 'asked_if_bot' };
     case 'human_requested': return { text: FIXED.handoff, status: 'paused', reason: 'human_requested' };
     case 'continue': {
-      const text = answerFor(topics);
+      const text = answerFor(topics, said);
       if (text) return { text };
     }
     // falls through
@@ -129,7 +129,8 @@ export async function replyToLead(conv, deps) {
   if (answer.intent === 'opt_out') return optOut(current, deps, { speak: true });
 
   const discountAsks = answer.intent === 'discount' ? (current.discount_asks ?? 0) + 1 : 0;
-  const decision = decide(answer, discountAsks);
+  const said = history.filter((m) => m.source === 'bot').map((m) => m.body).join('\n');
+  const decision = decide(answer, discountAsks, said);
 
   // Decisões que encerram a vez do bot são gravadas antes do envio.
   if (decision.status && !(await db.botTransition(conv.lead_id, ['active'], decision.status, decision.reason ?? null))) return;
