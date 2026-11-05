@@ -14,7 +14,7 @@
   - [ ] Desconto insistente, parcelar, robô, pausa pelo celular, reinício, queda, saída
   - [ ] Novos: recepcionista, ocupado, "é pagamento único?", "em outro momento", prévia
 - [x] **3b. Melhorias a partir das conversas reais (05/11):** ignora respostas automáticas, novas respostas fixas, 1 lembrete após 2 dias úteis, benefício por nicho, oferta de prévia
-  - [ ] Liberar o Funnel no Zima e definir `PUBLIC_PREVIEW_URL` para a prévia funcionar
+  - [x] Funnel ligado no Zima (05/11): prévias em `https://SEU-HOST.SEU-TAILNET.ts.net/previa/...`, o resto responde 404
 - [x] **3c. Limpeza mensal** no 3º dia útil (textos de conversas paradas e cópias da Evolution)
 - [ ] **4. Restaurar o horário de envio** para 09:00–18:00 em dias úteis
 - [ ] **5. Definir cidades e nichos**
