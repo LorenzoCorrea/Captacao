@@ -61,7 +61,7 @@ export function createRuntime() {
     purgeMessages: async (before) => ({ bot: await db.botPurgeMessages(before), evolution: await purgeEvolution(before) }),
     search: buscarEstabelecimentos,
     loadKnown: db.loadKnownLeads,
-    createSearch: (leads, meta) => createSearch(leads, meta, new Map(), { enrich: false }),
+    createSearch: (leads, meta, { known, enrich }) => createSearch(leads, meta, known, { enrich }),
     // Sem link público (Funnel) ou sem busca salva, o bot não oferece a prévia.
     previewUrl: (conv) => (process.env.PUBLIC_PREVIEW_URL && conv.search_id
       ? `${process.env.PUBLIC_PREVIEW_URL.replace(/\/+$/, '')}/previa/${conv.search_id}/${encodeURIComponent(conv.lead_id)}`

@@ -7,6 +7,8 @@ const WAIT_TO_REPLY_SEC = 30; // junta mensagens seguidas do mesmo lead
 const CAPTURE_RETRY_MS = 60 * 60 * 1000;
 const MAX_QUEUE = 50; // sem acumular mais do que se envia em alguns dias
 const TICK_MS = 60 * 1000;
+// Busca de celular na internet: poucas por dia para o buscador não bloquear.
+const MAX_ENRICH_PER_DAY = 40;
 
 const minutes = (hhmm) => {
   const [h, m] = String(hhmm).split(':').map(Number);
@@ -33,22 +35,32 @@ async function capture(now, config, state, deps) {
   const { db } = deps;
   if (await db.botQueuedCount() >= MAX_QUEUE) return deps.saveState({ ...state, lastCaptureDate: today });
 
+  let enrichLeft = MAX_ENRICH_PER_DAY;
   for (const city of config.cities ?? []) {
     for (const niche of config.niches ?? []) {
       const { leads } = await deps.search({ niche, city: city.name, lat: city.lat, lng: city.lng, radiusKm: config.radiusKm ?? 5 });
-      const candidates = leads
-        .filter((lead) => !lead.hasWebsite)
-        .map((lead) => ({ lead, phone: mobileFromLead(lead.phone) }))
-        .filter((c) => c.phone);
-      // Lead que já mudou de estágio foi trabalhado por Lorenzo e não recebe abordagem fria.
-      const known = await deps.loadKnown(candidates.map((c) => c.lead.id));
+      const noSite = leads.filter((lead) => !lead.hasWebsite);
+      const known = await deps.loadKnown(noSite.map((l) => l.id));
       const fresh = [];
-      for (const c of candidates) {
-        const stage = known.get(c.lead.id)?.stage;
-        if ((!stage || stage === 'novo') && !(await db.botGetByPhoneKey(phoneKey(c.phone)))) fresh.push(c);
+      const toEnrich = [];
+      for (const lead of noSite) {
+        const k = known.get(lead.id);
+        // Lead que já mudou de estágio foi trabalhado por Lorenzo e não recebe abordagem fria.
+        if (k?.stage && k.stage !== 'novo') continue;
+        const found = k?.enrichmentStatus === 'done' ? k.enrichment : null;
+        if (found?.discoveredWebsite) continue; // a busca achou site: não é lead quente
+        const phone = mobileFromLead(lead.phone) ?? mobileFromLead(found?.mobilePhone);
+        if (phone) {
+          if (!(await db.botGetByPhoneKey(phoneKey(phone)))) fresh.push({ lead, phone });
+        } else if (!k?.enrichmentStatus || k.enrichmentStatus === 'pending') {
+          // Sem celular no mapa: procura na internet; o achado entra na captação do dia seguinte.
+          if (enrichLeft-- > 0) toEnrich.push(lead);
+        }
       }
+      const meta = { city: city.name, niche, lat: city.lat, lng: city.lng, radiusKm: config.radiusKm ?? 5, found: leads.length };
+      if (toEnrich.length) deps.createSearch(toEnrich, meta, { known, enrich: true });
       if (!fresh.length) continue;
-      const searchId = deps.createSearch(fresh.map((f) => f.lead), { city: city.name, niche, lat: city.lat, lng: city.lng, radiusKm: config.radiusKm ?? 5, found: leads.length });
+      const searchId = deps.createSearch(fresh.map((f) => f.lead), meta, { known, enrich: false });
       for (const { lead, phone } of fresh) {
         await db.botEnqueue({ leadId: lead.id, phone, phoneKey: phoneKey(phone), name: lead.name, niche, searchId });
       }

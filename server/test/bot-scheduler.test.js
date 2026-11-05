@@ -12,7 +12,7 @@ const lead = (id, phone, hasWebsite = false) => ({ id, name: `Lead ${id}`, phone
 
 function setup({ config = {}, queued = [], leads = [], usage = {}, limits = {}, state = {}, known = new Map() } = {}) {
   queued = queued.map((c) => ({ ...c }));
-  const log = { recovered: [], sent: [], statuses: [], replies: [], captures: 0, created: [], enqueued: [], usage: [], disabled: [], stages: [], notes: [] };
+  const log = { recovered: [], sent: [], statuses: [], replies: [], captures: 0, created: [], enriched: [], enqueued: [], usage: [], disabled: [], stages: [], notes: [] };
   const queue = [...queued];
   const settings = {
     botConfig: { enabled: true, cities: [{ name: 'POA', lat: -30, lng: -51 }], radiusKm: 5, niches: ['barbearia'], sendFrom: '09:00', sendTo: '18:00', weekdaysOnly: true, ...config },
@@ -47,7 +47,7 @@ function setup({ config = {}, queued = [], leads = [], usage = {}, limits = {}, 
     },
     search: async () => { log.captures++; return { found: leads.length, leads }; },
     loadKnown: async () => known,
-    createSearch: (l) => { log.created.push(l.map((x) => x.id)); return '11111111-1111-1111-1111-111111111111'; },
+    createSearch: (l, _, { enrich }) => { (enrich ? log.enriched : log.created).push(l.map((x) => x.id)); return '11111111-1111-1111-1111-111111111111'; },
     gateway: {
       state: async () => 'open', isOnWhatsApp: async () => true,
       send: async (_, text) => { log.sent.push(text); return `id${log.sent.length}`; },
@@ -83,7 +83,21 @@ test('capta uma vez por dia só celular sem site', async () => {
   await tick(new Date(WED_10.getTime() + 60000), deps);
   assert.equal(log.captures, 1);
   assert.deepEqual(log.created, [['osm:1']]);
+  assert.deepEqual(log.enriched, [['osm:2', 'osm:4']], 'sem celular vai procurar na internet');
   assert.deepEqual(log.enqueued.map((c) => [c.leadId, c.phone, c.phoneKey]), [['osm:1', '5551991234567', '5191234567']]);
+});
+
+test('celular achado na internet entra na fila; sem nada ou com site, não', async () => {
+  const leads = [lead('osm:1', '(51) 3333-4444'), lead('osm:2', null), lead('osm:3', null), lead('osm:4', null)];
+  const known = new Map([
+    ['osm:1', { stage: 'novo', enrichmentStatus: 'done', enrichment: { mobilePhone: '(51) 99123-4567' } }],
+    ['osm:2', { stage: 'novo', enrichmentStatus: 'done', enrichment: { mobilePhone: '(51) 99123-1111', discoveredWebsite: 'https://x.com.br' } }],
+    ['osm:3', { stage: 'novo', enrichmentStatus: 'not_found' }],
+  ]);
+  const { log, deps } = setup({ leads, known });
+  await tick(WED_10, deps);
+  assert.deepEqual(log.enqueued.map((c) => [c.leadId, c.phone]), [['osm:1', '5551991234567']]);
+  assert.deepEqual(log.enriched, [['osm:4']], 'só quem nunca foi procurado');
 });
 
 test('não aborda lead que Lorenzo já trabalhou no CRM', async () => {
