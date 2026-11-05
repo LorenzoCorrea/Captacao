@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { tick, digestText, sendDigest, isThirdBusinessDay, monthlyPurge } from '../src/bot/scheduler.js';
+import { tick, digestText, sendDigest, isThirdBusinessDay, monthlyPurge, businessDaysAgo } from '../src/bot/scheduler.js';
+import { FIXED } from '../src/bot/offer.js';
 
 // Quarta-feira, 10h no fuso local.
 const WED_10 = new Date(2026, 10, 4, 10, 0, 0);
@@ -41,6 +42,7 @@ function setup({ config = {}, queued = [], leads = [], usage = {}, limits = {}, 
       botRecoverSending: async () => log.recovered,
       botAddMessage: async () => true,
       botQueuedCount: async () => queue.length,
+      botDueFollowUp: async () => null,
       incrementUsage: async (canal) => { log.usage.push(canal); return {}; },
     },
     search: async () => { log.captures++; return { found: leads.length, leads }; },
@@ -285,4 +287,23 @@ test('limpeza: uma vez por mês, apagando o que é anterior ao mês', async () =
   assert.equal(calls.length, 1, 'só uma vez no mês');
   assert.deepEqual(calls[0], new Date(2026, 11, 1));
   assert.match(notes[0], /4 mensagens.*30 cópias/);
+});
+
+test('dias úteis para trás pulam o fim de semana', () => {
+  // Terça 10/11/2026 − 2 dias úteis = sexta 06/11.
+  assert.deepEqual(businessDaysAgo(new Date(2026, 10, 10, 10), 2), new Date(2026, 10, 6, 10));
+  assert.deepEqual(businessDaysAgo(new Date(2026, 10, 5, 10), 2), new Date(2026, 10, 3, 10));
+});
+
+test('lembrete: vem antes de lead novo, gasta cota e sai uma vez', async () => {
+  const { log, deps } = setup({ queued: [q] });
+  const due = { lead_id: 'F', phone: '5551990000000', phone_key: '5190000000', name: 'Fulano', status: 'active' };
+  let marked = false;
+  deps.db.botDueFollowUp = async () => (marked ? null : due);
+  deps.db.botMarkFollowUp = async () => { if (marked) return false; marked = true; return true; };
+  deps.db.botGet = async (id) => (id === 'F' ? { ...due } : null);
+  await tick(WED_10, deps);
+  assert.deepEqual(log.sent, [FIXED.followUp]);
+  assert.deepEqual(log.usage, ['whatsapp']);
+  assert.equal(log.statuses.length, 0, 'o lead da fila espera a próxima vez');
 });

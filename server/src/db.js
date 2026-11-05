@@ -140,6 +140,7 @@ CREATE TABLE IF NOT EXISTS bot_conversations (
 );
 ALTER TABLE bot_conversations ADD COLUMN IF NOT EXISTS lid text;
 CREATE INDEX IF NOT EXISTS idx_bot_conversations_lid ON bot_conversations(lid);
+ALTER TABLE bot_conversations ADD COLUMN IF NOT EXISTS followup_at timestamptz;
 CREATE TABLE IF NOT EXISTS bot_messages (
   id         text PRIMARY KEY,
   lead_id    text NOT NULL,
@@ -539,8 +540,8 @@ export const botMessageSource = async (id) =>
 // Conversas ativas cuja última mensagem é do lead e já passou da espera (junta mensagens seguidas).
 export const botDueReplies = (olderThanSec) => botRows(
   `SELECT c.* FROM bot_conversations c
-   JOIN LATERAL (SELECT direction, created_at FROM bot_messages m WHERE m.lead_id = c.lead_id ORDER BY created_at DESC, id DESC LIMIT 1) last ON true
-   WHERE c.status = 'active' AND last.direction = 'in'
+   JOIN LATERAL (SELECT direction, source, created_at FROM bot_messages m WHERE m.lead_id = c.lead_id ORDER BY created_at DESC, id DESC LIMIT 1) last ON true
+   WHERE c.status = 'active' AND last.direction = 'in' AND last.source = 'lead'
      AND last.created_at <= now() - make_interval(secs => $1)
      AND (c.ai_next_retry IS NULL OR c.ai_next_retry <= now())`,
   [olderThanSec]
@@ -566,7 +567,7 @@ export async function botDigest(since) {
     `WITH f AS (
        SELECT c.name, c.niche, c.status,
          (SELECT min(created_at) FROM bot_messages m WHERE m.lead_id = c.lead_id AND m.source = 'bot') AS first_out,
-         (SELECT min(created_at) FROM bot_messages m WHERE m.lead_id = c.lead_id AND m.direction = 'in') AS first_in
+         (SELECT min(created_at) FROM bot_messages m WHERE m.lead_id = c.lead_id AND m.source = 'lead') AS first_in
        FROM bot_conversations c)
      SELECT name, niche, first_out >= $1 AS contacted, first_in >= $1 AS replied,
        (status = 'active' AND first_out IS NOT NULL AND first_in IS NULL) AS waiting
@@ -579,6 +580,26 @@ export async function botDigest(since) {
 }
 
 // Limpeza mensal: só os textos de conversas paradas. Saídas e o registro de quem já foi abordado ficam para sempre.
+export async function botMarkAuto(ids) {
+  if (ids.length) await pool.query(`UPDATE bot_messages SET source = 'auto' WHERE id = ANY($1) AND source = 'lead'`, [ids]);
+}
+
+// Um único lembrete para quem nunca respondeu (resposta automática não conta).
+export const botDueFollowUp = async (sentBefore) => (await botRows(
+  `SELECT c.* FROM bot_conversations c
+   WHERE c.status = 'active' AND c.followup_at IS NULL
+     AND NOT EXISTS (SELECT 1 FROM bot_messages m WHERE m.lead_id = c.lead_id AND m.source = 'lead')
+     AND (SELECT min(created_at) FROM bot_messages m WHERE m.lead_id = c.lead_id AND m.source = 'bot') < $1
+   ORDER BY c.created_at LIMIT 1`,
+  [sentBefore]
+))[0] ?? null;
+
+// Marca antes de enviar: um reinício no meio nunca manda o lembrete duas vezes.
+export async function botMarkFollowUp(leadId) {
+  const r = await pool.query(`UPDATE bot_conversations SET followup_at = now() WHERE lead_id = $1 AND status = 'active' AND followup_at IS NULL`, [leadId]);
+  return r.rowCount === 1;
+}
+
 export async function botPurgeMessages(before) {
   const r = await pool.query(
     `DELETE FROM bot_messages m USING bot_conversations c

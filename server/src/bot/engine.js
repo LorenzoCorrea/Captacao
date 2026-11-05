@@ -46,7 +46,12 @@ const REASONS = {
   human_requested: 'pediu para falar com você',
   unknown: 'fez uma pergunta que o bot não soube responder',
   asked_if_bot: 'perguntou se é um robô: o bot disse que o atendimento é automatizado e você assume',
+  later: 'disse que fica para outro momento. O bot se despediu sem bloquear o número',
 };
+
+// Menu, boas-vindas e "agradecemos o contato" do comércio: não é o lead falando.
+const AUTO_REPLY = /\b(assistente virtual|atendente virtual|agradece (o )?(seu|sua) (contato|mensagem)|agradecemos (o |a )?(seu |sua )?(contato|mensagem)|responderemos (assim que|em breve|o mais breve)|retornaremos (assim que|em breve|o mais breve)|digite (o numero|uma opcao|a opcao)|escolha (uma|a) (das )?opc|fora do (nosso )?horario de atendimento|mensagem automatica|resposta automatica|seja bem vindo)/;
+export const isAutoReply = (text) => AUTO_REPLY.test(normalize(text));
 
 // A saída é gravada antes da despedida: uma falha no envio não pode manter a conversa ativa.
 async function optOut(conv, deps, { speak }) {
@@ -60,8 +65,13 @@ async function optOut(conv, deps, { speak }) {
   await setStage?.(conv, 'descartado');
 }
 
-function decide({ intent, topics }, discountAsks, said) {
+function decide({ intent, topics }, discountAsks, ctx) {
+  const { said } = ctx;
   switch (intent) {
+    case 'auto_reply': return { silent: true };
+    case 'gatekeeper': return { text: FIXED.gatekeeper };
+    case 'busy': return { text: FIXED.busy };
+    case 'later': return { text: FIXED.later, status: 'closed', reason: 'later' };
     case 'accepted': return { text: acceptedText(said), status: 'ready_to_close' };
     case 'installments': return { text: FIXED.installments, status: 'paused', reason: 'installments' };
     case 'discount':
@@ -71,7 +81,7 @@ function decide({ intent, topics }, discountAsks, said) {
     case 'asked_if_bot': return { text: FIXED.botQuestion, status: 'paused', reason: 'asked_if_bot' };
     case 'human_requested': return { text: FIXED.handoff, status: 'paused', reason: 'human_requested' };
     case 'continue': {
-      const text = answerFor(topics, said);
+      const text = answerFor(topics, ctx);
       if (text) return { text };
     }
     // falls through
@@ -130,7 +140,14 @@ export async function replyToLead(conv, deps) {
 
   const discountAsks = answer.intent === 'discount' ? (current.discount_asks ?? 0) + 1 : 0;
   const said = history.filter((m) => m.source === 'bot').map((m) => m.body).join('\n');
-  const decision = decide(answer, discountAsks, said);
+  const decision = decide(answer, discountAsks, { said, niche: current.niche, name: current.name, previewUrl: deps.previewUrl?.(current) ?? null });
+  if (decision.silent) {
+    // Resposta automática: marca para não voltar à fila e espera uma pessoa escrever.
+    const trailing = [];
+    for (let i = history.length - 1; i >= 0 && history[i].direction === 'in'; i--) trailing.push(history[i].id);
+    await db.botMarkAuto(trailing);
+    return;
+  }
 
   // Decisões que encerram a vez do bot são gravadas antes do envio.
   if (decision.status && !(await db.botTransition(conv.lead_id, ['active'], decision.status, decision.reason ?? null))) return;
@@ -148,7 +165,7 @@ export async function replyToLead(conv, deps) {
   if (decision.status === 'ready_to_close') {
     await setStage?.(current, 'qualificado');
     await notify(`${label(current)} aceitou. Envie os dados de pagamento do sinal e feche.`);
-  } else if (decision.status === 'paused') {
+  } else if (decision.status === 'paused' || decision.status === 'closed') {
     await notify(`${label(current)} ${REASONS[decision.reason] ?? 'precisa de você'}.`);
   }
 }
@@ -156,8 +173,10 @@ export async function replyToLead(conv, deps) {
 export async function handleInbound({ conv, id, text, hasText }, deps) {
   const { db, notify } = deps;
   // Webhook repetido depois de uma falha segue adiante: as transições abaixo são idempotentes.
-  await db.botAddMessage({ id, leadId: conv.lead_id, direction: 'in', source: 'lead', body: hasText ? text : '[mídia]' });
-  if (conv.status === 'opted_out') return;
+  const auto = hasText && isAutoReply(text);
+  await db.botAddMessage({ id, leadId: conv.lead_id, direction: 'in', source: auto ? 'auto' : 'lead', body: hasText ? text : '[mídia]' });
+  // Antes das outras regras: "assistente virtual" no menu não é o lead perguntando se fala com um robô.
+  if (auto || conv.status === 'opted_out') return;
 
   if (hasText && isOptOut(text)) {
     await optOut(conv, deps, { speak: conv.status === 'active' });

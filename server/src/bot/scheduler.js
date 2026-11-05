@@ -1,5 +1,5 @@
 import { sendAndRecord } from './engine.js';
-import { firstMessage } from './offer.js';
+import { firstMessage, FIXED } from './offer.js';
 import { mobileFromLead, phoneKey } from './phone.js';
 import { hojeLocal } from '../date.js';
 
@@ -58,9 +58,37 @@ async function capture(now, config, state, deps) {
   await deps.saveState({ ...state, lastCaptureDate: today });
 }
 
+export function businessDaysAgo(now, days) {
+  const d = new Date(now);
+  while (days > 0) {
+    d.setDate(d.getDate() - 1);
+    if (d.getDay() !== 0 && d.getDay() !== 6) days--;
+  }
+  return d;
+}
+
+const FOLLOW_UP_DAYS = 2;
+
+// O lembrete usa a mesma cota e o mesmo espaçamento dos envios novos (anti-ban).
+async function sendFollowUp(now, conv, deps) {
+  const { db, gateway } = deps;
+  if (!(await db.botMarkFollowUp(conv.lead_id))) return;
+  try {
+    if ((await gateway.state()) !== 'open') return deps.disableBot('whatsapp_disconnected');
+    await db.incrementUsage('whatsapp', hojeLocal(now), now.getTime());
+    await sendAndRecord(conv, FIXED.followUp, deps, { allow: ['active'] });
+  } catch (e) {
+    console.error('[bot] falha no lembrete:', e.message);
+    await db.botTransition(conv.lead_id, ['active'], 'paused', 'send_failed');
+    return deps.disableBot('send_failed');
+  }
+}
+
 async function sendNext(now, config, settings, deps) {
   if (!canSendNow(now, config) || !withinLimits(now, settings.limits, settings.usage)) return;
   const { db, gateway } = deps;
+  const due = await db.botDueFollowUp(businessDaysAgo(now, FOLLOW_UP_DAYS));
+  if (due) return sendFollowUp(now, due, deps);
   const conv = await db.botNextQueued();
   if (!conv || !(await db.botClaim(conv))) return;
 

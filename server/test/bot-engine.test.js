@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { replyToLead, handleInbound, isOptOut, isBotQuestion, MAX_AI_TURNS, sendAndRecord } from '../src/bot/engine.js';
+import { replyToLead, handleInbound, isOptOut, isBotQuestion, isAutoReply, MAX_AI_TURNS, sendAndRecord } from '../src/bot/engine.js';
 import { FIXED, ANSWERS } from '../src/bot/offer.js';
 import { parseAiContent } from '../src/bot/ai.js';
 
@@ -22,6 +22,7 @@ function setup(aiResult, { status = 'active', ...over } = {}) {
     botIncrementDiscount: async () => ++conv.discount_asks,
     botSetAiFailure: async (_, first, next) => { conv.ai_first_fail = first; conv.ai_next_retry = next; },
     botClearAiFailure: async () => { conv.ai_first_fail = null; conv.ai_next_retry = null; },
+    botMarkAuto: async (ids) => { log.auto = ids; },
   };
   const deps = {
     db,
@@ -329,4 +330,66 @@ test('conversa ativa: mensagem comum não gera aviso', async () => {
   const { conv, log, deps } = setup(null);
   await handleInbound({ conv, id: 'w1', text: 'quanto custa?', hasText: true }, deps);
   assert.equal(log.notes.length, 0);
+});
+
+// Frases reais de comércios abordados por Lorenzo em 2026.
+const AUTO_SAMPLES = [
+  '✂️ Seja bem-vindo! Eu sou o Maninho, assistente virtual da Dom Caetano, e tô aqui pra facilitar tua vida.',
+  'Olá! Clínica Veterinária Latimia agradece o seu contato 🐶🐱 Como podemos ajudar você e seu pet hoje?',
+  '‎Castelo Day Hospital agradece seu contato. Como podemos ajudar?',
+  'Agradecemos sua mensagem. Responderemos assim que possível. 👍🏻😃',
+];
+
+test('resposta automática do comércio é reconhecida; conversa de gente não', () => {
+  for (const t of AUTO_SAMPLES) assert.equal(isAutoReply(t), true, t);
+  for (const t of ['Boa tarde', 'O que seria?', 'Vou passar ao responsável', 'Esse valor é uma vez só?', 'Você é um robô?']) assert.equal(isAutoReply(t), false, t);
+});
+
+test('menu automático não responde, não pausa e não vira pergunta de robô', async () => {
+  const { conv, log, deps } = setup(null);
+  await handleInbound({ conv, id: 'a1', text: AUTO_SAMPLES[0], hasText: true }, deps);
+  assert.equal(log.msgs.at(-1).source, 'auto');
+  assert.deepEqual([conv.status, log.sent.length, log.notes.length], ['active', 0, 0]);
+});
+
+test('IA reconhece automática: marca, fica calado e não gasta turno', async () => {
+  const { conv, log, deps } = setup({ intent: 'auto_reply', topics: [] });
+  await replyToLead(conv, deps);
+  assert.deepEqual(log.auto, ['m0']);
+  assert.deepEqual([log.sent.length, conv.ai_turns, conv.status], [0, 0, 'active']);
+});
+
+test('recepcionista e ocupado: resposta curta e o bot segue', async () => {
+  for (const [intent, text] of [['gatekeeper', FIXED.gatekeeper], ['busy', FIXED.busy]]) {
+    const { conv, log, deps } = setup({ intent, topics: [] });
+    await replyToLead(conv, deps);
+    assert.deepEqual([log.sent, conv.status, log.notes.length], [[text], 'active', 0], intent);
+  }
+});
+
+test('"em outro momento": despede, encerra, avisa e não bloqueia', async () => {
+  const { conv, log, deps } = setup({ intent: 'later', topics: [] });
+  await replyToLead(conv, deps);
+  assert.deepEqual(log.sent, [FIXED.later]);
+  assert.deepEqual([conv.status, conv.reason], ['closed', 'later']);
+  assert.match(log.notes[0], /outro momento/);
+  assert.deepEqual(log.optouts, []);
+});
+
+test('prévia: manda o link quando existe; sem link, chama Lorenzo', async () => {
+  const withLink = setup(ask(['preview']), { niche: 'barbearia' });
+  withLink.deps.previewUrl = () => 'https://previa.exemplo/previa/s/L';
+  await replyToLead(withLink.conv, withLink.deps);
+  assert.match(withLink.log.sent[0], /https:\/\/previa\.exemplo\/previa\/s\/L/);
+  const without = setup(ask(['preview']));
+  await replyToLead(without.conv, without.deps);
+  assert.deepEqual([without.log.sent, without.conv.status], [[FIXED.handoff], 'paused']);
+});
+
+test('como funciona: benefício do nicho e oferta da prévia quando há link', async () => {
+  const { conv, log, deps } = setup(ask(['how_it_works']), { niche: 'Clínica de estética' });
+  deps.previewUrl = () => 'https://x/previa/s/L';
+  await replyToLead(conv, deps);
+  assert.match(log.sent[0], /procedimentos/);
+  assert.match(log.sent[0], /prévia/);
 });

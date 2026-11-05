@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { OFFER, firstMessage, FIXED, ANSWERS, TOPICS, answerFor, safeName, trimRepeats, acceptedText } from '../src/bot/offer.js';
+import { OFFER, firstMessage, FIXED, ANSWERS, TOPICS, answerFor, safeName, trimRepeats, acceptedText, howItWorks } from '../src/bot/offer.js';
 
 test('oferta tem os valores do spec', () => {
   assert.match(OFFER.preco, /R\$ 550/);
@@ -71,7 +71,7 @@ test('respostas de tópico são compostas sem repetição e recusam desconhecido
   assert.equal(answerFor([]), null);
   assert.equal(answerFor('price'), null);
   assert.equal(answerFor(['price', 'deadline', 'payment']), null, 'mais de dois: Lorenzo responde');
-  assert.deepEqual(Object.keys(ANSWERS).sort(), [...TOPICS].sort());
+  assert.deepEqual([...Object.keys(ANSWERS), 'preview'].sort(), [...TOPICS].sort());
 });
 
 test('a apresentação geral não é colada em outra resposta', () => {
@@ -113,4 +113,21 @@ test('aceite: completo se não viu o preço, curto se já viu', () => {
   assert.match(short, /R\$ 385/);
   assert.doesNotMatch(short, /R\$ 550|expira/);
   assert.doesNotMatch(acceptedText(ANSWERS.price + ANSWERS.payment), /R\$ 385/, 'restante já dito');
+});
+
+test('benefício por nicho, com padrão para o resto', () => {
+  assert.match(howItWorks('Academia'), /modalidades/);
+  assert.match(howItWorks('escritório de advocacia'), /áreas de atuação/);
+  assert.match(howItWorks('Barbearia'), /agendar/);
+  assert.match(howItWorks('pizzaria'), /cardápio/);
+  assert.equal(howItWorks('loja de ferragens'), ANSWERS.how_it_works);
+  for (const n of ['Academia', 'clínica', 'advocacia', '']) {
+    assert.doesNotMatch(howItWorks(n, true), /R\$|https?:/);
+    assert.ok(howItWorks(n, true).length <= 300, n);
+  }
+});
+
+test('pagamento único explica a renovação', () => {
+  assert.match(ANSWERS.one_time, /único/);
+  assert.match(ANSWERS.one_time, /R\$ 50 por ano/);
 });

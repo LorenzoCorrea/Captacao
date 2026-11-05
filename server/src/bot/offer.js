@@ -39,21 +39,47 @@ export const FIXED = {
   discount: `Desconto eu não consigo fazer, mas ${OFFER.parcelamento}, se ajudar. O valor é ${OFFER.preco}.`,
   handoff: 'Deixa eu ver isso direitinho e já te respondo por aqui.',
   botQuestion: 'Esta parte do atendimento é automatizada, mas eu acompanho tudo e já assumo a conversa por aqui. — Lorenzo',
-  goodbye: 'Sem problema, não te chamo mais. Obrigado e bom trabalho!',
+  goodbye: 'Tranquilo, não te chamo mais. Agradeço pelo retorno e bom trabalho!',
+  // "Em outro momento" não é pedido de saída: despede sem bloquear o número.
+  later: 'Tranquilo! Agradeço pelo retorno. Se futuramente fizer sentido, fico à disposição 👍',
+  gatekeeper: 'Claro! Pode encaminhar para o responsável, por favor? Se ele quiser saber mais, é só me chamar por aqui. Obrigado!',
+  busy: 'Tranquilo, sem pressa! Quando puder, é só me chamar por aqui.',
+  followUp: 'Oi! Passando rapidinho para saber se viu minha mensagem. Se fizer sentido, te explico como funciona por aqui mesmo 😊',
 };
+
+// O benefício muda com o ramo; `kw` casa por trecho do nicho sem acento.
+const NICHE_BENEFITS = [
+  [['clinic', 'consult', 'odonto', 'dent', 'estetic', 'fisio', 'nutri', 'psicol', 'medic', 'saude', 'veterin'], 'com os procedimentos, a equipe e a localização. Passa mais confiança para quem pesquisa antes de marcar e facilita o agendamento pelo WhatsApp'],
+  [['academia', 'pilates', 'crossfit', 'fitness', 'muscula'], 'com as modalidades, os horários e os planos. Quem quer conhecer o espaço vê tudo antes de visitar e já chama no WhatsApp'],
+  [['advoc', 'advog', 'jurid', 'contab', 'contador'], 'com as áreas de atuação e as formas de contato. Passa credibilidade para quem pesquisa no Google antes de ligar'],
+  [['barbear', 'salao', 'beleza', 'manicure', 'cabelei', 'unha', 'sobrancelha'], 'com os serviços, a localização e um botão para agendar direto pelo WhatsApp'],
+  [['restaurante', 'lanchonete', 'pizz', 'hamburg', 'padaria', 'confeit', 'cafe', 'comida'], 'com o cardápio, os horários e a localização, e um botão para pedir pelo WhatsApp'],
+];
+const DEFAULT_BENEFIT = 'com a cara de vocês. Assim fica mais fácil o cliente te encontrar na internet, ver o que você oferece e te chamar direto';
+
+export function howItWorks(niche, withPreview = false) {
+  const key = String(niche ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+  const benefit = NICHE_BENEFITS.find(([kw]) => kw.some((k) => key.includes(k)))?.[1] ?? DEFAULT_BENEFIT;
+  return `Claro! Eu crio um site só do seu negócio, ${benefit}. ${withPreview ? 'Quer ver uma prévia de como ficaria o de vocês?' : 'Quer saber quanto fica?'}`;
+}
+
+export const previewText = (name, url) =>
+  `Montei uma prévia rápida para ${safeName(name)}: ${url}\n\nÉ só um rascunho. No site final eu ajusto textos, fotos e cores do jeito que vocês quiserem. O que achou?`;
 
 // Únicas respostas livres do bot: a IA escolhe o tópico e nunca escreve o texto.
 export const ANSWERS = {
-  how_it_works: 'Claro! Eu crio um site só do seu comércio, com a cara de vocês. Assim fica mais fácil o cliente te encontrar na internet, ver o que você oferece e te chamar direto. Quer saber quanto fica?',
+  how_it_works: howItWorks(''),
   price: `Fica ${OFFER.preco}. Para começar, é só um ${OFFER.sinal}, e em ${OFFER.prazo} está pronto. Só para você saber: ${OFFER.renovacao}. Vamos fazer o seu?`,
   deadline: `Fica pronto em ${OFFER.prazo} de R$ 165.`,
   payment: `Para começar, é só um ${OFFER.sinal}, e ${OFFER.saldo}. Se preferir, ${OFFER.parcelamento}.`,
   domain: `Sim: ${OFFER.renovacao}.`,
   maintenance: `Sobre alterações: ${OFFER.manutencao}.`,
   redo: `Se quiser mudar tudo depois: ${OFFER.refazer}.`,
-  included: `Por R$ 550 você recebe o site do seu comércio pronto e a hospedagem. Só para você saber: ${OFFER.renovacao}.`,
+  included: `Por R$ 550 está tudo incluso: hospedagem, domínio (o link do site), botão para o WhatsApp, localização e certificado de segurança. Ajustes nos 2 primeiros meses são por minha conta. Só para você saber: ${OFFER.renovacao}.`,
+  one_time: `É pagamento único pelo site. A única coisa que se repete: ${OFFER.renovacao}.`,
 };
-export const TOPICS = Object.keys(ANSWERS);
+// A prévia só existe com link público e busca salva; sem isso, o tópico cai para Lorenzo.
+export const TOPICS = [...Object.keys(ANSWERS), 'preview'];
 const MAX_TOPICS = 2;
 
 // O lead não é lembrado do que já leu: a primeira menção sai completa, as seguintes caem.
@@ -71,13 +97,23 @@ export function acceptedText(said = '') {
   return said.includes(OFFER.preco) ? trimRepeats(FIXED.acceptedShort, said) : FIXED.accepted;
 }
 
-export function answerFor(topics, said = '') {
+function topicText(topic, { niche, name, previewUrl }) {
+  if (topic === 'how_it_works') return howItWorks(niche, Boolean(previewUrl));
+  if (topic === 'preview') return previewUrl ? previewText(name, previewUrl) : null;
+  return ANSWERS[topic];
+}
+
+// ctx: { said, niche, name, previewUrl }
+export function answerFor(topics, ctx = {}) {
+  const said = ctx.said ?? '';
   if (!Array.isArray(topics) || !topics.length) return null;
   // A apresentação geral puxa a conversa e não faz sentido colada numa resposta específica.
   const specific = topics.filter((t) => t !== 'how_it_works');
   const unique = [...new Set(specific.length ? specific : topics)];
-  if (unique.length > MAX_TOPICS || !unique.every((t) => Object.hasOwn(ANSWERS, t))) return null;
+  if (unique.length > MAX_TOPICS || !unique.every((t) => TOPICS.includes(t))) return null;
+  const texts = unique.map((t) => topicText(t, ctx));
+  if (texts.some((t) => !t)) return null;
   const parts = [];
-  for (const t of unique) parts.push(trimRepeats(ANSWERS[t], said + parts.join(' ')));
+  for (const t of texts) parts.push(trimRepeats(t, said + parts.join(' ')));
   return parts.join('\n\n');
 }

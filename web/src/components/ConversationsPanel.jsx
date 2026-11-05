@@ -28,6 +28,7 @@ const REASON = {
   not_on_whatsapp: 'O número não usa WhatsApp',
   won: 'Negócio fechado',
   lost: 'Sem negócio',
+  later: 'Disse que fica para outro momento',
 };
 const reasonText = (r) => REASON[r] ?? r;
 
