@@ -124,7 +124,7 @@ export async function updateLead(searchId, leadId, patch = {}) {
       : [];
     fields.interactions = JSON.stringify(lead.interactions);
   }
-  if (Object.keys(fields).length && db.dbEnabled && s.dbReady) {
+  if (Object.keys(fields).length && s.dbReady) {
     s.dbReady.then(() => db.saveLeadFields(searchId, leadId, fields)).catch(() => {});
   }
   return true;
@@ -258,7 +258,7 @@ async function runOne(session, lead) {
   lead.enrichmentStatus = achou ? 'done' : 'not_found';
 
   broadcast(session, 'enrichment', payloadOf(lead));
-  if (db.dbEnabled) session.dbReady.then(() => db.saveEnrichment(session.id, lead)).catch(() => {});
+  session.dbReady.then(() => db.saveEnrichment(session.id, lead)).catch(() => {});
   if (allSettled(session)) broadcast(session, 'done', { searchId: session.id });
 }
 

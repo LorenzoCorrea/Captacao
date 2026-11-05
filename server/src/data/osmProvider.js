@@ -7,6 +7,7 @@
 // que é exatamente o filtro do produto ("negócios sem site").
 
 import https from 'node:https';
+import { buscarOsmLocal } from '../db.js';
 
 const ENDPOINTS = [
   // Mirrors públicos do Overpass — se o primeiro estiver enfileirado/lento,
@@ -69,6 +70,12 @@ const COMMERCIAL_KEYS = ['shop', 'amenity', 'office', 'craft', 'healthcare', 'le
 const ALL_AMENITY = 'restaurant|fast_food|cafe|bar|pub|ice_cream|dentist|clinic|doctors|veterinary|pharmacy|driving_school|language_school|music_school|events_venue|car_wash|coworking_space';
 const ALL_LEISURE = 'fitness_centre|sports_centre|dance|spa|bowling_alley';
 const ALL_TOURISM = 'hotel|guest_house|hostel';
+const ALL_LOCAL_TAGS = [
+  'shop', 'office', 'craft', 'healthcare',
+  ...ALL_AMENITY.split('|').map((v) => `amenity=${v}`),
+  ...ALL_LEISURE.split('|').map((v) => `leisure=${v}`),
+  ...ALL_TOURISM.split('|').map((v) => `tourism=${v}`),
+];
 
 // Regex tolerante a acento: os radicais dos nichos são sem acento, mas os nomes
 // no OSM têm ("estetic" precisa casar com "Estética"). Duas pegadinhas do
@@ -274,6 +281,16 @@ export async function buscarEstabelecimentos({ niche, city, lat, lng, radiusKm }
   const elements = [];
   let erroFase1 = null;
 
+  // Base local (scripts/import_osm.py): responde na hora e não depende do
+  // Overpass público. Sem a base carregada, cai nas duas fases abaixo.
+  const todos = isAllNiches(niche);
+  const local = await buscarOsmLocal({
+    tags: todos ? ALL_LOCAL_TAGS : tags,
+    nameRegex: todos ? '' : kws.join('|'),
+    lat, lng, radiusKm,
+  });
+  if (local) return guardarResultado(cacheKey, local, niche);
+
   // FASE 1 — tags: é o que traz o grosso e quase nunca falha.
   const tagQuery = buildTagQuery({ tags, niche, lat, lng, radiusKm });
   if (tagQuery) {
@@ -298,7 +315,10 @@ export async function buscarEstabelecimentos({ niche, city, lat, lng, radiusKm }
   }
   // Falhou tudo e não sobrou nada: aí sim é erro de verdade (502 pro usuário).
   if (erroFase1 && !elements.length) throw erroFase1;
+  return guardarResultado(cacheKey, elements, niche);
+}
 
+function guardarResultado(cacheKey, elements, niche) {
   const seen = new Set();
   const all = [];
   for (const el of elements) {

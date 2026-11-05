@@ -11,7 +11,7 @@ import { toCSV, toXLSX } from '../export/exporter.js';
 import { previewHtml } from '../preview/preview.js';
 import { propostaPdf } from '../export/proposta.js';
 import { hojeLocal } from '../date.js';
-import { listSearches, statsConversao, todayLeads, dbEnabled } from '../db.js';
+import { listSearches, statsConversao, todayLeads, dbEnabled, dbStatus } from '../db.js';
 
 const router = Router();
 const slug = (s) =>
@@ -276,7 +276,7 @@ router.get('/api/searches', async (_req, res) => {
 });
 
 // Diz se a persistência está ativa (DATABASE_URL configurada e pool aberto).
-router.get('/api/status', (_req, res) => res.json({ dbEnabled }));
+router.get('/api/status', (_req, res) => res.json(dbStatus()));
 
 // Painel "Hoje": follow-ups vencidos + contatados parados, de todas as buscas.
 // items = null quando o banco está desligado (o front cai pro modo memória).

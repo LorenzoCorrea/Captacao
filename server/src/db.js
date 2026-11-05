@@ -19,6 +19,58 @@ const pool = url
 // Erro assíncrono de um cliente ocioso não pode derrubar o processo.
 if (pool) pool.on('error', (e) => console.error('[db] erro no pool:', e.message));
 
+// Fila de gravações: se o banco estiver fora, nada se perde enquanto a API viver.
+// shortcut: a fila fica em memória e some se a API reiniciar; persistir em disco se isso virar problema.
+const outbox = [];
+const FLUSH_MS = 15000;
+const CONNECTION_ERRORS = new Set(['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'EAI_AGAIN', 'EPIPE', '57P01', '57P02', '57P03', '53300', '08000', '08003', '08006']);
+const isConnectionError = (e) => CONNECTION_ERRORS.has(e?.code) || /timeout|terminated|not queryable|Connection/i.test(e?.message ?? '');
+let lastDbError = null;
+
+async function persist(label, write) {
+  if (!pool) return;
+  if (!dbEnabled || outbox.length) {
+    outbox.push({ label, write }); // mantém a ordem: o INSERT da busca vem antes dos UPDATEs
+    return;
+  }
+  try {
+    await write();
+    lastDbError = null;
+  } catch (e) {
+    if (isConnectionError(e)) {
+      lastDbError = e.message;
+      outbox.push({ label, write });
+    }
+    console.error(`[db] ${label}:`, e.message);
+  }
+}
+
+export async function flushOutbox() {
+  while (dbEnabled && outbox.length) {
+    const { label, write } = outbox[0];
+    try {
+      await write();
+      lastDbError = null;
+    } catch (e) {
+      console.error(`[db] ${label}:`, e.message);
+      if (isConnectionError(e)) {
+        lastDbError = e.message;
+        return; // ainda fora do ar: tenta de novo no próximo ciclo
+      }
+    }
+    outbox.shift();
+  }
+}
+setInterval(() => flushOutbox().catch(() => {}), FLUSH_MS).unref();
+
+// Estado que a tela usa para avisar quando há alterações ainda não salvas.
+export const dbStatus = () => ({
+  configured: Boolean(pool),
+  dbEnabled,
+  pendingWrites: outbox.length,
+  offline: Boolean(pool) && (!dbEnabled || Boolean(lastDbError)),
+});
+
 const DDL = `
 CREATE TABLE IF NOT EXISTS searches (
   id         uuid PRIMARY KEY,
@@ -117,7 +169,10 @@ export async function initDb() {
 // Grava a busca e todos os leads de uma vez (transação). Devolve a Promise para
 // que updates posteriores (enriquecimento/estágio) esperem o INSERT terminar.
 export async function saveSearch(search, meta = {}) {
-  if (!dbEnabled) return;
+  return persist('saveSearch', () => writeSearch(search, meta));
+}
+
+async function writeSearch(search, meta) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -149,32 +204,27 @@ export async function saveSearch(search, meta = {}) {
     await client.query('COMMIT');
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch {}
-    console.error('[db] saveSearch:', e.message);
+    throw e;
   } finally {
     client.release();
   }
 }
 
 export async function saveEnrichment(searchId, lead) {
-  if (!dbEnabled) return;
-  try {
-    await pool.query(
-      `UPDATE leads SET enrichment=$3, enrichment_status=$4, updated_at=now() WHERE search_id=$1 AND lead_id=$2`,
-      [searchId, lead.id, lead.enrichment ?? null, lead.enrichmentStatus]
-    );
-  } catch (e) { console.error('[db] saveEnrichment:', e.message); }
+  return persist('saveEnrichment', () => pool.query(
+    `UPDATE leads SET enrichment=$3, enrichment_status=$4, updated_at=now() WHERE search_id=$1 AND lead_id=$2`,
+    [searchId, lead.id, lead.enrichment ?? null, lead.enrichmentStatus]
+  ));
 }
 
 export async function saveStage(searchId, leadId, stage) {
-  if (!dbEnabled) return;
-  try {
-    await pool.query(`UPDATE leads SET stage=$3, updated_at=now() WHERE search_id=$1 AND lead_id=$2`, [searchId, leadId, stage]);
-  } catch (e) { console.error('[db] saveStage:', e.message); }
+  return persist('saveStage', () => pool.query(
+    `UPDATE leads SET stage=$3, updated_at=now() WHERE search_id=$1 AND lead_id=$2`, [searchId, leadId, stage]
+  ));
 }
 
 // Atualiza os campos editáveis do lead (CRM): stage, notas, follow-up, tags, valor.
 export async function saveLeadFields(searchId, leadId, fields = {}) {
-  if (!dbEnabled) return;
   const map = { stage: 'stage', notes: 'notes', followUpAt: 'follow_up_at', tags: 'tags', estimatedValue: 'estimated_value', interactions: 'interactions', msgVariant: 'msg_variant' };
   const sets = []; const vals = []; let i = 1;
   for (const [k, col] of Object.entries(map)) {
@@ -182,9 +232,38 @@ export async function saveLeadFields(searchId, leadId, fields = {}) {
   }
   if (!sets.length) return;
   vals.push(searchId, leadId);
+  return persist('saveLeadFields', () => pool.query(
+    `UPDATE leads SET ${sets.join(', ')}, updated_at=now() WHERE search_id=$${i} AND lead_id=$${i + 1}`, vals
+  ));
+}
+
+// Busca na base local de estabelecimentos. Devolve null quando ela não existe ou
+// falha, e aí quem chama recorre ao Overpass. O formato é o mesmo dele.
+export async function buscarOsmLocal({ tags, nameRegex, lat, lng, radiusKm, limit = 500 }) {
+  if (!dbEnabled) return null;
+  const KM_POR_GRAU = 111.32;
+  const cosLat = Math.max(Math.cos((lat * Math.PI) / 180), 0.01);
+  const dLat = radiusKm / KM_POR_GRAU;
+  const dLng = dLat / cosLat;
   try {
-    await pool.query(`UPDATE leads SET ${sets.join(', ')}, updated_at=now() WHERE search_id=$${i++} AND lead_id=$${i}`, vals);
-  } catch (e) { console.error('[db] saveLeadFields:', e.message); }
+    const r = await pool.query(
+      `SELECT id, lat, lng, props FROM osm_places
+       WHERE lat BETWEEN $1::float8 AND $2::float8 AND lng BETWEEN $3::float8 AND $4::float8
+         AND (tags && $5::text[] OR ($6::text <> '' AND name_norm ~ $6::text))
+       ORDER BY power((lat - $7::float8) * ${KM_POR_GRAU}, 2) + power((lng - $8::float8) * ${KM_POR_GRAU} * $9::float8, 2)
+       LIMIT $10`,
+      [lat - dLat, lat + dLat, lng - dLng, lng + dLng, tags, nameRegex, lat, lng, cosLat, limit]
+    );
+    return r.rows
+      .filter((p) => Math.hypot((p.lat - lat) * KM_POR_GRAU, (p.lng - lng) * KM_POR_GRAU * cosLat) <= radiusKm)
+      .map((p) => {
+        const [type, id] = p.id.split('/');
+        return { type, id, lat: p.lat, lon: p.lng, tags: p.props };
+      });
+  } catch (e) {
+    if (e.code !== '42P01') console.error('[db] buscarOsmLocal:', e.message); // 42P01: base ainda não carregada
+    return null;
+  }
 }
 
 function rowToLead(r) {

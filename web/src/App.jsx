@@ -35,6 +35,24 @@ export default function App() {
   const toggleFilter = (k) => setFilters((f) => ({ ...f, [k]: !f[k] }));
   const [searchError, setSearchError] = useState(null); // erro inline (substitui alert)
 
+  // Avisa quando o banco está fora: as alterações ficam na fila do servidor.
+  const [dbState, setDbState] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    const checar = async () => {
+      try {
+        const r = await fetch('/api/status');
+        const s = await lerJson(r);
+        if (vivo) setDbState(s);
+      } catch {
+        if (vivo) setDbState({ apiOffline: true });
+      }
+    };
+    checar();
+    const t = setInterval(checar, 15000);
+    return () => { vivo = false; clearInterval(t); };
+  }, []);
+
   // Persiste o searchId no navegador pra sobreviver a F5: ao montar, tenta
   // reabrir a última busca (ainda em memória do back OU no banco quando ativo).
   // Sem isso, F5 perde tudo — estágios do Kanban, notas, follow-ups, etc.
@@ -224,6 +242,19 @@ export default function App() {
             <div className="search-error" role="alert">
               <strong>Não consegui buscar agora.</strong> {searchError}
               <button type="button" onClick={() => setSearchError(null)} aria-label="fechar">✕</button>
+            </div>
+          )}
+          {dbState?.apiOffline && (
+            <div className="search-error" role="alert">
+              <strong>Sem conexão com o servidor.</strong> Suas últimas alterações podem não ter sido salvas.
+            </div>
+          )}
+          {dbState && !dbState.apiOffline && (dbState.offline || dbState.pendingWrites > 0) && (
+            <div className="search-error" role="alert">
+              <strong>Banco de dados indisponível.</strong>{' '}
+              {dbState.pendingWrites > 0
+                ? `${dbState.pendingWrites} alteração(ões) aguardando para salvar. Não reinicie o sistema até o banco voltar.`
+                : 'Novas alterações ficam aguardando até ele voltar.'}
             </div>
           )}
           <div className="view-toggle">
