@@ -8,7 +8,14 @@
   - [x] Assumir a conversa: responder ao lead pelo celular pausa o bot
   - [x] Resumo a cada 5 min, só quando há novidade: quem foi chamado (com nicho), quem respondeu, quantos faltam
   - [ ] Ver o resumo chegando no celular durante o teste real
-- [ ] **3. Roteiro de teste com WhatsApp real:** desconto, pausa pelo celular, parcelar, robô, aceite, reinício, queda
+- [ ] **3. Roteiro de teste com WhatsApp real**
+  - [x] Aceite (completo e curto)
+  - [x] Desconto (1º pedido)
+  - [ ] Desconto insistente, parcelar, robô, pausa pelo celular, reinício, queda, saída
+  - [ ] Novos: recepcionista, ocupado, "é pagamento único?", "em outro momento", prévia
+- [x] **3b. Melhorias a partir das conversas reais (05/11):** ignora respostas automáticas, novas respostas fixas, 1 lembrete após 2 dias úteis, benefício por nicho, oferta de prévia
+  - [ ] Liberar o Funnel no Zima e definir `PUBLIC_PREVIEW_URL` para a prévia funcionar
+- [x] **3c. Limpeza mensal** no 3º dia útil (textos de conversas paradas e cópias da Evolution)
 - [ ] **4. Restaurar o horário de envio** para 09:00–18:00 em dias úteis
 - [ ] **5. Definir cidades e nichos**
 - [ ] **6. Começar com 1 lead por dia**
