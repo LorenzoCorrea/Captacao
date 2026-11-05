@@ -262,7 +262,7 @@ async function runOne(session, lead) {
   await sleep(200 + Math.random() * 800); // jitter: educado com o DuckDuckGo
   const enrichment = USE_MOCK ? mockEnrichment(lead) : await spawnPython(lead, session.city);
 
-  const achou = enrichment && (enrichment.email || enrichment.instagram || enrichment.facebook || enrichment.linkedin);
+  const achou = enrichment && (enrichment.email || enrichment.instagram || enrichment.facebook || enrichment.linkedin || enrichment.mobilePhone);
   // Falha transitória (worker caiu, DDG bloqueou/timeout) SEM nenhum contato:
   // re-tenta com backoff em vez de gravar "not_found" — bloqueio de rate-limit
   // não pode virar veredito definitivo no banco.
