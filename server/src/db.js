@@ -560,6 +560,24 @@ export const botIncrementTurn = async (leadId) =>
 export const botIncrementDiscount = async (leadId) =>
   (await botRows('UPDATE bot_conversations SET discount_asks = discount_asks + 1 WHERE lead_id = $1 RETURNING discount_asks', [leadId]))[0].discount_asks;
 
+// Para o resumo periódico: primeiro envio e primeira resposta de cada lead desde `since`, e quem ainda não respondeu.
+export async function botDigest(since) {
+  const rows = await botRows(
+    `WITH f AS (
+       SELECT c.name, c.niche, c.status,
+         (SELECT min(created_at) FROM bot_messages m WHERE m.lead_id = c.lead_id AND m.source = 'bot') AS first_out,
+         (SELECT min(created_at) FROM bot_messages m WHERE m.lead_id = c.lead_id AND m.direction = 'in') AS first_in
+       FROM bot_conversations c)
+     SELECT name, niche, first_out >= $1 AS contacted, first_in >= $1 AS replied,
+       (status = 'active' AND first_out IS NOT NULL AND first_in IS NULL) AS waiting
+     FROM f WHERE first_out >= $1 OR first_in >= $1 OR (status = 'active' AND first_out IS NOT NULL AND first_in IS NULL)
+     ORDER BY first_out`,
+    [since]
+  );
+  const pick = (key) => rows.filter((r) => r[key]).map(({ name, niche }) => ({ name, niche }));
+  return { contacted: pick('contacted'), replied: pick('replied'), waiting: rows.filter((r) => r.waiting).length };
+}
+
 export const botQueuedCount = async () =>
   (await botRows(`SELECT count(*)::int AS n FROM bot_conversations WHERE status = 'queued'`))[0].n;
 

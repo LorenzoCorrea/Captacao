@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { tick } from '../src/bot/scheduler.js';
+import { tick, digestText, sendDigest } from '../src/bot/scheduler.js';
 
 // Quarta-feira, 10h no fuso local.
 const WED_10 = new Date(2026, 10, 4, 10, 0, 0);
@@ -228,4 +228,33 @@ test('responde pendências, inclusive as anteriores a um reinício e à noite', 
   deps.db.botDueReplies = async (sec) => { assert.equal(sec, 30); return [{ lead_id: 'P' }]; };
   await tick(WED_20, deps);
   assert.deepEqual(log.replies, ['P']);
+});
+
+test('resumo: texto com envios, respostas e espera', () => {
+  const a = { name: 'Padaria Sol', niche: 'padaria' };
+  const b = { name: 'Salão Lua', niche: 'salão' };
+  assert.equal(digestText({ contacted: [], replied: [], waiting: 3 }, 5), null, 'sem novidade não avisa');
+  assert.equal(digestText({ contacted: [a, b], replied: [], waiting: 2 }, 5),
+    'Lorenzo, chamei 2 leads: Padaria Sol (padaria), Salão Lua (salão). Ainda espero resposta de 2.');
+  assert.equal(digestText({ contacted: [], replied: [a], waiting: 0 }, 5),
+    'Lorenzo, 1 respondeu nos últimos 5 min: Padaria Sol (padaria). Todos os contatados já responderam.');
+});
+
+test('resumo: a cada 5 min e só com novidade', async () => {
+  const notes = [];
+  const settings = {};
+  let calls = 0;
+  const deps = {
+    dbEnabled: () => true,
+    settings: async () => settings,
+    saveDigestAt: async (at) => { settings.botDigestAt = at; },
+    db: { botDigest: async () => { calls++; return { contacted: [{ name: 'X', niche: 'y' }], replied: [], waiting: 1 }; } },
+    notify: async (t) => notes.push(t),
+  };
+  await sendDigest(WED_10, deps);
+  assert.deepEqual([calls, notes.length], [0, 0], 'primeira rodada só marca');
+  await sendDigest(new Date(WED_10.getTime() + 4 * 60000), deps);
+  assert.equal(calls, 0, 'antes de 5 min');
+  await sendDigest(new Date(WED_10.getTime() + 5 * 60000), deps);
+  assert.deepEqual(notes, ['Lorenzo, chamei 1 lead: X (y). Ainda espero resposta de 1.']);
 });

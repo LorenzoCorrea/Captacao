@@ -27,6 +27,8 @@ test('dados do bot no Postgres real', { skip: !url }, async () => {
 
     assert.equal(await db.botAddMessage({ id: 'm1', leadId: conv.leadId, direction: 'out', source: 'bot', body: 'oi' }), true);
     assert.equal(await db.botAddMessage({ id: 'm1', leadId: conv.leadId, direction: 'out', source: 'bot', body: 'oi' }), false, 'id repetido');
+    assert.deepEqual(await db.botDigest(new Date(Date.now() - 60000)), { contacted: [{ name: 'Studio Aurora', niche: 'salão' }], replied: [], waiting: 0 });
+    assert.deepEqual((await db.botDigest(new Date(Date.now() + 60000))).contacted, [], 'envio anterior ao resumo');
 
     assert.equal(await db.botClaim({ lead_id: conv.leadId }), true);
     assert.equal(await db.botClaim({ lead_id: conv.leadId }), false, 'só um reserva');

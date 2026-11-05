@@ -124,6 +124,32 @@ export async function tick(now, deps) {
   if (latest?.botConfig?.enabled) await sendNext(now, latest.botConfig, latest, deps);
 }
 
+const DIGEST_MS = 5 * 60 * 1000;
+const plural = (n, one, many) => (n === 1 ? one : many);
+const names = (rows) => rows.map((r) => (r.niche ? `${r.name ?? 'sem nome'} (${r.niche})` : r.name ?? 'sem nome')).join(', ');
+
+export function digestText({ contacted, replied, waiting }, minutes) {
+  if (!contacted.length && !replied.length) return null;
+  const parts = [];
+  if (contacted.length) parts.push(`chamei ${contacted.length} ${plural(contacted.length, 'lead', 'leads')}: ${names(contacted)}.`);
+  if (replied.length) {
+    parts.push(`${replied.length} ${plural(replied.length, 'respondeu', 'responderam')} nos últimos ${minutes} min: ${names(replied)}.`);
+  }
+  parts.push(waiting ? `Ainda espero resposta de ${waiting}.` : 'Todos os contatados já responderam.');
+  return `Lorenzo, ${parts.join(' ')}`;
+}
+
+// Resumo a cada 5 min, só quando há envio ou primeira resposta nova. Aceite e pausas já avisam na hora.
+export async function sendDigest(now, deps) {
+  if (!deps.dbEnabled()) return;
+  const last = (await deps.settings())?.botDigestAt;
+  if (last && now.getTime() - last < DIGEST_MS) return;
+  await deps.saveDigestAt(now.getTime());
+  if (!last) return; // primeira rodada só marca o início
+  const text = digestText(await deps.db.botDigest(new Date(last)), Math.round((now.getTime() - last) / 60000));
+  if (text) await deps.notify(text);
+}
+
 export function startScheduler(deps) {
   let running = false;
   setInterval(async () => {
@@ -133,6 +159,11 @@ export function startScheduler(deps) {
       await tick(new Date(), deps);
     } catch (e) {
       console.error('[bot] rotina:', e.message); // banco ou gateway fora: tenta no próximo minuto
+    }
+    try {
+      await sendDigest(new Date(), deps);
+    } catch (e) {
+      console.error('[bot] resumo:', e.message);
     } finally {
       running = false;
     }

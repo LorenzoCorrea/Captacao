@@ -41,6 +41,7 @@ export function createRuntime() {
     ai: askAi,
     dbEnabled: () => db.dbEnabled,
     saveState: (state) => db.saveSetting('botState', state),
+    saveDigestAt: (at) => db.saveSetting('botDigestAt', at),
     search: buscarEstabelecimentos,
     loadKnown: db.loadKnownLeads,
     createSearch: (leads, meta) => createSearch(leads, meta, new Map(), { enrich: false }),

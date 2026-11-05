@@ -50,9 +50,9 @@ services:
     # Porta exposta no host. Em produção fica em 80 (HTTP padrão), assim você
     # acessa só `http://IP_DO_ZIMA` sem precisar de :porta.
     ports:
-      - "80:80"
+      - "${WEB_PORT:-80}:80"
       # Só para publicar as prévias (ex.: tailscale funnel); não sai deste computador.
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${PREVIEW_PORT:-8080}:8080"
 
     # Crie antes de subir: sh scripts/create-login.sh USUARIO
     volumes:
