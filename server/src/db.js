@@ -121,6 +121,36 @@ CREATE TABLE IF NOT EXISTS app_settings (
   value      jsonb,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+-- Bot do WhatsApp. Sem chave estrangeira para leads: histórico e saídas sobrevivem a limpezas.
+CREATE TABLE IF NOT EXISTS bot_conversations (
+  lead_id       text PRIMARY KEY,
+  phone         text NOT NULL,
+  phone_key     text NOT NULL UNIQUE,
+  name          text,
+  niche         text,
+  search_id     uuid,
+  status        text NOT NULL DEFAULT 'queued',
+  reason        text,
+  ai_turns      integer NOT NULL DEFAULT 0,
+  discount_asks integer NOT NULL DEFAULT 0,
+  ai_first_fail timestamptz,
+  ai_next_retry timestamptz,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS bot_messages (
+  id         text PRIMARY KEY,
+  lead_id    text NOT NULL,
+  direction  text NOT NULL,
+  source     text NOT NULL,
+  body       text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_bot_messages_lead ON bot_messages(lead_id, created_at);
+CREATE TABLE IF NOT EXISTS bot_optouts (
+  phone_key  text PRIMARY KEY,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 `;
 
 // O container do Postgres pode ter sido criado com outro POSTGRES_DB (ex.:
@@ -439,4 +469,80 @@ export async function listSearches(limit = 50) {
     );
     return r.rows;
   } catch (e) { console.error('[db] listSearches:', e.message); return []; }
+}
+
+// ── Bot do WhatsApp ─────────────────────────────────────────────────────────
+// Lançam erro em falha de banco: o bot não deve agir sem saber o estado da conversa.
+const botRows = async (text, values) => (await pool.query(text, values)).rows;
+
+export async function botEnqueue({ leadId, phone, phoneKey, name, niche, searchId = null }) {
+  const r = await pool.query(
+    `INSERT INTO bot_conversations (lead_id, phone, phone_key, name, niche, search_id)
+     SELECT $1, $2, $3, $4, $5, $6::uuid
+     WHERE NOT EXISTS (SELECT 1 FROM bot_optouts WHERE phone_key = $3)
+     ON CONFLICT DO NOTHING`,
+    [leadId, phone, phoneKey, name, niche, searchId]
+  );
+  return r.rowCount === 1;
+}
+
+export const botNextQueued = async () =>
+  (await botRows(`SELECT * FROM bot_conversations WHERE status = 'queued' ORDER BY created_at, lead_id LIMIT 1`))[0] ?? null;
+
+export const botGet = async (leadId) =>
+  (await botRows('SELECT * FROM bot_conversations WHERE lead_id = $1', [leadId]))[0] ?? null;
+
+export const botGetByPhoneKey = async (key) =>
+  (await botRows('SELECT * FROM bot_conversations WHERE phone_key = $1', [key]))[0] ?? null;
+
+export const botList = () => botRows(
+  `SELECT c.*, (SELECT body FROM bot_messages m WHERE m.lead_id = c.lead_id ORDER BY created_at DESC, id DESC LIMIT 1) AS last_body
+   FROM bot_conversations c ORDER BY c.updated_at DESC LIMIT 200`
+);
+
+export async function botSetStatus(leadId, status, reason = null) {
+  await pool.query('UPDATE bot_conversations SET status = $2, reason = $3, updated_at = now() WHERE lead_id = $1', [leadId, status, reason]);
+}
+
+export async function botAddMessage({ id, leadId, direction, source, body }) {
+  const r = await pool.query(
+    `INSERT INTO bot_messages (id, lead_id, direction, source, body) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING`,
+    [id, leadId, direction, source, body]
+  );
+  if (r.rowCount === 1) await pool.query('UPDATE bot_conversations SET updated_at = now() WHERE lead_id = $1', [leadId]);
+  return r.rowCount === 1;
+}
+
+export const botHistory = (leadId) =>
+  botRows('SELECT id, direction, source, body, created_at FROM bot_messages WHERE lead_id = $1 ORDER BY created_at, id', [leadId]);
+
+export const botHasMessage = async (id) =>
+  (await botRows('SELECT 1 FROM bot_messages WHERE id = $1', [id])).length > 0;
+
+// Conversas ativas cuja última mensagem é do lead e já passou da espera (junta mensagens seguidas).
+export const botDueReplies = (olderThanSec) => botRows(
+  `SELECT c.* FROM bot_conversations c
+   JOIN LATERAL (SELECT direction, created_at FROM bot_messages m WHERE m.lead_id = c.lead_id ORDER BY created_at DESC, id DESC LIMIT 1) last ON true
+   WHERE c.status = 'active' AND last.direction = 'in'
+     AND last.created_at <= now() - make_interval(secs => $1)
+     AND (c.ai_next_retry IS NULL OR c.ai_next_retry <= now())`,
+  [olderThanSec]
+);
+
+export async function botSetAiFailure(leadId, firstFailAt, nextRetry) {
+  await pool.query('UPDATE bot_conversations SET ai_first_fail = $2, ai_next_retry = $3 WHERE lead_id = $1', [leadId, firstFailAt, nextRetry]);
+}
+
+export async function botClearAiFailure(leadId) {
+  await pool.query('UPDATE bot_conversations SET ai_first_fail = NULL, ai_next_retry = NULL WHERE lead_id = $1', [leadId]);
+}
+
+export const botIncrementTurn = async (leadId) =>
+  (await botRows('UPDATE bot_conversations SET ai_turns = ai_turns + 1 WHERE lead_id = $1 RETURNING ai_turns', [leadId]))[0].ai_turns;
+
+export const botIncrementDiscount = async (leadId) =>
+  (await botRows('UPDATE bot_conversations SET discount_asks = discount_asks + 1 WHERE lead_id = $1 RETURNING discount_asks', [leadId]))[0].discount_asks;
+
+export async function botOptOut(phoneKey) {
+  await pool.query('INSERT INTO bot_optouts (phone_key) VALUES ($1) ON CONFLICT DO NOTHING', [phoneKey]);
 }
