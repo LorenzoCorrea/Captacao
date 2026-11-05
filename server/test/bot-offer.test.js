@@ -4,11 +4,12 @@ import { OFFER, firstMessage, FIXED, ANSWERS, TOPICS, answerFor, safeName } from
 
 test('oferta tem os valores do spec', () => {
   assert.match(OFFER.preco, /R\$ 550/);
-  assert.match(OFFER.sinal, /30% de sinal no Pix \(R\$ 165\)/);
+  assert.match(OFFER.sinal, /sinal de 30% no Pix \(R\$ 165\)/);
   assert.match(OFFER.saldo, /R\$ 385/);
   assert.match(OFFER.renovacao, /R\$ 50 por ano/);
   assert.match(OFFER.refazer, /R\$ 100/);
   assert.match(OFFER.prazo, /4 dias corridos/);
+  assert.match(ANSWERS.price, /4 dias corridos/);
 });
 
 test('primeira mensagem é curta, fala como Lorenzo, oferece saída e não despeja a oferta', () => {
@@ -22,11 +23,24 @@ test('primeira mensagem é curta, fala como Lorenzo, oferece saída e não despe
   }
 });
 
-test('preço nunca sai sem o aviso do domínio, antes de o cliente aceitar', () => {
-  for (const text of [ANSWERS.how_it_works, ANSWERS.price, ANSWERS.included, FIXED.accepted]) {
+test('como funciona vende o benefício, sem preço, e puxa a próxima pergunta', () => {
+  assert.doesNotMatch(ANSWERS.how_it_works, /R\$|domínio|sinal/i);
+  assert.match(ANSWERS.how_it_works, /\?$/);
+});
+
+test('todo preço leva o aviso do domínio, e quem aceita já sabe o total', () => {
+  for (const text of [ANSWERS.price, ANSWERS.included, FIXED.accepted]) {
+    assert.match(text, /R\$ 550/);
     assert.match(text, /expira a cada 1 ano/);
     assert.match(text, /R\$ 50 por ano/);
   }
+});
+
+test('sinal nunca aparece sem o valor', () => {
+  for (const [name, text] of Object.entries({ ...ANSWERS, ...FIXED })) {
+    if (/sinal/i.test(text)) assert.match(text, /R\$ 165/, name);
+  }
+  assert.match(FIXED.accepted, /R\$ 385/);
 });
 
 test('respostas são curtas', () => {
