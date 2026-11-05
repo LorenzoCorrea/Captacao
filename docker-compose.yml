@@ -60,7 +60,7 @@ services:
 
   # ── Gateway do WhatsApp: sem porta publicada, só o Captação fala com ele ────
   evolution:
-    image: evoapicloud/evolution-api:2.4.0-rc2
+    image: evoapicloud/evolution-api:v2.3.7
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
