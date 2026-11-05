@@ -13,6 +13,7 @@ import { leadScore } from './lib/score.js';
 import { igHandle } from './lib/instagram.js';
 import { variantOf, telefoneWhats } from './lib/whatsapp.js';
 import { lerJson } from './lib/api.js';
+import { hojeLocal, addDias } from './lib/date.js';
 import { useEnrichmentStream } from './hooks/useEnrichmentStream.js';
 
 const CENTRO_PADRAO = [-30.0427211, -51.1626625]; // Porto Alegre (bairro Bom Jesus)
@@ -147,11 +148,9 @@ export default function App() {
       const patch = { stage };
       if (stage === 'contatado') {
         const l = leads.find((x) => x.id === leadId);
-        const hj = new Date().toISOString().slice(0, 10);
+        const hj = hojeLocal();
         if (!l?.followUpAt || l.followUpAt <= hj) {
-          const d = new Date();
-          d.setDate(d.getDate() + 2);
-          patch.followUpAt = d.toISOString().slice(0, 10);
+          patch.followUpAt = addDias(hj, 2);
         }
       }
       patchLead(leadId, patch);
@@ -169,11 +168,9 @@ export default function App() {
         msgVariant: variantOf(leadId), // registra a variante A/B usada — alimenta o painel
         interactions: [...(l?.interactions ?? []), { at: new Date().toISOString(), type: 'msg', note: canal }],
       };
-      const hj = new Date().toISOString().slice(0, 10);
+      const hj = hojeLocal();
       if (!l?.followUpAt || l.followUpAt <= hj) {
-        const d = new Date();
-        d.setDate(d.getDate() + 2);
-        patch.followUpAt = d.toISOString().slice(0, 10);
+        patch.followUpAt = addDias(hj, 2);
       }
       patchLead(leadId, patch);
     },

@@ -5,6 +5,7 @@
 // O banco mora no home server (ZimaOS) e é acessado via Tailscale. A connection
 // string fica em server/.env (DATABASE_URL=postgresql://user:senha@100.x:5432/db).
 import pg from 'pg';
+import { hojeLocal } from './date.js';
 
 const { Pool } = pg;
 const url = process.env.DATABASE_URL;
@@ -259,7 +260,7 @@ export async function statsConversao() {
 // agendado. A venda está no 4º toque; isso aqui é o que impede o lead esfriar.
 export async function todayLeads() {
   if (!dbEnabled) return null;
-  const today = new Date().toISOString().slice(0, 10); // follow_up_at é text YYYY-MM-DD
+  const today = hojeLocal(); // follow_up_at é text YYYY-MM-DD
   try {
     const r = await pool.query(
       `SELECT l.*, s.city AS search_city, s.niche AS search_niche

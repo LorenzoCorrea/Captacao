@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import http from 'node:http';
+import https from 'node:https';
 import net from 'node:net';
 import { lookup } from 'node:dns/promises';
 import { buscarEstabelecimentos } from '../data/osmProvider.js';
@@ -8,6 +10,7 @@ import { createSearch, attachStream, prioritizeLead, getSearchLeads, updateLead,
 import { toCSV, toXLSX } from '../export/exporter.js';
 import { previewHtml } from '../preview/preview.js';
 import { propostaPdf } from '../export/proposta.js';
+import { hojeLocal } from '../date.js';
 import { listSearches, statsConversao, todayLeads, dbEnabled } from '../db.js';
 
 const router = Router();
@@ -140,7 +143,7 @@ router.get('/api/search/:searchId/export', async (req, res) => {
   if (!data) return res.status(404).json({ error: 'Busca não encontrada (sessão expirada?).' });
 
   const format = (req.query.format ?? 'csv').toString().toLowerCase();
-  const base = `leads-${slug(data.niche)}-${new Date().toISOString().slice(0, 10)}`;
+  const base = `leads-${slug(data.niche)}-${hojeLocal()}`;
   try {
     if (format === 'xlsx') {
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -162,7 +165,7 @@ router.get('/api/search/:searchId/leads/:leadId/proposta', async (req, res) => {
   const lead = data?.leads.find((l) => l.id === req.params.leadId);
   if (!lead) return res.status(404).json({ error: 'Lead não encontrado (busca expirada?).' });
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="proposta-${slug(lead.name)}-${new Date().toISOString().slice(0, 10)}.pdf"`);
+  res.setHeader('Content-Disposition', `attachment; filename="proposta-${slug(lead.name)}-${hojeLocal()}.pdf"`);
   propostaPdf(lead, { niche: lead.niche || data.niche }).pipe(res);
 });
 
@@ -171,21 +174,54 @@ router.get('/api/search/:searchId/leads/:leadId/proposta', async (req, res) => {
 // Proteção SSRF: o webhook só pode apontar para a internet pública. Sem isso,
 // uma URL como http://host.docker.internal:5432 alcançaria o Postgres e outros
 // serviços internos do Zima/Tailscale.
-function isPrivateIp(ip) {
+export function isPrivateIp(ip) {
   if (net.isIPv6(ip)) {
     const low = ip.toLowerCase();
-    if (low.startsWith('::ffff:')) return isPrivateIp(low.slice(7)); // IPv4 mapeado
-    return low === '::1' || low === '::' || low.startsWith('fc') || low.startsWith('fd') || low.startsWith('fe80');
+    if (low.includes('.')) return isPrivateIp(low.slice(low.lastIndexOf(':') + 1)); // IPv4 embutido
+    return low === '::1' || low === '::' || /^(fc|fd|fe[89ab]|ff)/.test(low) || low.startsWith('::ffff:') || low.startsWith('64:ff9b:') || low.startsWith('2002:');
   }
   const p = ip.split('.').map(Number);
   if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
   return (
-    p[0] === 0 || p[0] === 10 || p[0] === 127 ||
+    p[0] === 0 || p[0] === 10 || p[0] === 127 || p[0] >= 224 ||
     (p[0] === 100 && p[1] >= 64 && p[1] <= 127) || // CGNAT — inclui a faixa da Tailscale
     (p[0] === 169 && p[1] === 254) ||
     (p[0] === 172 && p[1] >= 16 && p[1] <= 31) ||
-    (p[0] === 192 && p[1] === 168)
+    (p[0] === 192 && p[1] === 168) ||
+    (p[0] === 192 && p[1] === 0 && p[2] === 0) ||
+    (p[0] === 198 && (p[1] === 18 || p[1] === 19))
   );
+}
+
+// Revalida o DNS na hora da conexão: um domínio pode responder com IP público
+// na checagem e com IP interno logo depois (DNS rebinding).
+export function safeLookup(hostname, options, callback) {
+  lookup(hostname, { all: true }).then((addrs) => {
+    if (!addrs.length || addrs.some((a) => isPrivateIp(a.address))) {
+      return callback(new Error('endereço interno/privado'));
+    }
+    if (options?.all) return callback(null, addrs);
+    return callback(null, addrs[0].address, addrs[0].family);
+  }).catch(callback);
+}
+
+// Não segue redirecionamentos: um 302 público poderia levar a um serviço interno.
+export function postJsonPublic(raw, payload, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(raw);
+    const body = JSON.stringify(payload);
+    const client = u.protocol === 'https:' ? https : http;
+    const req = client.request(u, {
+      method: 'POST', agent: false, lookup: safeLookup,
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+    }, (r) => {
+      r.resume();
+      resolve({ ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode });
+    });
+    req.setTimeout(timeoutMs, () => req.destroy(new Error('Webhook timeout')));
+    req.on('error', reject);
+    req.end(body);
+  });
 }
 
 async function assertPublicUrl(raw) {
@@ -209,12 +245,7 @@ router.post('/api/search/:searchId/webhook', async (req, res) => {
   }
 
   try {
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: { niche: data.niche, city: data.city }, count: data.leads.length, leads: data.leads }),
-      signal: AbortSignal.timeout(10000),
-    });
+    const r = await postJsonPublic(url, { query: { niche: data.niche, city: data.city }, count: data.leads.length, leads: data.leads });
     res.json({ delivered: r.ok, status: r.status });
   } catch (e) {
     console.error('Webhook falhou:', e);

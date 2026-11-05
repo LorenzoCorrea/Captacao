@@ -1,3 +1,5 @@
+import { hojeLocal as hoje } from './date.js';
+
 // Proteção anti-ban ("modo aquecimento").
 //
 // O WhatsApp bane número que dispara mensagem fria em volume — e número NOVO
@@ -23,7 +25,6 @@ export const AQUECIMENTO = [
   'Semana 4+ — 20/dia, só se a taxa de resposta estiver saudável.',
 ];
 
-const hoje = () => new Date().toISOString().slice(0, 10);
 const ler = (k, fallback) => {
   try {
     const raw = localStorage.getItem(k);

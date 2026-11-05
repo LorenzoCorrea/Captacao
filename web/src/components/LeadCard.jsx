@@ -2,9 +2,9 @@ import { waLink, telefoneWhats, tipoTelefone } from '../lib/whatsapp.js';
 import { mailtoLink } from '../lib/email.js';
 import { igHandle, igUrl, fmtSeguidores } from '../lib/instagram.js';
 import { leadScore, scoreTier } from '../lib/score.js';
+import { hojeLocal as hoje } from '../lib/date.js';
 
 const stop = (ev) => ev.stopPropagation();
-const hoje = () => new Date().toISOString().slice(0, 10);
 const fmtMoney = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
 export default function LeadCard({ lead, selected, onSelect, onOpenDetails, searchId }) {
