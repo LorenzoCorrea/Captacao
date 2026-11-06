@@ -18,7 +18,7 @@
 - [x] **3c. Limpeza mensal** no 3º dia útil (textos de conversas paradas e cópias da Evolution)
 - [x] **4. Horário de envio** 09:00–18:00 em dias úteis (restaurado em 05/11). Lembretes: 1º no dia útil seguinte e 2º (despedida) 3 dias úteis depois, só a partir das 14h, com cota própria
 - [x] **5. Cidades e nichos** (05/11): Santa Maria, Santo Ângelo, Pelotas, Rio Grande, Caxias do Sul e Passo Fundo, raio 5 km; nichos salão de beleza, academia e advocacia ("clínica de estética" e "barbearia" faziam a mesma busca no mapa). Quem não tem celular no mapa é procurado na internet (até 40 por dia)
-- [ ] **5b. Busca de celular na internet**: o DuckDuckGo bloqueia o servidor. Precisa de `BRAVE_API_KEY` (plano gratuito) no `.env` do Zima
+- [x] **5b. Busca de celular na internet** sem custo: SearXNG próprio no compose (o DuckDuckGo direto bloqueava o Zima). 15 comércios por dia, 30 s entre cada um; só aceita celular com o DDD da cidade
 - [ ] **6. Começar com 1 lead por dia**
 - [ ] **7. Trocar a chave do Gemini e as outras senhas**
 - [ ] **8. Enviar a branch ao GitHub** (`git push -u origin fix/boot-e-seguranca-docker`)
