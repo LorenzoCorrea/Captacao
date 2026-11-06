@@ -11,7 +11,7 @@ Estratégia de performance (o usuário não espera demais):
   2. 2ª consulta só dispara se o e-mail não apareceu na primeira.
   3. Orçamento de tempo rígido (TIMEOUT_LEAD): estourou, devolve parcial — nunca trava.
 
-Busca: com BRAVE_API_KEY no ambiente, usa a API oficial da Brave. Sem a chave, usa
+Busca: com SEARXNG_URL (buscador próprio, grátis, no compose) usa o SearXNG. Com BRAVE_API_KEY, usa a API oficial da Brave. Sem a chave, usa
 o DuckDuckGo HTML, que é gratuito mas pode bloquear uso automatizado; bloqueio
 vira resultado parcial, para não marcar o lead como "sem contatos" por engano.
 """
@@ -311,7 +311,20 @@ async def _cnpj_lookup(client: httpx.AsyncClient, name: str, city: str, out: dic
         return
 
 
+def _parse_searxng(data: dict) -> list[Result]:
+    results = [Result(r["url"], r.get("title") or "", r.get("content") or "") for r in data.get("results", []) if r.get("url")]
+    # Sem resultado e com buscadores fora: bloqueio, não "não achou".
+    if not results and data.get("unresponsive_engines"):
+        raise SearchBlocked("SearXNG sem buscadores respondendo")
+    return results
+
+
 async def _serp(client: httpx.AsyncClient, query: str) -> list[Result]:
+    searx = os.environ.get("SEARXNG_URL")
+    if searx:
+        r = await client.get(f"{searx.rstrip('/')}/search", params={"q": query, "format": "json", "language": "pt-BR"})
+        r.raise_for_status()
+        return _parse_searxng(r.json())
     key = os.environ.get("BRAVE_API_KEY")
     if key:
         r = await client.get(

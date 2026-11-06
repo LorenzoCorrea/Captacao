@@ -1,0 +1,9 @@
+# Buscador próprio e grátis para o enriquecimento (workers/enrich.py).
+# A chave secreta vem de SEARXNG_SECRET no .env; nunca coloque aqui.
+use_default_settings: true
+server:
+  limiter: false
+  image_proxy: false
+search:
+  formats: [html, json]
+  default_lang: pt-BR
