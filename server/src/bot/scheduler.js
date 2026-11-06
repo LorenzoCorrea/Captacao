@@ -8,7 +8,7 @@ const CAPTURE_RETRY_MS = 60 * 60 * 1000;
 const MAX_QUEUE = 50; // sem acumular mais do que se envia em alguns dias
 const TICK_MS = 60 * 1000;
 // Busca de celular na internet: poucas por dia para o buscador não bloquear.
-const MAX_ENRICH_PER_DAY = 40;
+const MAX_ENRICH_PER_DAY = 15;
 
 const minutes = (hhmm) => {
   const [h, m] = String(hhmm).split(':').map(Number);

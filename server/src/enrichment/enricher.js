@@ -20,6 +20,8 @@ const MAX_CONCURRENCY = Number(process.env.ENRICH_CONCURRENCY ?? 2);
 const BACKGROUND = process.env.ENRICH_BACKGROUND !== 'false'; // pré-aquece todos por padrão
 const USE_MOCK = process.env.ENRICH_PROVIDER === 'mock'; // demo offline sem rede
 const TTL_MS = 30 * 60 * 1000; // tempo OCIOSO até liberar a memória (deslizante)
+// Pausa entre leads: o DuckDuckGo bloqueia rajadas (no Zima, 30 s).
+const GAP_MS = Number(process.env.ENRICH_GAP_MS ?? 200);
 const RETRY_DELAY_MS = 20000; // espera antes de re-tentar um lead bloqueado pelo DDG
 const MAX_ATTEMPTS = 2;
 
@@ -259,7 +261,7 @@ function pumpAll() {
 }
 
 async function runOne(session, lead) {
-  await sleep(200 + Math.random() * 800); // jitter: educado com o DuckDuckGo
+  await sleep(GAP_MS + Math.random() * 800); // jitter: educado com o DuckDuckGo
   const enrichment = USE_MOCK ? mockEnrichment(lead) : await spawnPython(lead, session.city);
 
   const achou = enrichment && (enrichment.email || enrichment.instagram || enrichment.facebook || enrichment.linkedin || enrichment.mobilePhone);
