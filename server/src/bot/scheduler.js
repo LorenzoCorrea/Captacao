@@ -27,6 +27,14 @@ const usageToday = (now, usage) => (usage?.date === hojeLocal(now) ? usage : { w
 // O espaçamento vale para todo envio, novo ou lembrete.
 const spaced = (now, limits, today) => now.getTime() - (today.lastAt ?? 0) >= Number(limits?.minSpacingMin ?? 8) * 60000;
 
+const ddd = (phone) => phoneKey(phone).slice(0, 2);
+
+function mostCommonDdd(leads) {
+  const count = new Map();
+  for (const l of leads) if (l.phone) count.set(ddd(l.phone), (count.get(ddd(l.phone)) ?? 0) + 1);
+  return [...count].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+}
+
 async function capture(now, config, state, deps) {
   const today = hojeLocal(now);
   if (state?.lastCaptureDate === today) return;
@@ -40,6 +48,7 @@ async function capture(now, config, state, deps) {
     for (const niche of config.niches ?? []) {
       const { leads } = await deps.search({ niche, city: city.name, lat: city.lat, lng: city.lng, radiusKm: config.radiusKm ?? 5 });
       const noSite = leads.filter((lead) => !lead.hasWebsite);
+      const cityDdd = mostCommonDdd(leads);
       const known = await deps.loadKnown(noSite.map((l) => l.id));
       const fresh = [];
       const toEnrich = [];
@@ -49,7 +58,9 @@ async function capture(now, config, state, deps) {
         if (k?.stage && k.stage !== 'novo') continue;
         const found = k?.enrichmentStatus === 'done' ? k.enrichment : null;
         if (found?.discoveredWebsite) continue; // a busca achou site: não é lead quente
-        const phone = mobileFromLead(lead.phone) ?? mobileFromLead(found?.mobilePhone);
+        const web = mobileFromLead(found?.mobilePhone);
+        // Celular da internet de outro DDD costuma ser de outro negócio com nome parecido.
+        const phone = mobileFromLead(lead.phone) ?? (web && ddd(web) === cityDdd ? web : null);
         if (phone) {
           if (!(await db.botGetByPhoneKey(phoneKey(phone)))) fresh.push({ lead, phone });
         } else if (!k?.enrichmentStatus || k.enrichmentStatus === 'pending' || k.enrichment?.partial) {
