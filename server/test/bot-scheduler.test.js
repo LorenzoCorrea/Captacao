@@ -161,6 +161,20 @@ test('respeita limite diário e espaçamento', async () => {
   assert.equal(tooSoon.log.sent.length, 0);
 });
 
+test('tarde com 4 de 5 sem resposta libera mais 2; com 3 sem resposta ou de manhã, não', async () => {
+  const WED_15 = new Date(2026, 10, 4, 15, 0, 0);
+  const run = async (now, silent, sentToday) => {
+    const { log, deps } = setup({ queued: [q], usage: { whatsapp: sentToday }, state: { lastCaptureDate: '2026-11-04' } });
+    deps.db.botSilentSince = async () => silent;
+    await tick(now, deps);
+    return log.sent.length;
+  };
+  assert.equal(await run(WED_15, 4, 5), 1);
+  assert.equal(await run(WED_15, 6, 7), 0); // teto de 7
+  assert.equal(await run(WED_15, 3, 5), 0);
+  assert.equal(await run(WED_10, 5, 5), 0);
+});
+
 test('contador de ontem não bloqueia hoje', async () => {
   const { log, deps } = setup({ queued: [q], usage: { date: '2026-11-03', whatsapp: 5, lastAt: WED_10.getTime() - 60000 }, state: { lastCaptureDate: '2026-11-04' } });
   await tick(WED_10, deps);

@@ -119,6 +119,15 @@ async function sendFollowUp(now, conv, deps) {
   }
 }
 
+// Se até a tarde quase ninguém dos leads de hoje respondeu (todos menos 1), chama mais 2 no mesmo dia.
+const EXTRA_IF_SILENT = 2;
+async function dailyLimit(now, settings, sent, db) {
+  const base = Number(settings.limits?.whatsapp ?? 5);
+  if (sent < base || now.getHours() < FOLLOW_UP_HOUR) return base;
+  const silent = await db.botSilentSince(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  return silent >= base - 1 ? base + EXTRA_IF_SILENT : base;
+}
+
 async function sendNext(now, config, settings, deps) {
   const today = usageToday(now, settings.usage);
   if (!canSendNow(now, config) || !spaced(now, settings.limits, today)) return;
@@ -127,7 +136,7 @@ async function sendNext(now, config, settings, deps) {
     const due = await db.botDueFollowUp(FOLLOW_UP_AFTER_DAYS.map((days) => sentUpTo(now, days)));
     if (due) return sendFollowUp(now, due, deps);
   }
-  if ((today.whatsapp ?? 0) >= Number(settings.limits?.whatsapp ?? 5)) return;
+  if ((today.whatsapp ?? 0) >= (await dailyLimit(now, settings, today.whatsapp ?? 0, db))) return;
   const conv = await db.botNextQueued();
   if (!conv || !(await db.botClaim(conv))) return;
 
