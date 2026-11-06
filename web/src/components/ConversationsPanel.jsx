@@ -97,7 +97,7 @@ function Settings({ config, onSaved, onError }) {
         <label>Raio (km) <input type="number" min="0.5" max="30" step="0.5" value={form.radiusKm} onChange={(e) => set('radiusKm', e.target.value)} /></label>
         <label>Envia das <input type="time" value={form.sendFrom} onChange={(e) => set('sendFrom', e.target.value)} /></label>
         <label>até <input type="time" value={form.sendTo} onChange={(e) => set('sendTo', e.target.value)} /></label>
-        <label className="bot-check"><input type="checkbox" checked={form.weekdaysOnly} onChange={(e) => set('weekdaysOnly', e.target.checked)} /> Só dias úteis</label>
+        <label className="bot-check"><input type="checkbox" checked={form.weekdaysOnly} onChange={(e) => set('weekdaysOnly', e.target.checked)} /> Só dias úteis (no sábado, só quem abre no sábado)</label>
       </div>
       <button type="button" className="msg-edit-btn" onClick={save}>Salvar configuração</button>
     </div>

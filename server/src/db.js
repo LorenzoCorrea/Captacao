@@ -489,6 +489,9 @@ export async function botEnqueue({ leadId, phone, phoneKey, name, niche, searchI
 export const botNextQueued = async () =>
   (await botRows(`SELECT * FROM bot_conversations WHERE status = 'queued' ORDER BY created_at, lead_id LIMIT 1`))[0] ?? null;
 
+export const botQueuedAll = () =>
+  botRows(`SELECT * FROM bot_conversations WHERE status = 'queued' ORDER BY created_at, lead_id`);
+
 export const botGet = async (leadId) =>
   (await botRows('SELECT * FROM bot_conversations WHERE lead_id = $1', [leadId]))[0] ?? null;
 

@@ -15,9 +15,11 @@ const minutes = (hhmm) => {
   return h * 60 + m;
 };
 
+// Com "só dias úteis", o sábado ainda vale para quem abre no sábado (ver nextOpenOnSaturday).
+const saturdayOnly = (now, config) => (config.weekdaysOnly ?? true) && now.getDay() === 6;
+
 function canSendNow(now, { sendFrom = '09:00', sendTo = '18:00', weekdaysOnly = true }) {
-  const day = now.getDay();
-  if (weekdaysOnly && (day === 0 || day === 6)) return false;
+  if (weekdaysOnly && now.getDay() === 0) return false;
   const current = now.getHours() * 60 + now.getMinutes();
   return current >= minutes(sendFrom) && current < minutes(sendTo);
 }
@@ -119,6 +121,63 @@ async function sendFollowUp(now, conv, deps) {
   }
 }
 
+const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+// Dias de uma regra do opening_hours ("Mo-Fr", "Tu-Sa", "Mo,We,Sa"); null se não entender.
+function ruleCoversSaturday(days) {
+  let covers = false;
+  for (const token of days.split(',')) {
+    if (token === 'PH' || token === 'SH') continue;
+    const [a, b = a] = token.split('-').map((d) => DAYS.indexOf(d));
+    if (a < 0 || b < 0) return null;
+    for (let d = a; ; d = (d + 1) % 7) { if (d === 6) covers = true; if (d === b) break; }
+  }
+  return covers;
+}
+
+// Janelas de sábado em minutos, pela tag opening_hours do OSM. null = horário desconhecido ou ilegível.
+// shortcut: entende só o formato comum (dias + horas); exceções por data/feriado são ignoradas.
+export function saturdayWindows(oh) {
+  if (!oh) return null;
+  if (oh.trim() === '24/7') return [[0, 1440]];
+  let windows = null;
+  for (const raw of oh.split(';')) {
+    const rule = raw.trim();
+    const m = rule.match(/^(?:([A-Za-z,-]+)\s+)?(\d.*|off|closed)$/i);
+    if (!m) continue;
+    const covers = m[1] ? ruleCoversSaturday(m[1]) : true;
+    if (!covers) continue; // regra de outro dia ou que não deu para ler
+    windows = [...m[2].matchAll(/(\d{1,2}):(\d\d)\s*-\s*(\d{1,2}):(\d\d)/g)].map(([, h1, m1, h2, m2]) => {
+      const end = Number(h2) * 60 + Number(m2);
+      return [Number(h1) * 60 + Number(m1), end === 0 ? 1440 : end];
+    }); // regra posterior vale sobre a anterior, como no OSM
+  }
+  return windows;
+}
+
+const SATURDAY_CLOSING_MARGIN_MIN = 30; // não chama quem está para fechar
+
+// Próximo da fila que abre no sábado e está aberto agora. O horário vem do OSM, consultado no máximo 1x por hora.
+async function nextOpenOnSaturday(now, deps) {
+  const queued = await deps.db.botQueuedAll();
+  const day = hojeLocal(now);
+  if (deps.hoursCache?.date !== day) deps.hoursCache = { date: day, hours: new Map(), triedAt: 0 };
+  const cache = deps.hoursCache;
+  const missing = queued.map((c) => c.lead_id).filter((id) => !cache.hours.has(id));
+  if (missing.length && now.getTime() - cache.triedAt >= CAPTURE_RETRY_MS) {
+    cache.triedAt = now.getTime();
+    try {
+      const found = await deps.openingHours(missing);
+      for (const id of missing) cache.hours.set(id, found.get(id) ?? null);
+    } catch (e) {
+      console.error('[bot] falha ao ler horários:', e.message);
+    }
+  }
+  const t = now.getHours() * 60 + now.getMinutes();
+  return queued.find((c) => (saturdayWindows(cache.hours.get(c.lead_id)) ?? [])
+    .some(([from, to]) => t >= from && t <= to - SATURDAY_CLOSING_MARGIN_MIN)) ?? null;
+}
+
 // Se até a tarde quase ninguém dos leads de hoje respondeu (todos menos 1), chama mais 2 no mesmo dia.
 const EXTRA_IF_SILENT = 2;
 async function dailyLimit(now, settings, sent, db) {
@@ -132,12 +191,14 @@ async function sendNext(now, config, settings, deps) {
   const today = usageToday(now, settings.usage);
   if (!canSendNow(now, config) || !spaced(now, settings.limits, today)) return;
   const { db, gateway } = deps;
-  if (now.getHours() >= FOLLOW_UP_HOUR && (today.followup ?? 0) < MAX_FOLLOW_UPS_PER_DAY) {
+  const saturday = saturdayOnly(now, config);
+  // Lembrete só em dia útil.
+  if (!saturday && now.getHours() >= FOLLOW_UP_HOUR && (today.followup ?? 0) < MAX_FOLLOW_UPS_PER_DAY) {
     const due = await db.botDueFollowUp(FOLLOW_UP_AFTER_DAYS.map((days) => sentUpTo(now, days)));
     if (due) return sendFollowUp(now, due, deps);
   }
   if ((today.whatsapp ?? 0) >= (await dailyLimit(now, settings, today.whatsapp ?? 0, db))) return;
-  const conv = await db.botNextQueued();
+  const conv = saturday ? await nextOpenOnSaturday(now, deps) : await db.botNextQueued();
   if (!conv || !(await db.botClaim(conv))) return;
 
   let id;

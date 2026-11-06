@@ -211,19 +211,28 @@ const SEARCH_BUDGET_MS = 40000;
 const NAME_BUDGET_MS = 18000;
 const PER_MIRROR_MS = 15000;
 
-async function fetchOverpass(query, budgetMs = SEARCH_BUDGET_MS) {
+async function fetchOverpass(query, budgetMs = SEARCH_BUDGET_MS, perMirrorMs = PER_MIRROR_MS) {
   const deadline = Date.now() + budgetMs;
   let lastErr;
   for (const url of ENDPOINTS) {
     const remaining = deadline - Date.now();
     if (remaining <= 1000) break; // orçamento esgotado
     try {
-      return await overpassPost(url, query, Math.min(PER_MIRROR_MS, remaining));
+      return await overpassPost(url, query, Math.min(perMirrorMs, remaining));
     } catch (e) {
       lastErr = e; // tenta o próximo endpoint
     }
   }
   throw lastErr ?? new Error('Overpass indisponível');
+}
+
+// Horário de funcionamento (tag opening_hours) dos leads do OSM, por id do lead.
+export async function openingHours(leadIds) {
+  const refs = leadIds.map((id) => String(id).match(/^osm:(node|way|relation)\/(\d+)$/)).filter(Boolean);
+  if (!refs.length) return new Map();
+  // Roda no agendador, sem ninguém esperando: aguenta o Overpass lento (já levou 40s).
+  const els = await fetchOverpass(`[out:json][timeout:60];(${refs.map(([, t, n]) => `${t}(${n});`).join('')});out tags;`, 150000, 70000);
+  return new Map(els.map((e) => [`osm:${e.type}/${e.id}`, e.tags?.opening_hours ?? null]));
 }
 
 function assembleAddress(t) {

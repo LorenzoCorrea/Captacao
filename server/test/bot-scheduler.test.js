@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { tick, digestText, sendDigest, isThirdBusinessDay, monthlyPurge, businessDaysAgo } from '../src/bot/scheduler.js';
+import { tick, digestText, sendDigest, isThirdBusinessDay, monthlyPurge, businessDaysAgo, saturdayWindows } from '../src/bot/scheduler.js';
 import { FIXED } from '../src/bot/offer.js';
 
 // Quarta-feira, 10h no fuso local.
@@ -26,6 +26,7 @@ function setup({ config = {}, queued = [], leads = [], usage = {}, limits = {}, 
     db: {
       botDueReplies: async () => [],
       botNextQueued: async () => queue[0] ?? null,
+      botQueuedAll: async () => [...queue],
       botEnqueue: async (c) => { log.enqueued.push(c); return true; },
       botGetByPhoneKey: async () => null,
       botClaim: async (conv) => { if (queue[0] !== conv) return false; conv.status = 'sending'; return true; },
@@ -173,6 +174,40 @@ test('tarde com 4 de 5 sem resposta libera mais 2; com 3 sem resposta ou de manh
   assert.equal(await run(WED_15, 6, 7), 0); // teto de 7
   assert.equal(await run(WED_15, 3, 5), 0);
   assert.equal(await run(WED_10, 5, 5), 0);
+});
+
+test('horário do OSM: janelas de sábado', () => {
+  assert.deepEqual(saturdayWindows('Mo-Fr 07:15-11:30, 13:00-17:00; Sa 07:15-11:30, 12:45-16:00'), [[435, 690], [765, 960]]);
+  assert.deepEqual(saturdayWindows('Tu-Sa 09:00-18:30'), [[540, 1110]]);
+  assert.deepEqual(saturdayWindows('Mo-Sa 08:00-18:00; Sa off'), []);
+  assert.deepEqual(saturdayWindows('08:00-12:00'), [[480, 720]]);
+  assert.deepEqual(saturdayWindows('Fr-Mo 10:00-00:00'), [[600, 1440]]);
+  assert.deepEqual(saturdayWindows('Mo-Fr 07:00-21:00'), null);
+  assert.equal(saturdayWindows('segunda a sexta das 06:00 as 00:00'), null);
+  assert.equal(saturdayWindows(null), null);
+});
+
+test('sábado com "só dias úteis": só quem está aberto, sem lembrete, horário lido 1x por hora', async () => {
+  const closed = { ...q, lead_id: 'osm:node/1', name: 'Fechado' };
+  const open = { ...q, lead_id: 'osm:node/2', name: 'Aberto' };
+  const { log, deps } = setup({ queued: [closed, open], usage: { date: '2026-11-07' }, state: { lastCaptureDate: '2026-11-07' } });
+  const queue = [closed, open].map((c) => ({ ...c }));
+  deps.db.botQueuedAll = async () => queue.filter((c) => c.status === 'queued');
+  deps.db.botClaim = async (c) => { c.status = 'sending'; return true; };
+  deps.db.botTransition = async (id, from, status) => { const c = queue.find((x) => x.lead_id === id); if (!from.includes(c.status)) return false; c.status = status; log.statuses.push([id, status]); return true; };
+  deps.db.botGet = async (id) => ({ ...queue.find((x) => x.lead_id === id) });
+  deps.db.botDueFollowUp = async () => { throw new Error('lembrete no sábado'); };
+  let lookups = 0;
+  deps.openingHours = async () => { lookups++; return new Map([['osm:node/1', 'Mo-Fr 08:00-18:00'], ['osm:node/2', 'Sa 09:00-12:00']]); };
+  await tick(new Date(2026, 10, 7, 11, 40, 0), deps); // aberto fecha às 12h: perto demais
+  assert.equal(log.sent.length, 0);
+  await tick(new Date(2026, 10, 7, 11, 30, 0), deps);
+  assert.equal(lookups, 1);
+  assert.deepEqual(log.statuses, [['osm:node/2', 'active']]);
+  assert.equal(log.sent.length, 1);
+  assert.equal(queue[0].status, 'queued');
+  await tick(new Date(2026, 10, 8, 10, 0, 0), deps); // domingo não envia
+  assert.equal(log.sent.length, 1);
 });
 
 test('contador de ontem não bloqueia hoje', async () => {
