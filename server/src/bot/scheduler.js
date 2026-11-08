@@ -178,12 +178,13 @@ async function nextOpenOnSaturday(now, deps) {
     .some(([from, to]) => t >= from && t <= to - SATURDAY_CLOSING_MARGIN_MIN)) ?? null;
 }
 
-// Se até a tarde quase ninguém dos leads de hoje respondeu (todos menos 1), chama mais 2 no mesmo dia.
+// Se quase ninguém dos leads de hoje (todos menos 1) respondeu em 4 h desde a 1ª mensagem, chama mais 2 no mesmo dia.
 const EXTRA_IF_SILENT = 2;
+const SILENT_AFTER_MS = 4 * 60 * 60 * 1000;
 async function dailyLimit(now, settings, sent, db) {
   const base = Number(settings.limits?.whatsapp ?? 5);
-  if (sent < base || now.getHours() < FOLLOW_UP_HOUR) return base;
-  const silent = await db.botSilentSince(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  if (sent < base) return base;
+  const silent = await db.botSilentSince(new Date(now.getFullYear(), now.getMonth(), now.getDate()), new Date(now.getTime() - SILENT_AFTER_MS));
   return silent >= base - 1 ? base + EXTRA_IF_SILENT : base;
 }
 

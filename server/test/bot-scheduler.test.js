@@ -44,6 +44,7 @@ function setup({ config = {}, queued = [], leads = [], usage = {}, limits = {}, 
       botAddMessage: async () => true,
       botQueuedCount: async () => queue.length,
       botDueFollowUp: async () => null,
+      botSilentSince: async () => 0,
       incrementUsage: async (canal) => { log.usage.push(canal); return {}; },
     },
     search: async () => { log.captures++; return { found: leads.length, leads }; },
@@ -162,18 +163,21 @@ test('respeita limite diário e espaçamento', async () => {
   assert.equal(tooSoon.log.sent.length, 0);
 });
 
-test('tarde com 4 de 5 sem resposta libera mais 2; com 3 sem resposta ou de manhã, não', async () => {
+test('4 de 5 sem resposta há 4 h libera mais 2; com 3 sem resposta, não', async () => {
   const WED_15 = new Date(2026, 10, 4, 15, 0, 0);
   const run = async (now, silent, sentToday) => {
     const { log, deps } = setup({ queued: [q], usage: { whatsapp: sentToday }, state: { lastCaptureDate: '2026-11-04' } });
-    deps.db.botSilentSince = async () => silent;
+    deps.db.botSilentSince = async (since, until) => {
+      assert.equal(now - until, 4 * 60 * 60 * 1000); // só conta quem foi chamado há 4 h ou mais
+      return silent;
+    };
     await tick(now, deps);
     return log.sent.length;
   };
   assert.equal(await run(WED_15, 4, 5), 1);
   assert.equal(await run(WED_15, 6, 7), 0); // teto de 7
   assert.equal(await run(WED_15, 3, 5), 0);
-  assert.equal(await run(WED_10, 5, 5), 0);
+  assert.equal(await run(WED_10, 0, 5), 0); // de manhã ninguém tem 4 h ainda
 });
 
 test('horário do OSM: janelas de sábado', () => {

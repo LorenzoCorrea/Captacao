@@ -599,12 +599,12 @@ export const botDueFollowUp = async (sentBefore) => (await botRows(
   [sentBefore]
 ))[0] ?? null;
 
-// Leads abordados pela primeira vez desde `since` que ainda não responderam (resposta automática não conta).
-export const botSilentSince = async (since) => (await botRows(
+// Leads abordados pela primeira vez entre `since` e `until` que ainda não responderam (resposta automática não conta).
+export const botSilentSince = async (since, until) => (await botRows(
   `SELECT count(*)::int AS n FROM bot_conversations c
-   WHERE (SELECT min(created_at) FROM bot_messages m WHERE m.lead_id = c.lead_id AND m.source = 'bot') >= $1
+   WHERE (SELECT min(created_at) FROM bot_messages m WHERE m.lead_id = c.lead_id AND m.source = 'bot') BETWEEN $1 AND $2
      AND NOT EXISTS (SELECT 1 FROM bot_messages m WHERE m.lead_id = c.lead_id AND m.source = 'lead')`,
-  [since]
+  [since, until]
 ))[0].n;
 
 // Marca antes de enviar: um reinício no meio nunca manda o mesmo lembrete duas vezes.
