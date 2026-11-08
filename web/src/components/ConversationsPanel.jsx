@@ -29,6 +29,7 @@ const REASON = {
   won: 'Negócio fechado',
   lost: 'Sem negócio',
   later: 'Disse que fica para outro momento',
+  wrong_contact: 'Número não é desse comércio',
 };
 const reasonText = (r) => REASON[r] ?? r;
 

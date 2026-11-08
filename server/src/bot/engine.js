@@ -46,6 +46,7 @@ const REASONS = {
   human_requested: 'pediu para falar com você',
   unknown: 'fez uma pergunta que o bot não soube responder',
   asked_if_bot: 'perguntou se é um robô: o bot disse que o atendimento é automatizado e você assume',
+  wrong_contact: 'disse que o número não é desse comércio. O bot pediu desculpas e encerrou',
   later: 'disse que fica para outro momento. O bot se despediu sem bloquear o número',
 };
 
@@ -71,6 +72,7 @@ function decide({ intent, topics }, discountAsks, ctx) {
     case 'auto_reply': return { silent: true };
     case 'gatekeeper': return { text: FIXED.gatekeeper };
     case 'busy': return { text: FIXED.busy };
+    case 'wrong_contact': return { text: FIXED.wrongContact, status: 'closed', reason: 'wrong_contact' };
     case 'later': return { text: FIXED.later, status: 'closed', reason: 'later' };
     case 'accepted': return { text: acceptedText(said), status: 'ready_to_close' };
     case 'installments': return { text: FIXED.installments, status: 'paused', reason: 'installments' };

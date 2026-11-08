@@ -45,6 +45,7 @@ export const FIXED = {
   gatekeeper: 'Claro! Pode encaminhar para o responsável, por favor? Se ele quiser saber mais, é só me chamar por aqui. Obrigado!',
   busy: 'Tranquilo, sem pressa! Quando puder, é só me chamar por aqui.',
   followUp: 'Oi! Passando rapidinho para saber se viu minha mensagem. Se fizer sentido, te explico como funciona por aqui mesmo 😊',
+  wrongContact: 'Ah, desculpa pelo engano! Obrigado por avisar e bom trabalho 🙏',
   followUpLast: 'Oi, tudo bem? Vou parar de te chamar por aqui para não incomodar. Se em algum momento fizer sentido ter um site, é só me mandar uma mensagem 👍',
 };
 
@@ -63,6 +64,10 @@ export function howItWorks(niche, withPreview = false) {
   const benefit = NICHE_BENEFITS.find(([kw]) => kw.some((k) => key.includes(k)))?.[1] ?? DEFAULT_BENEFIT;
   return `Claro! Eu crio um site só do seu negócio, ${benefit}. ${withPreview ? 'Quer ver uma prévia de como ficaria o de vocês?' : 'Quer saber quanto fica?'}`;
 }
+
+// 1º lembrete com algo novo: oferece a prévia, mas pede licença antes de mandar link a quem não respondeu.
+export const followUpPreview = (name) =>
+  `Oi! Montei uma prévia de como ficaria o site de ${safeName(name)}. Quer que eu te mande o link?`;
 
 export const previewText = (name, url) =>
   `Montei uma prévia rápida para ${safeName(name)}: ${url}\n\nÉ só um rascunho. No site final eu ajusto textos, fotos e cores do jeito que vocês quiserem. O que achou?`;

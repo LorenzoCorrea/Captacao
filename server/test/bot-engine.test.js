@@ -376,6 +376,15 @@ test('"em outro momento": despede, encerra, avisa e não bloqueia', async () => 
   assert.deepEqual(log.optouts, []);
 });
 
+test('número errado: pede desculpas, encerra, avisa e não oferece o site', async () => {
+  const { conv, log, deps } = setup({ intent: 'wrong_contact', topics: [] });
+  await replyToLead(conv, deps);
+  assert.deepEqual(log.sent, [FIXED.wrongContact]);
+  assert.deepEqual([conv.status, conv.reason], ['closed', 'wrong_contact']);
+  assert.match(log.notes[0], /não é desse comércio/);
+  assert.deepEqual(parseAiContent('{"intent":"wrong_contact","topics":[]}').intent, 'wrong_contact');
+});
+
 test('prévia: manda o link quando existe; sem link, chama Lorenzo', async () => {
   const withLink = setup(ask(['preview']), { niche: 'barbearia' });
   withLink.deps.previewUrl = () => 'https://previa.exemplo/previa/s/L';

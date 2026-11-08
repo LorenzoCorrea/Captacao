@@ -1,5 +1,5 @@
 import { sendAndRecord } from './engine.js';
-import { firstMessage, FIXED } from './offer.js';
+import { firstMessage, followUpPreview, FIXED } from './offer.js';
 import { mobileFromLead, phoneKey } from './phone.js';
 import { hojeLocal } from '../date.js';
 
@@ -113,7 +113,8 @@ async function sendFollowUp(now, conv, deps) {
     if ((await gateway.state()) !== 'open') return deps.disableBot('whatsapp_disconnected');
     // Cota própria: lembrete não tira a vaga de um lead novo.
     await db.incrementUsage('followup', hojeLocal(now), now.getTime());
-    await sendAndRecord(conv, FOLLOW_UP_TEXTS[step], deps, { allow: ['active'] });
+    const text = step === 0 && deps.previewUrl?.(conv) ? followUpPreview(conv.name) : FOLLOW_UP_TEXTS[step];
+    await sendAndRecord(conv, text, deps, { allow: ['active'] });
   } catch (e) {
     console.error('[bot] falha no lembrete:', e.message);
     await db.botTransition(conv.lead_id, ['active'], 'paused', 'send_failed');

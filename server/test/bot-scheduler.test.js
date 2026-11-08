@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { tick, digestText, sendDigest, isThirdBusinessDay, monthlyPurge, businessDaysAgo, saturdayWindows } from '../src/bot/scheduler.js';
-import { FIXED } from '../src/bot/offer.js';
+import { FIXED, followUpPreview } from '../src/bot/offer.js';
 
 // Quarta-feira, 10h no fuso local.
 const WED_10 = new Date(2026, 10, 4, 10, 0, 0);
@@ -394,6 +394,20 @@ test('lembrete: de manhã não sai; a manhã é dos leads novos', async () => {
   assert.equal(seen.cutoffs, null);
   assert.equal(log.sent.length, 1);
   assert.notEqual(log.sent[0], FIXED.followUp);
+});
+
+test('1º lembrete oferece a prévia quando há link; o 2º continua sendo a despedida', async () => {
+  const first = setup();
+  withFollowUp(first.deps, due(0));
+  first.deps.previewUrl = () => 'https://x/previa/s/F';
+  await tick(WED_15, first.deps);
+  assert.deepEqual(first.log.sent, [followUpPreview('Fulano')]);
+  assert.doesNotMatch(first.log.sent[0], /https?:/, 'pede licença antes de mandar link');
+  const last = setup();
+  withFollowUp(last.deps, due(1));
+  last.deps.previewUrl = () => 'https://x/previa/s/F';
+  await tick(WED_15, last.deps);
+  assert.deepEqual(last.log.sent, [FIXED.followUpLast]);
 });
 
 test('segundo lembrete é o último e se despede', async () => {

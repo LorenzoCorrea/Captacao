@@ -1,4 +1,4 @@
-const INTENTS = ['continue', 'accepted', 'installments', 'discount', 'unknown', 'human_requested', 'asked_if_bot', 'opt_out', 'auto_reply', 'gatekeeper', 'busy', 'later'];
+const INTENTS = ['continue', 'accepted', 'installments', 'discount', 'unknown', 'human_requested', 'asked_if_bot', 'opt_out', 'auto_reply', 'gatekeeper', 'busy', 'later', 'wrong_contact'];
 const MAX_HISTORY = 20;
 
 const SYSTEM_PROMPT = `Você classifica mensagens de clientes numa conversa de WhatsApp sobre a compra de uma landing page. Você não escreve respostas: o sistema envia textos prontos conforme a sua classificação.
@@ -19,6 +19,7 @@ Intenções:
 - auto_reply: mensagem automática do comércio, não escrita por uma pessoa para esta conversa (menu de opções, boas-vindas, "agradecemos o seu contato", "responderemos em breve", apresentação padrão da atendente).
 - gatekeeper: quem respondeu não decide; o dono ou responsável não está, ou vai passar a mensagem para ele.
 - busy: está ocupado agora (em atendimento, correria) e vai ver depois.
+- wrong_contact: quem respondeu diz que não é o comércio citado (número errado, outro negócio, outra cidade).
 - unknown: qualquer outra coisa. Na dúvida, use esta.
 
 Tópicos, só com a intenção continue, no máximo dois:
