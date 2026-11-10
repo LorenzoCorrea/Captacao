@@ -385,19 +385,15 @@ test('número errado: pede desculpas, encerra, avisa e não oferece o site', asy
   assert.deepEqual(parseAiContent('{"intent":"wrong_contact","topics":[]}').intent, 'wrong_contact');
 });
 
-test('prévia: manda o link quando existe; sem link, chama Lorenzo', async () => {
-  const withLink = setup(ask(['preview']), { niche: 'barbearia' });
-  withLink.deps.previewUrl = () => 'https://previa.exemplo/previa/s/L';
-  await replyToLead(withLink.conv, withLink.deps);
-  assert.match(withLink.log.sent[0], /https:\/\/previa\.exemplo\/previa\/s\/L/);
-  const without = setup(ask(['preview']));
-  await replyToLead(without.conv, without.deps);
-  assert.deepEqual([without.log.sent, without.conv.status], [[FIXED.handoff], 'paused']);
+test('prévia: o bot aceita o pedido sem mandar link e pausa para Lorenzo montar', async () => {
+  const { conv, log, deps } = setup(ask(['preview', 'price']), { niche: 'barbearia' });
+  await replyToLead(conv, deps);
+  assert.deepEqual([log.sent, conv.status], [[FIXED.previewRequested], 'paused']);
+  assert.doesNotMatch(log.sent[0], /https?:/);
 });
 
-test('como funciona: benefício do nicho e oferta da prévia quando há link', async () => {
+test('como funciona: benefício do nicho e pergunta se quer a prévia', async () => {
   const { conv, log, deps } = setup(ask(['how_it_works']), { niche: 'Clínica de estética' });
-  deps.previewUrl = () => 'https://x/previa/s/L';
   await replyToLead(conv, deps);
   assert.match(log.sent[0], /procedimentos/);
   assert.match(log.sent[0], /prévia/);

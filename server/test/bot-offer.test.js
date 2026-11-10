@@ -123,8 +123,8 @@ test('benefício por nicho, com padrão para o resto', () => {
   assert.match(howItWorks('pizzaria'), /cardápio/);
   assert.equal(howItWorks('loja de ferragens'), ANSWERS.how_it_works);
   for (const n of ['Academia', 'clínica', 'advocacia', '']) {
-    assert.doesNotMatch(howItWorks(n, true), /R\$|https?:/);
-    assert.ok(howItWorks(n, true).length <= 300, n);
+    assert.doesNotMatch(howItWorks(n), /R\$|https?:/);
+    assert.ok(howItWorks(n).length <= 300, n);
   }
 });
 

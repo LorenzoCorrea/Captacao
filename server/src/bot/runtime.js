@@ -63,10 +63,6 @@ export function createRuntime() {
     openingHours,
     loadKnown: db.loadKnownLeads,
     createSearch: (leads, meta, { known, enrich }) => createSearch(leads, meta, known, { enrich }),
-    // Sem link público (Funnel) ou sem busca salva, o bot não oferece a prévia.
-    previewUrl: (conv) => (process.env.PUBLIC_PREVIEW_URL && conv.search_id
-      ? `${process.env.PUBLIC_PREVIEW_URL.replace(/\/+$/, '')}/previa/${conv.search_id}/${encodeURIComponent(conv.lead_id)}`
-      : null),
     setStage: (conv, stage) => (conv.search_id ? updateLead(conv.search_id, conv.lead_id, { stage }) : Promise.resolve(false)),
   };
   deps.reply = (conv) => replyToLead(conv, { ...deps, now: () => new Date() });

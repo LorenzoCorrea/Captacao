@@ -95,7 +95,6 @@ export function businessDaysAgo(now, days) {
 // Cadência anti-ban: 1º lembrete no dia útil seguinte, 2º e último 3 dias úteis depois do primeiro envio.
 // Lembretes só à tarde: a manhã fica para os leads novos.
 const FOLLOW_UP_AFTER_DAYS = [1, 3];
-const FOLLOW_UP_TEXTS = [FIXED.followUp, FIXED.followUpLast];
 const FOLLOW_UP_HOUR = 14;
 const MAX_FOLLOW_UPS_PER_DAY = 10;
 
@@ -113,7 +112,7 @@ async function sendFollowUp(now, conv, deps) {
     if ((await gateway.state()) !== 'open') return deps.disableBot('whatsapp_disconnected');
     // Cota própria: lembrete não tira a vaga de um lead novo.
     await db.incrementUsage('followup', hojeLocal(now), now.getTime());
-    const text = step === 0 && deps.previewUrl?.(conv) ? followUpPreview(conv.name) : FOLLOW_UP_TEXTS[step];
+    const text = step === 0 ? followUpPreview(conv.name) : FIXED.followUpLast;
     await sendAndRecord(conv, text, deps, { allow: ['active'] });
   } catch (e) {
     console.error('[bot] falha no lembrete:', e.message);

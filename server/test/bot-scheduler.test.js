@@ -380,7 +380,7 @@ test('lembrete: só à tarde, com cota própria e antes do lead novo', async () 
   const { log, deps } = setup({ queued: [q], usage: { whatsapp: 5 } });
   const seen = withFollowUp(deps, due(0));
   await tick(WED_15, deps);
-  assert.deepEqual(log.sent, [FIXED.followUp]);
+  assert.deepEqual(log.sent, [followUpPreview('Fulano')]);
   assert.deepEqual(log.usage, ['followup'], 'não gasta a vaga de lead novo');
   assert.deepEqual(seen.marked, [0]);
   // Prazos: 1º lembrete para quem foi chamado até terça; 2º para quem foi chamado até a sexta anterior.
@@ -393,19 +393,17 @@ test('lembrete: de manhã não sai; a manhã é dos leads novos', async () => {
   await tick(WED_10, deps);
   assert.equal(seen.cutoffs, null);
   assert.equal(log.sent.length, 1);
-  assert.notEqual(log.sent[0], FIXED.followUp);
+  assert.notEqual(log.sent[0], followUpPreview('Fulano'));
 });
 
-test('1º lembrete oferece a prévia quando há link; o 2º continua sendo a despedida', async () => {
+test('1º lembrete pergunta se quer a prévia, sem afirmar que já existe; o 2º é a despedida', async () => {
   const first = setup();
   withFollowUp(first.deps, due(0));
-  first.deps.previewUrl = () => 'https://x/previa/s/F';
   await tick(WED_15, first.deps);
   assert.deepEqual(first.log.sent, [followUpPreview('Fulano')]);
-  assert.doesNotMatch(first.log.sent[0], /https?:/, 'pede licença antes de mandar link');
+  assert.doesNotMatch(first.log.sent[0], /https?:|montei/i);
   const last = setup();
   withFollowUp(last.deps, due(1));
-  last.deps.previewUrl = () => 'https://x/previa/s/F';
   await tick(WED_15, last.deps);
   assert.deepEqual(last.log.sent, [FIXED.followUpLast]);
 });

@@ -39,12 +39,13 @@ export const FIXED = {
   discount: `Desconto eu não consigo fazer, mas ${OFFER.parcelamento}, se ajudar. O valor é ${OFFER.preco}.`,
   handoff: 'Deixa eu ver isso direitinho e já te respondo por aqui.',
   botQuestion: 'Esta parte do atendimento é automatizada, mas eu acompanho tudo e já assumo a conversa por aqui. — Lorenzo',
+  // A prévia é montada por Lorenzo com fotos e dados reais: o bot só aceita o pedido e pausa.
+  previewRequested: 'Combinado! Vou montar com calma, com as informações de vocês, e te mando por aqui assim que ficar pronta 😊',
   goodbye: 'Tranquilo, não te chamo mais. Agradeço pelo retorno e bom trabalho!',
   // "Em outro momento" não é pedido de saída: despede sem bloquear o número.
   later: 'Tranquilo! Agradeço pelo retorno. Se futuramente fizer sentido, fico à disposição 👍',
   gatekeeper: 'Claro! Pode encaminhar para o responsável, por favor? Se ele quiser saber mais, é só me chamar por aqui. Obrigado!',
   busy: 'Tranquilo, sem pressa! Quando puder, é só me chamar por aqui.',
-  followUp: 'Oi! Passando rapidinho para saber se viu minha mensagem. Se fizer sentido, te explico como funciona por aqui mesmo 😊',
   wrongContact: 'Ah, desculpa pelo engano! Obrigado por avisar e bom trabalho 🙏',
   followUpLast: 'Oi, tudo bem? Vou parar de te chamar por aqui para não incomodar. Se em algum momento fizer sentido ter um site, é só me mandar uma mensagem 👍',
 };
@@ -59,18 +60,15 @@ const NICHE_BENEFITS = [
 ];
 const DEFAULT_BENEFIT = 'com a cara de vocês. Assim fica mais fácil o cliente te encontrar na internet, ver o que você oferece e te chamar direto';
 
-export function howItWorks(niche, withPreview = false) {
+export function howItWorks(niche) {
   const key = String(niche ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
   const benefit = NICHE_BENEFITS.find(([kw]) => kw.some((k) => key.includes(k)))?.[1] ?? DEFAULT_BENEFIT;
-  return `Claro! Eu crio um site só do seu negócio, ${benefit}. ${withPreview ? 'Quer ver uma prévia de como ficaria o de vocês?' : 'Quer saber quanto fica?'}`;
+  return `Claro! Eu crio um site só do seu negócio, ${benefit}. Quer que eu monte uma prévia de como ficaria o de vocês, sem compromisso?`;
 }
 
-// 1º lembrete com algo novo: oferece a prévia, mas pede licença antes de mandar link a quem não respondeu.
+// 1º lembrete com algo novo: pergunta se quer a prévia; quem monta é Lorenzo, depois do sim.
 export const followUpPreview = (name) =>
-  `Oi! Montei uma prévia de como ficaria o site de ${safeName(name)}. Quer que eu te mande o link?`;
-
-export const previewText = (name, url) =>
-  `Montei uma prévia rápida para ${safeName(name)}: ${url}\n\nÉ só um rascunho. No site final eu ajusto textos, fotos e cores do jeito que vocês quiserem. O que achou?`;
+  `Oi! Posso montar uma prévia de como ficaria o site de ${safeName(name)}, sem compromisso. Quer que eu faça?`;
 
 // Únicas respostas livres do bot: a IA escolhe o tópico e nunca escreve o texto.
 export const ANSWERS = {
@@ -103,13 +101,12 @@ export function acceptedText(said = '') {
   return said.includes(OFFER.preco) ? trimRepeats(FIXED.acceptedShort, said) : FIXED.accepted;
 }
 
-function topicText(topic, { niche, name, previewUrl }) {
-  if (topic === 'how_it_works') return howItWorks(niche, Boolean(previewUrl));
-  if (topic === 'preview') return previewUrl ? previewText(name, previewUrl) : null;
+function topicText(topic, { niche }) {
+  if (topic === 'how_it_works') return howItWorks(niche);
   return ANSWERS[topic];
 }
 
-// ctx: { said, niche, name, previewUrl }
+// ctx: { said, niche }
 export function answerFor(topics, ctx = {}) {
   const said = ctx.said ?? '';
   if (!Array.isArray(topics) || !topics.length) return null;

@@ -44,6 +44,7 @@ const REASONS = {
   installments: 'quer parcelar: gere o link do Mercado Pago',
   discount_insist: 'insistiu em desconto',
   human_requested: 'pediu para falar com você',
+  preview_requested: 'quer a prévia do site: monte com as fotos e informações dele e mande por aqui',
   unknown: 'fez uma pergunta que o bot não soube responder',
   asked_if_bot: 'perguntou se é um robô: o bot disse que o atendimento é automatizado e você assume',
   wrong_contact: 'disse que o número não é desse comércio. O bot pediu desculpas e encerrou',
@@ -83,6 +84,7 @@ function decide({ intent, topics }, discountAsks, ctx) {
     case 'asked_if_bot': return { text: FIXED.botQuestion, status: 'paused', reason: 'asked_if_bot' };
     case 'human_requested': return { text: FIXED.handoff, status: 'paused', reason: 'human_requested' };
     case 'continue': {
+      if (topics?.includes('preview')) return { text: FIXED.previewRequested, status: 'paused', reason: 'preview_requested' };
       const text = answerFor(topics, ctx);
       if (text) return { text };
     }
@@ -142,7 +144,7 @@ export async function replyToLead(conv, deps) {
 
   const discountAsks = answer.intent === 'discount' ? (current.discount_asks ?? 0) + 1 : 0;
   const said = history.filter((m) => m.source === 'bot').map((m) => m.body).join('\n');
-  const decision = decide(answer, discountAsks, { said, niche: current.niche, name: current.name, previewUrl: deps.previewUrl?.(current) ?? null });
+  const decision = decide(answer, discountAsks, { said, niche: current.niche });
   if (decision.silent) {
     // Resposta automática: marca para não voltar à fila e espera uma pessoa escrever.
     const trailing = [];
