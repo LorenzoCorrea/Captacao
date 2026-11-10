@@ -12,13 +12,14 @@ test('oferta tem os valores do spec', () => {
   assert.match(ANSWERS.price, /4 dias corridos/);
 });
 
-test('primeira mensagem é curta, fala como Lorenzo, oferece saída e não despeja a oferta', () => {
+test('primeira mensagem é curta, fala como Lorenzo e não despeja a oferta', () => {
   for (const variant of ['A', 'B']) {
     const text = firstMessage(variant, 'Barbearia 24h');
     assert.match(text, /Lorenzo/);
     assert.doesNotMatch(text, /assistente virtual|R\$|domínio/i);
     assert.match(text, /Barbearia 24h/);
-    assert.match(text, /não te chamo mais/);
+    // Lorenzo achou o "não te chamo mais" invasivo na abertura; o pedido de saída segue valendo pelo isOptOut.
+    assert.doesNotMatch(text, /não te chamo mais/);
     assert.ok(text.length <= 220, `${variant}: ${text.length}`);
   }
 });

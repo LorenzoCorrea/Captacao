@@ -21,8 +21,8 @@ export function safeName(name) {
 }
 
 const FIRST = {
-  A: 'Oi, tudo bem? Aqui é o Lorenzo, faço sites para comércios. Não encontrei um site de {nome} e acho que posso ajudar. Posso te contar como funciona? Se não fizer sentido, é só avisar que não te chamo mais.',
-  B: 'Oi! Sou o Lorenzo, faço sites para comércios. Vi que {nome} ainda não tem um site próprio. Posso te explicar como funciona? Se não tiver interesse, é só me avisar que não te chamo mais.',
+  A: 'Oi, tudo bem? Aqui é o Lorenzo, faço sites para comércios. Não encontrei um site de {nome} e acho que posso ajudar. Posso te contar como funciona?',
+  B: 'Oi! Sou o Lorenzo, faço sites para comércios. Vi que {nome} ainda não tem um site próprio. Posso te explicar como funciona?',
 };
 
 export function firstMessage(variant, name) {

@@ -159,7 +159,14 @@ export function createBotRouter(deps) {
   router.put('/api/bot/config', guard(async (req, res) => {
     const patch = validConfig(req.body);
     if (!patch) return res.status(400).json({ error: 'Configuração inválida.' });
+    const current = await deps.settings();
+    const where = (c) => JSON.stringify([c?.cities ?? [], c?.niches ?? [], c?.radiusKm ?? DEFAULT_BOT_CONFIG.radiusKm]);
     await saveConfig(patch);
+    // Cidade, nicho ou raio novos: capta de novo no próximo minuto, sem esperar a meia-noite.
+    // shortcut: se a captação estiver rodando nesse instante, ela grava o dia ao terminar e a nova config fica para amanhã.
+    if (where(current?.botConfig) !== where(patch)) {
+      await db.saveSetting('botState', { ...current?.botState, lastCaptureDate: null, lastCaptureAttempt: 0 });
+    }
     res.json({ ok: true });
   }));
 

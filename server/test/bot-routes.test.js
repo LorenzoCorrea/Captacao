@@ -114,7 +114,15 @@ test('configuração inválida é recusada', async (t) => {
   }
   assert.equal(log.saved.length, 0);
   assert.equal((await call('/api/bot/config', 'PUT', { cities: [{ name: 'POA', lat: -30, lng: -51 }], niches: ['barbearia'], radiusKm: 5, sendFrom: '09:00', sendTo: '18:00', weekdaysOnly: true })).status, 200);
-  assert.equal(log.saved.length, 1);
+  // Cidade nova: salva a config e libera a captação no mesmo dia.
+  assert.deepEqual(log.saved.map(([k]) => k), ['botConfig', 'botState']);
+  assert.equal(log.saved[1][1].lastCaptureDate, null);
+});
+
+test('mudar só o horário não refaz a captação', async (t) => {
+  const { log, call } = await start(t);
+  assert.equal((await call('/api/bot/config', 'PUT', { cities: [], niches: [], radiusKm: 5, sendFrom: '10:00', sendTo: '18:00', weekdaysOnly: true })).status, 200);
+  assert.deepEqual(log.saved.map(([k]) => k), ['botConfig']);
 });
 
 test('status zera contador de outro dia e informa o modo', async (t) => {
