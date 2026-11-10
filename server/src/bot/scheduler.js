@@ -9,6 +9,9 @@ const MAX_QUEUE = 50; // sem acumular mais do que se envia em alguns dias
 const TICK_MS = 60 * 1000;
 // Busca de celular na internet: poucas por dia para o buscador não bloquear.
 const MAX_ENRICH_PER_DAY = 15;
+// Nichos do Brasil todo (rastreamento): no máximo 2 dos envios do dia, sem aumentar o total.
+const NATIONAL_PER_DAY = 2;
+const NATIONAL_ENRICH_PER_DAY = 5;
 
 const minutes = (hhmm) => {
   const [h, m] = String(hhmm).split(':').map(Number);
@@ -45,42 +48,56 @@ async function capture(now, config, state, deps) {
   const { db } = deps;
   if (await db.botQueuedCount() >= MAX_QUEUE) return deps.saveState({ ...state, lastCaptureDate: today });
 
-  let enrichLeft = MAX_ENRICH_PER_DAY;
+  // Nacionais primeiro, com parte da cota de busca na internet: a lista é curta e quase toda sem celular no mapa.
+  const nationalBudget = { enrich: NATIONAL_ENRICH_PER_DAY };
+  for (const niche of config.nationalNiches ?? []) {
+    const { found, leads } = await deps.searchNational(niche);
+    // Sem cidade: o celular da internet tem de bater com o DDD do telefone do próprio lead.
+    // Sem telefone no mapa, vale o da internet (null = sem checagem): o nome da rastreadora costuma ser único.
+    await enqueueFresh(leads, (lead) => (lead.phone ? ddd(lead.phone) : null), { city: 'Brasil', niche, found }, nationalBudget, deps);
+  }
+  const budget = { enrich: MAX_ENRICH_PER_DAY - (NATIONAL_ENRICH_PER_DAY - Math.max(nationalBudget.enrich, 0)) };
   for (const city of config.cities ?? []) {
     for (const niche of config.niches ?? []) {
       const { leads } = await deps.search({ niche, city: city.name, lat: city.lat, lng: city.lng, radiusKm: config.radiusKm ?? 5 });
-      const noSite = leads.filter((lead) => !lead.hasWebsite);
       const cityDdd = mostCommonDdd(leads);
-      const known = await deps.loadKnown(noSite.map((l) => l.id));
-      const fresh = [];
-      const toEnrich = [];
-      for (const lead of noSite) {
-        const k = known.get(lead.id);
-        // Lead que já mudou de estágio foi trabalhado por Lorenzo e não recebe abordagem fria.
-        if (k?.stage && k.stage !== 'novo') continue;
-        const found = k?.enrichmentStatus === 'done' ? k.enrichment : null;
-        if (found?.discoveredWebsite) continue; // a busca achou site: não é lead quente
-        const web = mobileFromLead(found?.mobilePhone);
-        // Celular da internet de outro DDD costuma ser de outro negócio com nome parecido.
-        const phone = mobileFromLead(lead.phone) ?? (web && ddd(web) === cityDdd ? web : null);
-        if (phone) {
-          if (!(await db.botGetByPhoneKey(phoneKey(phone)))) fresh.push({ lead, phone });
-        } else if (!k?.enrichmentStatus || k.enrichmentStatus === 'pending' || k.enrichment?.partial) {
-          // partial = o buscador bloqueou: não é um "não achou" de verdade.
-          // Sem celular no mapa: procura na internet; o achado entra na captação do dia seguinte.
-          if (enrichLeft-- > 0) toEnrich.push(lead);
-        }
-      }
       const meta = { city: city.name, niche, lat: city.lat, lng: city.lng, radiusKm: config.radiusKm ?? 5, found: leads.length };
-      if (toEnrich.length) deps.createSearch(toEnrich, meta, { known, enrich: true });
-      if (!fresh.length) continue;
-      const searchId = deps.createSearch(fresh.map((f) => f.lead), meta, { known, enrich: false });
-      for (const { lead, phone } of fresh) {
-        await db.botEnqueue({ leadId: lead.id, phone, phoneKey: phoneKey(phone), name: lead.name, niche, searchId });
-      }
+      await enqueueFresh(leads, () => cityDdd ?? '', meta, budget, deps); // '' nunca bate: sem DDD da cidade, descarta
     }
   }
   await deps.saveState({ ...state, lastCaptureDate: today });
+}
+
+async function enqueueFresh(leads, dddFor, meta, budget, deps) {
+  const { db } = deps;
+  const noSite = leads.filter((lead) => !lead.hasWebsite);
+  const known = await deps.loadKnown(noSite.map((l) => l.id));
+  const fresh = [];
+  const toEnrich = [];
+  for (const lead of noSite) {
+    const k = known.get(lead.id);
+    // Lead que já mudou de estágio foi trabalhado por Lorenzo e não recebe abordagem fria.
+    if (k?.stage && k.stage !== 'novo') continue;
+    const found = k?.enrichmentStatus === 'done' ? k.enrichment : null;
+    if (found?.discoveredWebsite) continue; // a busca achou site: não é lead quente
+    const web = mobileFromLead(found?.mobilePhone);
+    // Celular da internet de outro DDD costuma ser de outro negócio com nome parecido.
+    const expected = dddFor(lead);
+    const phone = mobileFromLead(lead.phone) ?? (web && (expected === null || ddd(web) === expected) ? web : null);
+    if (phone) {
+      if (!(await db.botGetByPhoneKey(phoneKey(phone)))) fresh.push({ lead, phone });
+    } else if (!k?.enrichmentStatus || k.enrichmentStatus === 'pending' || k.enrichment?.partial) {
+      // partial = o buscador bloqueou: não é um "não achou" de verdade.
+      // Sem celular no mapa: procura na internet; o achado entra na captação do dia seguinte.
+      if (budget.enrich-- > 0) toEnrich.push(lead);
+    }
+  }
+  if (toEnrich.length) deps.createSearch(toEnrich, meta, { known, enrich: true });
+  if (!fresh.length) return;
+  const searchId = deps.createSearch(fresh.map((f) => f.lead), meta, { known, enrich: false });
+  for (const { lead, phone } of fresh) {
+    await db.botEnqueue({ leadId: lead.id, phone, phoneKey: phoneKey(phone), name: lead.name, niche: meta.niche, searchId });
+  }
 }
 
 export function businessDaysAgo(now, days) {
@@ -188,6 +205,15 @@ async function dailyLimit(now, settings, sent, db) {
   return silent >= base - 1 ? base + EXTRA_IF_SILENT : base;
 }
 
+// Nacionais têm vez até a cota deles; depois, só os das cidades.
+async function nextWeekday(today, national, db) {
+  if (!national.size) return db.botNextQueued();
+  const queued = await db.botQueuedAll();
+  const isNational = (c) => national.has(c.niche);
+  const room = (today.national ?? 0) < NATIONAL_PER_DAY;
+  return (room ? queued.find(isNational) : null) ?? queued.find((c) => !isNational(c)) ?? null;
+}
+
 async function sendNext(now, config, settings, deps) {
   const today = usageToday(now, settings.usage);
   if (!canSendNow(now, config) || !spaced(now, settings.limits, today)) return;
@@ -199,7 +225,8 @@ async function sendNext(now, config, settings, deps) {
     if (due) return sendFollowUp(now, due, deps);
   }
   if ((today.whatsapp ?? 0) >= (await dailyLimit(now, settings, today.whatsapp ?? 0, db))) return;
-  const conv = saturday ? await nextOpenOnSaturday(now, deps) : await db.botNextQueued();
+  const national = new Set(config.nationalNiches ?? []);
+  const conv = saturday ? await nextOpenOnSaturday(now, deps) : await nextWeekday(today, national, db);
   if (!conv || !(await db.botClaim(conv))) return;
 
   let id;
@@ -220,6 +247,7 @@ async function sendNext(now, config, settings, deps) {
   try {
     // Conta antes de enviar: sem o registro, o limite anti-ban deixaria de valer.
     await db.incrementUsage('whatsapp', hojeLocal(now), now.getTime());
+    if (national.has(conv.niche)) await db.incrementUsage('national', hojeLocal(now), now.getTime());
   } catch (e) {
     console.error('[bot] falha ao contar o envio:', e.message);
     await db.botTransition(conv.lead_id, ['sending'], 'queued');

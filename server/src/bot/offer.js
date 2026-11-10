@@ -53,6 +53,7 @@ export const FIXED = {
 // O benefício muda com o ramo; `kw` casa por trecho do nicho sem acento.
 const NICHE_BENEFITS = [
   [['clinic', 'consult', 'odonto', 'dent', 'estetic', 'fisio', 'nutri', 'psicol', 'medic', 'saude', 'veterin'], 'com os procedimentos, a equipe e a localização. Passa mais confiança para quem pesquisa antes de marcar e facilita o agendamento pelo WhatsApp'],
+  [['rastre'], 'com os planos, a cobertura e o app, e um botão para pedir cotação pelo WhatsApp. Passa confiança para quem pesquisa antes de contratar'],
   [['academia', 'pilates', 'crossfit', 'fitness', 'muscula'], 'com as modalidades, os horários e os planos. Quem quer conhecer o espaço vê tudo antes de visitar e já chama no WhatsApp'],
   [['advoc', 'advog', 'jurid', 'contab', 'contador'], 'com as áreas de atuação e as formas de contato. Passa credibilidade para quem pesquisa no Google antes de ligar'],
   [['barbear', 'salao', 'beleza', 'manicure', 'cabelei', 'unha', 'sobrancelha'], 'com os serviços, a localização e um botão para agendar direto pelo WhatsApp'],

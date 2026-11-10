@@ -63,11 +63,14 @@ export async function handleWebhook(payload, deps) {
 
 function validConfig(body) {
   const time = (v) => typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
-  const { cities, niches, radiusKm, sendFrom, sendTo, weekdaysOnly } = body ?? {};
+  const { cities, niches, radiusKm, sendFrom, sendTo, weekdaysOnly, nationalNiches } = body ?? {};
   const okCity = (c) => typeof c?.name === 'string' && Number.isFinite(c?.lat) && Math.abs(c.lat) <= 90 && Number.isFinite(c?.lng) && Math.abs(c.lng) <= 180;
   if (!Array.isArray(cities) || !cities.every(okCity) || !Array.isArray(niches) || !niches.every((n) => typeof n === 'string' && n.trim())) return null;
   if (!Number.isFinite(radiusKm) || radiusKm < 0.5 || radiusKm > 30 || !time(sendFrom) || !time(sendTo) || sendFrom >= sendTo || typeof weekdaysOnly !== 'boolean') return null;
-  return { cities: cities.map(({ name, lat, lng }) => ({ name, lat, lng })), niches: niches.map((n) => n.trim()), radiusKm, sendFrom, sendTo, weekdaysOnly };
+  if (nationalNiches !== undefined && !(Array.isArray(nationalNiches) && nationalNiches.every((n) => typeof n === 'string' && n.trim()))) return null;
+  const config = { cities: cities.map(({ name, lat, lng }) => ({ name, lat, lng })), niches: niches.map((n) => n.trim()), radiusKm, sendFrom, sendTo, weekdaysOnly };
+  // A tela não manda os nichos nacionais: ausente, mantém o que já está salvo.
+  return nationalNiches === undefined ? config : { ...config, nationalNiches: nationalNiches.map((n) => n.trim()) };
 }
 
 function sameSecret(given) {
@@ -160,11 +163,11 @@ export function createBotRouter(deps) {
     const patch = validConfig(req.body);
     if (!patch) return res.status(400).json({ error: 'Configuração inválida.' });
     const current = await deps.settings();
-    const where = (c) => JSON.stringify([c?.cities ?? [], c?.niches ?? [], c?.radiusKm ?? DEFAULT_BOT_CONFIG.radiusKm]);
+    const where = (c) => JSON.stringify([c?.cities ?? [], c?.niches ?? [], c?.radiusKm ?? DEFAULT_BOT_CONFIG.radiusKm, c?.nationalNiches ?? []]);
     await saveConfig(patch);
     // Cidade, nicho ou raio novos: capta de novo no próximo minuto, sem esperar a meia-noite.
     // shortcut: se a captação estiver rodando nesse instante, ela grava o dia ao terminar e a nova config fica para amanhã.
-    if (where(current?.botConfig) !== where(patch)) {
+    if (where(current?.botConfig) !== where({ ...current?.botConfig, ...patch })) {
       await db.saveSetting('botState', { ...current?.botState, lastCaptureDate: null, lastCaptureAttempt: 0 });
     }
     res.json({ ok: true });

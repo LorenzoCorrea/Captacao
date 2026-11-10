@@ -414,3 +414,33 @@ test('segundo lembrete é o último e se despede', async () => {
   await tick(WED_15, deps);
   assert.deepEqual(log.sent, [FIXED.followUpLast]);
 });
+
+test('nicho nacional: celular da internet bate com o DDD do telefone do lead; sem telefone, vale o da internet', async () => {
+  const national = [lead('osm:n1', '+55 31 3000-0001'), lead('osm:n2', '+55 86 3000-0002'), lead('osm:n3', '(54) 98877-6655'), lead('osm:n4', null)];
+  const known = new Map([
+    ['osm:n1', { stage: 'novo', enrichmentStatus: 'done', enrichment: { mobilePhone: '(31) 99876-5432' } }],
+    ['osm:n2', { stage: 'novo', enrichmentStatus: 'done', enrichment: { mobilePhone: '(11) 99876-5432' } }],
+    ['osm:n4', { stage: 'novo', enrichmentStatus: 'done', enrichment: { mobilePhone: '(85) 99111-2222' } }],
+  ]);
+  const { log, deps } = setup({ config: { nationalNiches: ['rastreamento veicular'], cities: [] }, known });
+  deps.searchNational = async () => ({ found: national.length, leads: national });
+  await tick(WED_10, deps);
+  assert.deepEqual(log.enqueued.map((c) => [c.leadId, c.phone, c.niche]), [
+    ['osm:n1', '5531998765432', 'rastreamento veicular'],
+    ['osm:n3', '5554988776655', 'rastreamento veicular'],
+    ['osm:n4', '5585991112222', 'rastreamento veicular'],
+  ]);
+});
+
+test('nicho nacional: no máximo 2 por dia, sem aumentar o total', async () => {
+  const city = { lead_id: 'c1', phone: '5551991234567', name: 'Clínica', niche: 'barbearia', status: 'queued' };
+  const nat = { lead_id: 'n1', phone: '5531998765432', name: 'Rastreadora', niche: 'rastreamento veicular', status: 'queued' };
+  for (const [sentNational, expected] of [[0, 'n1'], [2, 'c1']]) {
+    const { log, deps } = setup({ queued: [city, nat], config: { nationalNiches: ['rastreamento veicular'] }, usage: { national: sentNational }, state: { lastCaptureDate: '2026-11-04' } });
+    let claimed = null;
+    deps.db.botClaim = async (c) => { claimed = c.lead_id; return false; };
+    await tick(WED_10, deps);
+    assert.equal(claimed, expected, `com ${sentNational} nacionais hoje`);
+    assert.deepEqual(log.sent, []);
+  }
+});

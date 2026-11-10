@@ -4,7 +4,7 @@ import { askAi } from './ai.js';
 import { DEFAULT_BOT_CONFIG } from './config.js';
 import { createGateway } from './gateway.js';
 import { replyToLead } from './engine.js';
-import { buscarEstabelecimentos, openingHours } from '../data/osmProvider.js';
+import { buscarEstabelecimentos, buscarNacional, openingHours } from '../data/osmProvider.js';
 import { createSearch, updateLead } from '../enrichment/enricher.js';
 
 
@@ -60,6 +60,7 @@ export function createRuntime() {
     savePurgedMonth: (month) => db.saveSetting('botPurgedMonth', month),
     purgeMessages: async (before) => ({ bot: await db.botPurgeMessages(before), evolution: await purgeEvolution(before) }),
     search: buscarEstabelecimentos,
+    searchNational: buscarNacional,
     openingHours,
     loadKnown: db.loadKnownLeads,
     createSearch: (leads, meta, { known, enrich }) => createSearch(leads, meta, known, { enrich }),

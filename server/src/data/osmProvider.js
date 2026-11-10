@@ -38,6 +38,8 @@ const NICHE_GROUPS = [
   { kw: ['arquitet'], tags: ['office=architect'] },
   { kw: ['psicol', 'terapeut', 'terapia'], tags: ['healthcare=psychotherapist', 'office=therapist'] },
   { kw: ['fisio'], tags: ['healthcare=physiotherapist'] },
+  // Rastreadora não tem tag própria no OSM: só a busca por nome acha.
+  { kw: ['rastre'], tags: [] },
   { kw: ['otica', 'oculos'], tags: ['shop=optician'] },
   { kw: ['mecanic', 'funilaria', 'oficina', 'autocenter'], tags: ['shop=car_repair', 'craft=car_repair'] },
   // Construção civil: empreiteiras, construtoras, reformas. Cobre vários
@@ -325,6 +327,15 @@ export async function buscarEstabelecimentos({ niche, city, lat, lng, radiusKm }
   // Falhou tudo e não sobrou nada: aí sim é erro de verdade (502 pro usuário).
   if (erroFase1 && !elements.length) throw erroFase1;
   return guardarResultado(cacheKey, elements, niche);
+}
+
+// Nicho do Brasil todo: só busca por nome na base local. Sem fallback no Overpass, que não aguenta um raio desse tamanho.
+const CENTRO_BRASIL = { lat: -14.2, lng: -51.9, radiusKm: 2600 };
+export async function buscarNacional(niche) {
+  const { kws } = resolveNiche(niche);
+  const local = await buscarOsmLocal({ tags: [], nameRegex: kws.join('|'), ...CENTRO_BRASIL, limit: 2000 });
+  if (!local) throw new Error('base local de estabelecimentos indisponível');
+  return guardarResultado(`nacional|${normalize(niche)}`, local, niche);
 }
 
 function guardarResultado(cacheKey, elements, niche) {
