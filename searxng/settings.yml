@@ -7,3 +7,16 @@ server:
 search:
   formats: [html, json]
   default_lang: pt-BR
+# Mais motores grátis: com vários, o bloqueio de um (DuckDuckGo/Brave na madrugada) não zera a busca.
+# Google e Qwant negam acesso ao IP do Zima; Wikipedia só dá timeout e não tem telefone.
+engines:
+  - name: bing
+    disabled: false
+  - name: yahoo
+    disabled: false
+  - name: google
+    disabled: true
+  - name: qwant
+    disabled: true
+  - name: wikipedia
+    disabled: true
