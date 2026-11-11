@@ -144,7 +144,7 @@ export async function replyToLead(conv, deps) {
 
   const discountAsks = answer.intent === 'discount' ? (current.discount_asks ?? 0) + 1 : 0;
   const said = history.filter((m) => m.source === 'bot').map((m) => m.body).join('\n');
-  const decision = decide(answer, discountAsks, { said, niche: current.niche });
+  const decision = decide(answer, discountAsks, { said, niche: current.niche, name: current.name });
   if (decision.silent) {
     // Resposta automática: marca para não voltar à fila e espera uma pessoa escrever.
     const trailing = [];

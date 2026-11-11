@@ -132,3 +132,27 @@ test('pagamento único explica a renovação', () => {
   assert.match(ANSWERS.one_time, /único/);
   assert.match(ANSWERS.one_time, /R\$ 50 por ano/);
 });
+
+test('abertura muda com o ramo, reconhecido pelo nicho ou pelo nome', () => {
+  const casos = [
+    ['salão de beleza', 'Barbearia Davi', /barbearias/],
+    ['salão de beleza', 'Centro de Estética Novo Visual', /estéticas/],
+    ['salão de beleza', 'Salão Miragem', /salões/],
+    ['fisioterapia', 'Carmem Mainardi Fisioterapeuta', /saúde/],
+    ['academia', 'Move It', /academias/],
+    ['escritório de advocacia', 'Silva Advogados', /escritórios/],
+    ['rastreamento veicular', 'Skyfleet', /rastreamento/],
+    ['pizzaria', 'Bella', /restaurantes/],
+  ];
+  for (const [niche, name, re] of casos) {
+    const text = firstMessage('A', name, niche);
+    assert.match(text, re, name);
+    assert.match(text, /Lorenzo/);
+    assert.ok(text.includes(name), name);
+    assert.doesNotMatch(text, /R\$|domínio|não te chamo mais|https?:/i);
+    assert.ok(text.length <= 230, `${name}: ${text.length}`);
+  }
+  // Ramo desconhecido segue no A/B genérico.
+  assert.equal(firstMessage('B', 'Ferragens Zé', 'loja de ferragens'), firstMessage('B', 'Ferragens Zé'));
+  assert.match(howItWorks('salão de beleza', 'Centro de Estética X'), /procedimentos/);
+});

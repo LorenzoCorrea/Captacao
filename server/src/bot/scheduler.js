@@ -255,7 +255,7 @@ async function sendNext(now, config, settings, deps) {
   }
   try {
     const variant = conv.lead_id.length % 2 === 0 ? 'A' : 'B';
-    id = await sendAndRecord(conv, firstMessage(variant, conv.name), deps, { allow: ['sending'] });
+    id = await sendAndRecord(conv, firstMessage(variant, conv.name, conv.niche), deps, { allow: ['sending'] });
   } catch (e) {
     console.error('[bot] falha no envio:', e.message);
     // A mensagem pode ter saído: nunca reenvia sozinho.

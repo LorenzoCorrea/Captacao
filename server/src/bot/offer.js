@@ -25,8 +25,10 @@ const FIRST = {
   B: 'Oi! Sou o Lorenzo, faço sites para comércios. Vi que {nome} ainda não tem um site próprio. Posso te explicar como funciona?',
 };
 
-export function firstMessage(variant, name) {
-  const template = FIRST[variant] ?? FIRST.A;
+// Ramo reconhecido: abre pelo resultado que importa àquele dono; senão, A/B genérico.
+export function firstMessage(variant, name, niche = '') {
+  const hook = nicheOf(niche, name)?.hook;
+  const template = hook ? `Oi, tudo bem? Aqui é o Lorenzo. ${hook} Vi que {nome} ainda não tem site próprio. Posso te mostrar como funciona?` : FIRST[variant] ?? FIRST.A;
   return template.replace(/\{([^{}]*)\}/g, (_, key) => (key === 'nome' ? safeName(name) : OFFER[key]));
 }
 
@@ -50,20 +52,30 @@ export const FIXED = {
   followUpLast: 'Oi, tudo bem? Vou parar de te chamar por aqui para não incomodar. Se em algum momento fizer sentido ter um site, é só me mandar uma mensagem 👍',
 };
 
-// O benefício muda com o ramo; `kw` casa por trecho do nicho sem acento.
-const NICHE_BENEFITS = [
-  [['clinic', 'consult', 'odonto', 'dent', 'estetic', 'fisio', 'nutri', 'psicol', 'medic', 'saude', 'veterin'], 'com os procedimentos, a equipe e a localização. Passa mais confiança para quem pesquisa antes de marcar e facilita o agendamento pelo WhatsApp'],
-  [['rastre'], 'com os planos, a cobertura e o app, e um botão para pedir cotação pelo WhatsApp. Passa confiança para quem pesquisa antes de contratar'],
-  [['academia', 'pilates', 'crossfit', 'fitness', 'muscula'], 'com as modalidades, os horários e os planos. Quem quer conhecer o espaço vê tudo antes de visitar e já chama no WhatsApp'],
-  [['advoc', 'advog', 'jurid', 'contab', 'contador'], 'com as áreas de atuação e as formas de contato. Passa credibilidade para quem pesquisa no Google antes de ligar'],
-  [['barbear', 'salao', 'beleza', 'manicure', 'cabelei', 'unha', 'sobrancelha'], 'com os serviços, a localização e um botão para agendar direto pelo WhatsApp'],
-  [['restaurante', 'lanchonete', 'pizz', 'hamburg', 'padaria', 'confeit', 'cafe', 'comida'], 'com o cardápio, os horários e a localização, e um botão para pedir pelo WhatsApp'],
+// Abertura e benefício mudam com o ramo. `kw` casa por trecho do nicho + nome, sem acento:
+// "salão de beleza" no OSM também traz barbearias e estéticas, que o nome denuncia. A ordem importa.
+const SALAO = 'com os serviços, a localização e um botão para agendar direto pelo WhatsApp';
+const SAUDE = 'com os procedimentos, a equipe e a localização. Passa mais confiança para quem pesquisa antes de marcar e facilita o agendamento pelo WhatsApp';
+const NICHES = [
+  { kw: ['barbear', 'barber'], hook: 'Ajudo barbearias a aparecer no Google e receber agendamentos direto pelo WhatsApp.', benefit: SALAO },
+  { kw: ['estetic'], hook: 'Ajudo estéticas a atrair quem pesquisa no Google antes de marcar um procedimento.', benefit: SAUDE },
+  { kw: ['clinic', 'consult', 'odonto', 'dent', 'fisio', 'nutri', 'psicol', 'medic', 'saude', 'veterin'], hook: 'Ajudo profissionais da saúde a serem encontrados por quem pesquisa no Google antes de marcar.', benefit: SAUDE },
+  { kw: ['rastre'], hook: 'Ajudo empresas de rastreamento a receber pedidos de cotação direto pelo WhatsApp.', benefit: 'com os planos, a cobertura e o app, e um botão para pedir cotação pelo WhatsApp. Passa confiança para quem pesquisa antes de contratar' },
+  { kw: ['academia', 'pilates', 'crossfit', 'fitness', 'muscula'], hook: 'Ajudo academias a mostrar planos e horários para quem pesquisa no Google antes de visitar.', benefit: 'com as modalidades, os horários e os planos. Quem quer conhecer o espaço vê tudo antes de visitar e já chama no WhatsApp' },
+  // Sem promessa de clientes: o Código de Ética da OAB veda captação.
+  { kw: ['advoc', 'advog', 'jurid', 'contab', 'contador'], hook: 'Ajudo escritórios a passar credibilidade para quem pesquisa no Google antes de ligar.', benefit: 'com as áreas de atuação e as formas de contato. Passa credibilidade para quem pesquisa no Google antes de ligar' },
+  { kw: ['salao', 'beleza', 'manicure', 'cabelei', 'unha', 'sobrancelha', 'hair', 'nail'], hook: 'Ajudo salões a aparecer no Google e receber agendamentos direto pelo WhatsApp.', benefit: SALAO },
+  { kw: ['restaurante', 'lanchonete', 'pizz', 'hamburg', 'padaria', 'confeit', 'cafe', 'comida'], hook: 'Ajudo restaurantes a mostrar o cardápio e receber pedidos direto pelo WhatsApp.', benefit: 'com o cardápio, os horários e a localização, e um botão para pedir pelo WhatsApp' },
 ];
 const DEFAULT_BENEFIT = 'com a cara de vocês. Assim fica mais fácil o cliente te encontrar na internet, ver o que você oferece e te chamar direto';
 
-export function howItWorks(niche) {
-  const key = String(niche ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
-  const benefit = NICHE_BENEFITS.find(([kw]) => kw.some((k) => key.includes(k)))?.[1] ?? DEFAULT_BENEFIT;
+function nicheOf(niche, name = '') {
+  const key = `${niche ?? ''} ${name ?? ''}`.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+  return NICHES.find(({ kw }) => kw.some((k) => key.includes(k)));
+}
+
+export function howItWorks(niche, name) {
+  const benefit = nicheOf(niche, name)?.benefit ?? DEFAULT_BENEFIT;
   return `Claro! Eu crio um site só do seu negócio, ${benefit}. Quer que eu monte uma prévia de como ficaria o de vocês, sem compromisso?`;
 }
 
@@ -102,12 +114,12 @@ export function acceptedText(said = '') {
   return said.includes(OFFER.preco) ? trimRepeats(FIXED.acceptedShort, said) : FIXED.accepted;
 }
 
-function topicText(topic, { niche }) {
-  if (topic === 'how_it_works') return howItWorks(niche);
+function topicText(topic, { niche, name }) {
+  if (topic === 'how_it_works') return howItWorks(niche, name);
   return ANSWERS[topic];
 }
 
-// ctx: { said, niche }
+// ctx: { said, niche, name }
 export function answerFor(topics, ctx = {}) {
   const said = ctx.said ?? '';
   if (!Array.isArray(topics) || !topics.length) return null;
