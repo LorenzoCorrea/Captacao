@@ -38,3 +38,12 @@ test('get de id inexistente: undefined; update de inexistente lança', () => {
   assert.equal(store.get('zzzzzzzz'), undefined);
   assert.throws(() => store.update('zzzzzzzz', { estado: 'erro' }));
 });
+
+test('dois processos: um não apaga a mudança do outro', () => {
+  const d = dir();
+  const servico = createStore(d);
+  const p = servico.create({ leadId: 'x', leadName: 'X', phone: '1', observacao: '' });
+  createStore(d).update(p.id, { estado: 'enviado' });
+  servico.update(p.id, { fotos: 3 });
+  assert.deepEqual([createStore(d).get(p.id).estado, createStore(d).get(p.id).fotos], ['enviado', 3]);
+});

@@ -17,7 +17,7 @@ Você monta a **prévia de um site** para um pequeno negócio que conversa com o
    ```
    /srv/jarvis-previas/app/bin/gerar-pdf
    ```
-   Depois, confira o tamanho com `ls -la saida`. Se passar de 12 MB, reduza as fotos e gere de novo.
+   Rode esse comando **sozinho**, sem `&&`, `;` ou `|`. Comando composto não é reconhecido e falha. Depois, num comando separado, confira o tamanho com `ls -la saida`. Se passar de 12 MB, reduza as fotos e gere de novo.
 
 ## Regras
 
@@ -33,7 +33,7 @@ Quando o PDF estiver pronto e conferido, peça o envio rodando, sem argumentos e
 /srv/jarvis-previas/app/bin/enviar-previa
 ```
 
-Esse comando **pede a aprovação do Lorenzo** e espera. Ele vê a prévia pelo celular e aprova ou recusa. Não tente outro jeito de enviar.
+Rode também **sozinho**, sem nada encadeado. Esse comando **pede a aprovação do Lorenzo** e espera. Ele vê a prévia pelo celular e aprova ou recusa. Não tente outro jeito de enviar.
 
 - Se ele mandar ajustes por mensagem, refaça o `site.html`, gere o PDF de novo e peça o envio outra vez.
 - Se o envio falhar, mostre a mensagem de erro e espere instruções.
