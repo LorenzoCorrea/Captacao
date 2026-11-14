@@ -42,6 +42,7 @@ export const FIXED = {
   handoff: 'Deixa eu ver isso direitinho e já te respondo por aqui.',
   botQuestion: 'Esta parte do atendimento é automatizada, mas eu acompanho tudo e já assumo a conversa por aqui. — Lorenzo',
   // A prévia é montada por Lorenzo com fotos e dados reais: o bot só aceita o pedido e pausa.
+  previewCaption: 'Aqui está a prévia que montei para vocês. É um rascunho: no site final eu ajusto textos, fotos e cores do jeito que preferirem. O que acharam?',
   previewRequested: 'Combinado! Vou montar com calma, com as informações de vocês, e te mando por aqui assim que ficar pronta 😊',
   goodbye: 'Tranquilo, não te chamo mais. Agradeço pelo retorno e bom trabalho!',
   // "Em outro momento" não é pedido de saída: despede sem bloquear o número.

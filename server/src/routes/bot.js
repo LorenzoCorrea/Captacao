@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
-import { Router } from 'express';
-import { handleInbound, pendingSend } from '../bot/engine.js';
+import express, { Router } from 'express';
+import { handleInbound, pendingSend, sendAndRecord } from '../bot/engine.js';
+import { FIXED } from '../bot/offer.js';
 import { phoneKey } from '../bot/phone.js';
 import { isLive } from '../bot/gateway.js';
 import { DEFAULT_BOT_CONFIG } from '../bot/config.js';
@@ -137,6 +138,23 @@ export function createBotRouter(deps) {
     if (blocked) return res.status(409).json({ error: 'Esta conversa não pode voltar para o bot.' });
     await db.botClearAiFailure(conv.lead_id);
     res.json({ ok: true });
+  }));
+
+  // Prévia aprovada por Lorenzo no Jarvis: o PDF vai ao lead com a legenda fixa; a conversa segue com ele.
+  const PREVIEW_OK = ['active', 'paused', 'ready_to_close'];
+  router.post('/api/bot/conversations/:leadId/preview', express.raw({ type: 'application/pdf', limit: '15mb' }), withConversation(async (conv, req, res) => {
+    const pdf = req.body;
+    if (!Buffer.isBuffer(pdf) || pdf.subarray(0, 4).toString() !== '%PDF') return res.status(400).json({ error: 'Envie um PDF.' });
+    if (!PREVIEW_OK.includes(conv.status)) return res.status(409).json({ error: 'Esta conversa não pode receber a prévia.' });
+    const name = String(req.query.file ?? '');
+    const fileName = /^[\w.-]{1,60}\.pdf$/.test(name) ? name : 'previa.pdf';
+    const id = await sendAndRecord(conv, `${FIXED.previewCaption}\n[PDF: ${fileName}]`, deps, {
+      allow: PREVIEW_OK,
+      send: () => gateway.sendDocument(conv.phone, { pdf, fileName, caption: FIXED.previewCaption }),
+    });
+    if (!id) return res.status(409).json({ error: 'O lead saiu da conversa ou pediu para não receber mensagens.' });
+    await deps.notify(`Prévia enviada para ${conv.name ?? conv.phone}.`);
+    res.json({ ok: true, id });
   }));
 
   router.post('/api/bot/conversations/:leadId/finish', withConversation(async (conv, req, res) => {
