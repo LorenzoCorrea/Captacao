@@ -98,6 +98,33 @@
   .progresso i { display: block; height: 100%; width: 0; background: var(--ambar); transition: width .3s; }
   #tNovo { padding-bottom: 110px; }
 
+  /* Jarvis */
+  #tJarvis { padding-bottom: 104px; }
+  .conversa { display: grid; gap: 10px; padding: 4px 14px 0; }
+  .balao { max-width: 86%; padding: 11px 14px; border-radius: 16px; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
+  .balao.eu { justify-self: end; background: var(--raised); border-bottom-right-radius: 5px; }
+  .balao.ele { justify-self: start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 5px; }
+  .balao.ele.erro { border-color: rgba(255,122,107,.5); color: var(--verm); }
+  .balao .quem { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ambar); margin-bottom: 3px; display: flex; align-items: center; gap: 6px; }
+  .balao .quem button { margin-left: auto; border: 0; background: none; color: var(--sub); padding: 0; display: grid; }
+  .balao .quem svg { width: 16px; height: 16px; }
+  .pontos { display: inline-flex; gap: 4px; padding: 6px 0; }
+  .pontos i { width: 6px; height: 6px; border-radius: 50%; background: var(--sub); animation: pulsa 1.2s infinite; }
+  .pontos i:nth-child(2) { animation-delay: .2s; } .pontos i:nth-child(3) { animation-delay: .4s; }
+  .aprovacao { margin-top: 8px; padding: 10px; border-radius: 10px; background: var(--ambar-suave); border: 1px solid rgba(242,169,59,.35); }
+  .aprovacao code { display: block; font: 12px/1.4 ui-monospace, monospace; color: var(--txt); margin: 4px 0 10px; overflow-wrap: anywhere; }
+  .aprovacao .acoes { margin-top: 0; }
+  .saudacao { text-align: center; padding: 40px 24px 16px; color: var(--sub); }
+  .saudacao b { display: block; font: 700 22px/1.2 Bricolage, Onest, sans-serif; color: var(--txt); margin-bottom: 6px; }
+  .sugestoes { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 8px 14px; }
+  .sugestoes button { border: 1px solid var(--line); background: var(--surface); color: var(--txt); border-radius: 99px; padding: 9px 13px; font-size: 13px; }
+  .falar { display: flex; gap: 8px; align-items: center; }
+  .falar input { flex: 1; min-width: 0; border-radius: 99px; padding: 13px 16px; }
+  .mic { width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--ambar); color: var(--ambar-tinta); display: grid; place-items: center; flex: none; transition: transform .1s; }
+  .mic svg { width: 24px; height: 24px; }
+  .mic.ouvindo { background: var(--verm); color: #fff; box-shadow: 0 0 0 calc(var(--nivel, 0) * 1.2px + 4px) rgba(255,122,107,.25); }
+  .mic:disabled { opacity: .45; }
+
   /* Prévia e configuração */
   .pagina { display: block; width: calc(100% - 28px); margin: 0 14px 14px; border-radius: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.45); background: #fff; }
   .ajuda { color: var(--sub); font-size: 13px; margin: 8px 2px 0; }
@@ -108,6 +135,7 @@
   #toast.on { opacity: 1; transform: none; pointer-events: auto; }
   #toast.erro { border-left-color: var(--verm); }
   body.com-barra #toast { bottom: calc(var(--nav) + 96px); }
+  nav button { font-size: 10.5px; }
 
   /* Navegação */
   nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 5; height: var(--nav); display: flex; background: #17191c; border-top: 1px solid var(--line); }
@@ -133,12 +161,18 @@
   <symbol id="i-busca" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></symbol>
   <symbol id="i-foto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M21 15.5l-5-4.5-8 8"/></symbol>
   <symbol id="i-voltar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-onda" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></symbol>
+  <symbol id="i-enviar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-som" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+  <symbol id="i-nova" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></symbol>
   <symbol id="i-mao" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11V5.5a1.5 1.5 0 0 1 3 0V10m0-5.5a1.5 1.5 0 0 1 3 0V10m0-4a1.5 1.5 0 0 1 3 0v7a7 7 0 0 1-7 7h-.5A6.5 6.5 0 0 1 5 14.5V12a1.5 1.5 0 0 1 3 0"/></symbol>
 </svg>
 
 <header>
   <button class="icone" id="btVoltar" onclick="ir('tPedidos')" aria-label="Voltar" hidden><svg><use href="#i-voltar"/></svg></button>
   <div class="tit"><h1 id="titulo">Pedidos</h1><div class="resumo"><i class="conexao" id="conexao"></i><span id="resumo">Conectando…</span></div></div>
+  <button class="icone" id="btNova" onclick="novaConversa()" aria-label="Nova conversa" hidden><svg><use href="#i-nova"/></svg></button>
   <button class="icone" id="btAtualizar" onclick="carregarPedidos(true)" aria-label="Atualizar"><svg><use href="#i-atualizar"/></svg></button>
 </header>
 
@@ -159,6 +193,16 @@
     <div class="progresso" id="progresso"><i id="progressoBarra"></i></div>
     <div class="falta" id="falta"></div>
     <button class="bt pri cheio" id="btMontar" onclick="montar()">Montar prévia</button>
+  </div>
+</section>
+
+<section class="tela" id="tJarvis">
+  <div id="conversa" class="conversa"></div>
+  <div class="barra-acao">
+    <div class="falar">
+      <input id="pergunta" placeholder="Pergunte ao Jarvis" autocomplete="off" oninput="atualizarMic()" onkeydown="if (event.key === 'Enter') enviarPergunta()">
+      <button class="mic" id="mic" onclick="micOuEnviar()" aria-label="Falar"><svg><use href="#i-mic"/></svg></button>
+    </div>
   </div>
 </section>
 
@@ -184,6 +228,7 @@
 <nav>
   <button id="nPedidos" onclick="ir('tPedidos')"><svg><use href="#i-lista"/></svg>Pedidos<span class="bolinha" id="bolinha"></span></button>
   <button id="nNovo" onclick="ir('tNovo')"><svg><use href="#i-mais"/></svg>Novo pedido</button>
+  <button id="nJarvis" onclick="ir('tJarvis')"><svg><use href="#i-onda"/></svg>Jarvis</button>
   <button onclick="Jarvis.abrirEscritorio()"><svg><use href="#i-predio"/></svg>Escritório</button>
   <button id="nConfig" onclick="ir('tConfig')"><svg><use href="#i-ajuste"/></svg>Ajustes</button>
 </nav>
@@ -193,7 +238,7 @@ const ESTADOS = {
   recebendo: ['Recebendo fotos', '--cinza', true], na_fila: ['Na fila', '--cinza', true], montando: ['Montando', '--azul', true],
   previa_pronta: ['Aguardando você', '--ambar', true], enviado: ['Enviado', '--verde', false], encerrado: ['Encerrado', '--cinza', false], erro: ['Erro', '--verm', false],
 };
-const TITULOS = { tPedidos: 'Pedidos', tNovo: 'Nova prévia', tPrevia: 'Prévia', tConfig: 'Ajustes' };
+const TITULOS = { tPedidos: 'Pedidos', tNovo: 'Nova prévia', tJarvis: 'Jarvis', tPrevia: 'Prévia', tConfig: 'Ajustes' };
 let leads = [], leadSel = null, enviando = false, seq = 0, telaAtual = '', relogio = null, toastT = null;
 const cbs = {};
 const $ = (id) => document.getElementById(id);
@@ -230,15 +275,17 @@ function aviso(texto, erro) {
 function ir(tela) {
   telaAtual = tela;
   for (const t of document.querySelectorAll('.tela')) t.classList.toggle('on', t.id === tela);
-  for (const [n, t] of [['nPedidos', 'tPedidos'], ['nNovo', 'tNovo'], ['nConfig', 'tConfig']]) $(n).classList.toggle('on', t === tela);
+  for (const [n, t] of [['nPedidos', 'tPedidos'], ['nNovo', 'tNovo'], ['nJarvis', 'tJarvis'], ['nConfig', 'tConfig']]) $(n).classList.toggle('on', t === tela);
   $('titulo').textContent = TITULOS[tela];
   $('btAtualizar').hidden = tela !== 'tPedidos';
+  $('btNova').hidden = tela !== 'tJarvis';
   $('btVoltar').hidden = tela !== 'tPrevia';
-  document.body.classList.toggle('com-barra', tela === 'tNovo');
+  document.body.classList.toggle('com-barra', tela === 'tNovo' || tela === 'tJarvis');
   aviso('');
   scrollTo(0, 0);
   if (tela === 'tPedidos') carregarPedidos();
   if (tela === 'tNovo') { onFotos(); carregarLeads(); atualizarBarra(); $('resumo').textContent = 'Fotos, lead e, se quiser, uma observação'; }
+  if (tela === 'tJarvis') { $('resumo').textContent = 'Seu mordomo, às ordens'; desenharConversa(); }
   if (tela === 'tConfig') { $('cfgServidor').value = JSON.parse(Jarvis.config()).servidor; $('resumo').textContent = 'Conexão com o servidor'; }
 }
 
@@ -254,17 +301,19 @@ function cartaoPedido(p) {
   const [txt, cor, ativo] = ESTADOS[p.estado] ?? [p.estado, '--cinza', false];
   const ver = ['previa_pronta', 'enviado'].includes(p.estado) && !p.apagado;
   const pronta = p.estado === 'previa_pronta';
+  const pede = pronta && p.aguardandoAprovacao;
   const vivo = ['montando', 'na_fila'].includes(p.estado);
-  return `<div class="cartao${pronta ? ' destaque' : ''}">
+  return `<div class="cartao${pede ? ' destaque' : ''}">
     <div class="linha"><div class="cresce"><div class="nome">${esc(p.leadName)}</div>
       <div class="meta">${haQuanto(p.atualizadoEm)} · ${p.fotos} foto${p.fotos === 1 ? '' : 's'}</div></div>
       <span class="estado${vivo ? ' vivo' : ''}" style="--cor:var(${cor})">${txt}</span></div>
     ${p.erro ? `<div class="erro-txt">${esc(p.erro)}</div>` : ''}
-    ${pronta ? `<div class="dica">${icone('mao').replace('<svg>', '<svg width="16" height="16">')}O agente pediu sua aprovação no Escritório.</div>` : ''}
+    ${pede ? `<div class="dica">${icone('mao').replace('<svg>', '<svg width="16" height="16">')}O agente pede para enviar a prévia ao lead. Confira antes.</div>` : ''}
+    ${pede ? `<div class="acoes"><button class="bt sec" style="flex:1" onclick="verPrevia('${p.id}')">${icone('olho')}Ver prévia</button></div>` : ''}
     <div class="acoes">
-      ${ver ? `<button class="bt sec" style="flex:1" onclick="verPrevia('${p.id}')">${icone('olho')}Ver prévia</button>` : ''}
-      ${pronta ? `<button class="bt pri" style="flex:1" onclick="Jarvis.abrirEscritorio()">${icone('predio')}Aprovar</button>` : ''}
-      <button class="bt fant" style="${ver || pronta ? '' : 'margin-left:auto'}" onclick="apagar(this, '${p.id}')" aria-label="Apagar">${icone('lixo')}<span hidden>Confirmar</span></button>
+      ${ver && !pede ? `<button class="bt sec" style="flex:1" onclick="verPrevia('${p.id}')">${icone('olho')}Ver prévia</button>` : ''}
+      ${pede ? `<button class="bt pri" style="flex:1" onclick="aprovarPedido(this, '${p.id}', true)">Enviar</button><button class="bt fant" onclick="aprovarPedido(this, '${p.id}', false)">Recusar</button>` : ''}
+      <button class="bt fant" style="${ver || pede ? '' : 'margin-left:auto'}" onclick="apagar(this, '${p.id}')" aria-label="Apagar">${icone('lixo')}<span hidden>Confirmar</span></button>
     </div></div>`;
 }
 
@@ -276,7 +325,7 @@ async function carregarPedidos(manual) {
     const { pedidos } = await api('GET', '/pedidos');
     const ativos = pedidos.filter((p) => ESTADOS[p.estado]?.[2]);
     const feitos = pedidos.filter((p) => !ESTADOS[p.estado]?.[2]);
-    const aguardando = pedidos.filter((p) => p.estado === 'previa_pronta').length;
+    const aguardando = pedidos.filter((p) => p.estado === 'previa_pronta' && p.aguardandoAprovacao).length;
     if (telaAtual === 'tPedidos') $('resumo').textContent = !pedidos.length ? 'Nenhum pedido' : ativos.length ? `${ativos.length} em andamento` + (aguardando ? ` · ${aguardando} aguardando você` : '') : 'Tudo em dia';
     $('bolinha').textContent = aguardando; $('bolinha').style.display = aguardando ? 'grid' : 'none';
     const grupo = (titulo, lista) => lista.length ? `<div class="rotulo"><span>${titulo}</span><span>${lista.length}</span></div><div class="lista">${lista.map(cartaoPedido).join('')}</div>` : '';
@@ -378,6 +427,112 @@ function salvarConfig() {
   $('cfgToken').value = '';
   aviso('Configuração salva.');
   ir('tPedidos');
+}
+
+async function aprovarPedido(bt, id, aprovar) {
+  bt.disabled = true;
+  try {
+    await api('POST', `/pedidos/${id}/aprovacao`, { aprovar });
+    aviso(aprovar ? 'Envio aprovado. O agente está mandando a prévia.' : 'Envio recusado.');
+    setTimeout(carregarPedidos, 1500);
+  } catch (e) { aviso(e.message, true); bt.disabled = false; }
+}
+
+// ---- Jarvis ----
+const SUGESTOES = ['Como está o bot?', 'Quantas conversas estão pausadas?', 'Algum pedido de prévia?', 'Como está o servidor?'];
+const falas = [];
+let jarvisOcupado = false, ouvindo = false, idAtual = null;
+
+function desenharConversa() {
+  const c = $('conversa');
+  if (!falas.length) {
+    c.innerHTML = `<div class="saudacao"><b>Às suas ordens, senhor.</b>Toque no microfone e fale, ou escolha uma pergunta.</div>
+      <div class="sugestoes">${SUGESTOES.map((q) => `<button onclick="perguntar(this.textContent)">${esc(q)}</button>`).join('')}</div>`;
+  } else {
+    c.innerHTML = falas.map((f, i) => {
+      if (f.eu) return `<div class="balao eu">${esc(f.texto)}</div>`;
+      const corpo = f.estado === 'pensando' ? '<span class="pontos"><i></i><i></i><i></i></span>'
+        : f.estado === 'aguardando_aprovacao' ? `Preciso da sua aprovação, senhor.<div class="aprovacao">${f.acao ? `<code>${esc(f.acao.replace('/srv/jarvis-voz/bin/agir ', ''))}</code>` : '<code>Um comando fora da lista do Jarvis. Só dá para recusar.</code>'}
+            <div class="acoes">${f.acao ? `<button class="bt pri" style="flex:1" onclick="responderJarvis(this, true)">Aprovar</button>` : ''}<button class="bt fant" style="flex:1" onclick="responderJarvis(this, false)">Recusar</button></div></div>`
+        : esc(f.texto);
+      const som = f.audio ? `<button onclick="tocarDeNovo('${f.id}')" aria-label="Ouvir de novo">${icone('som')}</button>` : '';
+      return `<div class="balao ele${f.estado === 'erro' ? ' erro' : ''}"><div class="quem">Jarvis${som}</div>${corpo}</div>`;
+    }).join('');
+  }
+  atualizarMic();
+  if (telaAtual === 'tJarvis') scrollTo(0, document.body.scrollHeight);
+}
+
+function atualizarMic() {
+  const tem = $('pergunta').value.trim().length > 0 && !ouvindo;
+  $('mic').innerHTML = icone(tem ? 'enviar' : 'mic');
+  $('mic').setAttribute('aria-label', tem ? 'Enviar' : ouvindo ? 'Parar' : 'Falar');
+  $('mic').classList.toggle('ouvindo', ouvindo);
+  $('mic').disabled = jarvisOcupado && !ouvindo;
+}
+
+function micOuEnviar() {
+  if ($('pergunta').value.trim() && !ouvindo) return enviarPergunta();
+  if (ouvindo) return Jarvis.pararDeOuvir();
+  ouvindo = true; atualizarMic();
+  Jarvis.pararDeFalar();
+  chamar('ouvir').then((texto) => { $('pergunta').value = ''; perguntar(texto); })
+    .catch((e) => aviso(e.message, true))
+    .finally(() => { ouvindo = false; $('mic').style.removeProperty('--nivel'); atualizarMic(); });
+}
+window.onOuvindo = (n) => $('mic').style.setProperty('--nivel', n);
+window.onParcial = (t) => { $('pergunta').value = t; };
+
+function enviarPergunta() {
+  const t = $('pergunta').value.trim();
+  if (!t || jarvisOcupado) return;
+  $('pergunta').value = '';
+  perguntar(t);
+}
+
+async function perguntar(texto) {
+  if (jarvisOcupado) return aviso('O Jarvis ainda está respondendo.', true);
+  jarvisOcupado = true;
+  falas.push({ eu: true, texto });
+  const resp = { estado: 'pensando' };
+  falas.push(resp);
+  desenharConversa();
+  try {
+    const { id } = await api('POST', '/jarvis/mensagens', { texto });
+    resp.id = idAtual = id;
+    await acompanhar(resp);
+  } catch (e) { Object.assign(resp, { estado: 'erro', texto: e.message }); }
+  jarvisOcupado = false;
+  desenharConversa();
+}
+
+async function acompanhar(resp) {
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const e = await api('GET', `/jarvis/mensagens/${resp.id}`);
+    const mudou = e.estado !== resp.estado || e.acao !== resp.acao;
+    Object.assign(resp, e);
+    if (mudou) desenharConversa();
+    if (e.estado === 'pronta') { if (e.audio) tocarDeNovo(resp.id); return; }
+    if (e.estado === 'erro') return;
+  }
+}
+
+async function responderJarvis(bt, aprovar) {
+  bt.disabled = true;
+  try {
+    await api('POST', `/jarvis/mensagens/${idAtual}/aprovacao`, { aprovar });
+    const resp = falas.at(-1);
+    resp.estado = 'pensando'; resp.acao = undefined;
+    desenharConversa();
+  } catch (e) { aviso(e.message, true); bt.disabled = false; }
+}
+
+function tocarDeNovo(id) { chamar('tocar', id).catch((e) => aviso(e.message, true)); }
+
+async function novaConversa() {
+  if (jarvisOcupado) return aviso('Espere o Jarvis terminar de responder.', true);
+  try { await api('POST', '/jarvis/nova'); falas.length = 0; desenharConversa(); aviso('Conversa nova.'); } catch (e) { aviso(e.message, true); }
 }
 
 // Chamado pelo voltar do Android: true se tratou aqui.

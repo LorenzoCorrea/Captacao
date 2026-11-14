@@ -1,16 +1,22 @@
 package app.jarvis;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.ClipData;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.ImageDecoder;
 import android.graphics.pdf.PdfRenderer;
+import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.util.Base64;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
@@ -256,4 +262,94 @@ public class MainActivity extends Activity {
             setContentView(office);
         });
     }
+
+    // ---- Jarvis de voz: ouvir (reconhecimento do Android, pt-BR) e tocar a resposta ----
+    static final int MICROFONE = 7;
+    SpeechRecognizer escuta;
+    String cbOuvir;
+    MediaPlayer voz;
+
+    @JavascriptInterface public void ouvir(String cb) {
+        runOnUiThread(() -> {
+            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                cbOuvir = cb;
+                requestPermissions(new String[] { Manifest.permission.RECORD_AUDIO }, MICROFONE);
+                return;
+            }
+            comecarAOuvir(cb);
+        });
+    }
+
+    @Override public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
+        if (req != MICROFONE || cbOuvir == null) return;
+        String cb = cbOuvir;
+        cbOuvir = null;
+        if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED) comecarAOuvir(cb);
+        else responder(cb, false, "Sem permissão do microfone. Libere em Configurações > Apps > Jarvis.");
+    }
+
+    void comecarAOuvir(String cb) {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) { responder(cb, false, "Este celular não tem reconhecimento de voz. Digite a pergunta."); return; }
+        if (escuta != null) escuta.destroy();
+        escuta = SpeechRecognizer.createSpeechRecognizer(this);
+        escuta.setRecognitionListener(new RecognitionListener() {
+            boolean respondido;
+            void fim(boolean ok, String dado) { if (respondido) return; respondido = true; responder(cb, ok, dado); }
+            @Override public void onReadyForSpeech(Bundle b) { js("window.onOuvindo && onOuvindo(0)"); }
+            @Override public void onBeginningOfSpeech() {}
+            @Override public void onRmsChanged(float db) { js("window.onOuvindo && onOuvindo(" + Math.max(0, Math.min(10, db)) + ")"); }
+            @Override public void onBufferReceived(byte[] b) {}
+            @Override public void onEndOfSpeech() {}
+            @Override public void onError(int e) {
+                fim(false, e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT ? "Não entendi, tente de novo."
+                    : e == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ? "Sem permissão do microfone."
+                    : e == SpeechRecognizer.ERROR_NETWORK || e == SpeechRecognizer.ERROR_NETWORK_TIMEOUT ? "O reconhecimento de voz precisa de internet."
+                    : "Reconhecimento de voz falhou (código " + e + ").");
+            }
+            @Override public void onResults(Bundle b) {
+                ArrayList<String> r = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                if (r == null || r.isEmpty() || r.get(0).trim().isEmpty()) fim(false, "Não entendi, tente de novo.");
+                else fim(true, r.get(0));
+            }
+            @Override public void onPartialResults(Bundle b) {
+                ArrayList<String> r = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                if (r != null && !r.isEmpty()) js("window.onParcial && onParcial(" + JSONObject.quote(r.get(0)) + ")");
+            }
+            @Override public void onEvent(int t, Bundle b) {}
+        });
+        Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
+            .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        escuta.startListening(i);
+    }
+
+    @JavascriptInterface public void pararDeOuvir() { runOnUiThread(() -> { if (escuta != null) escuta.stopListening(); }); }
+
+    // Baixa o WAV da resposta (com o token) e toca; volta pelo cb quando termina.
+    @JavascriptInterface public void tocar(String cb, String id) {
+        bg.execute(() -> {
+            try {
+                HttpURLConnection c = (HttpURLConnection) new URL(prefs.getString("servidor", SERVIDOR) + "/jarvis/mensagens/" + id + "/audio").openConnection();
+                c.setRequestProperty("Authorization", "Bearer " + prefs.getString("token", ""));
+                c.setConnectTimeout(15000);
+                c.setReadTimeout(60000);
+                if (c.getResponseCode() != 200) throw new Exception("Sem áudio para esta resposta.");
+                File f = new File(getCacheDir(), "jarvis.wav");
+                try (FileOutputStream o = new FileOutputStream(f)) { o.write(ler(c.getInputStream())); }
+                runOnUiThread(() -> {
+                    try {
+                        if (voz != null) voz.release();
+                        voz = new MediaPlayer();
+                        voz.setDataSource(f.getPath());
+                        voz.setOnCompletionListener(m -> responder(cb, true, ""));
+                        voz.prepare();
+                        voz.start();
+                    } catch (Exception e) { responder(cb, false, "Não consegui tocar a resposta."); }
+                });
+            } catch (Exception e) { responder(cb, false, erro(e)); }
+        });
+    }
+
+    @JavascriptInterface public void pararDeFalar() { runOnUiThread(() -> { if (voz != null && voz.isPlaying()) voz.stop(); }); }
 }
