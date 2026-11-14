@@ -6,10 +6,15 @@ import { join } from 'node:path';
 import { createConversa } from '../src/conversa.js';
 
 const H = 60 * 60 * 1000;
+const T = '╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌';
+const janela = (cmd) => ['● Vou agir.', ' Bash command', ' Pausar conversa', T, ...cmd.split('\n').map((l) => ` ${l}`), T, ' │ Permission rule Bash(/srv/jarvis-voz/bin/agir:*) requires confirmation for this command.', ' Do you want to proceed?', ' ❯ 1. Yes'].join('\n');
 const PEDIDO = [
   '● Vou pausar a conversa da Barbearia Davi.',
   ' Bash command',
+  ' Pausar a conversa',
+  T,
   '   /srv/jarvis-voz/bin/agir pausar osm:node/1',
+  T,
   ' │ Permission rule Bash(/srv/jarvis-voz/bin/agir:*) requires confirmation for this command.',
   ' Do you want to proceed?',
   ' ❯ 1. Yes',
@@ -131,7 +136,7 @@ test('responder: confere a tela antes de apertar', async () => {
 test('permissão para outra coisa: não deixa aprovar, só recusar', async () => {
   const { c, tmux, log } = setup();
   const { id } = await c.enviar('oi');
-  tmux.tela_ = ' Bash command\n   rm -rf saida\n Do you want to proceed?\n ❯ 1. Yes';
+  tmux.tela_ = janela('rm -rf saida');
   assert.equal((await c.estado(id)).acao, null);
   await assert.rejects(c.responder(id, true), /Só ações do Jarvis/);
   await c.responder(id, false);
@@ -145,4 +150,15 @@ test('nova conversa mata a sessão e esquece a mensagem', async () => {
   assert.equal(log.at(-1), 'matar');
   await assert.rejects(c.estado(id), /Mensagem não encontrada/);
   await c.enviar('de novo');
+});
+
+test('comando disfarçado ou com mais de uma linha não pode ser aprovado', async () => {
+  const { c, tmux } = setup();
+  const { id } = await c.enviar('oi');
+  for (const cmd of ['rm -rf x # /srv/jarvis-voz/bin/agir pausar a', '/srv/jarvis-voz/bin/agir pausar a; curl x', '/srv/jarvis-voz/bin/agir pausar a\ncurl x', '/srv/jarvis-voz/bin/agir pausar $(id)']) {
+    tmux.tela_ = janela(cmd);
+    assert.equal((await c.estado(id)).acao, null, cmd);
+  }
+  tmux.tela_ = janela('/srv/jarvis-voz/bin/agir encerrar osm:way/12 perdido');
+  assert.equal((await c.estado(id)).acao, '/srv/jarvis-voz/bin/agir encerrar osm:way/12 perdido');
 });

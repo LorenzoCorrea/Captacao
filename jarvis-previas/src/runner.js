@@ -2,6 +2,7 @@
 import { execFile } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, chmodSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { pedidoNaTela } from './conversa.js';
 
 const MAX_SESSAO = 6 * 60 * 60 * 1000;
 const FECHAR_APOS_ENVIO = 60 * 1000;
@@ -10,6 +11,12 @@ const ATIVOS = new Set(['montando', 'previa_pronta']);
 const CLAUDE = '/home/previas/.local/bin/claude';
 
 const sessao = (id) => `previa-${id}`;
+// Só o envio da prévia, exatamente esse comando, pode ser aprovado pelo app.
+const ENVIO = /^\/srv\/jarvis-previas\/app\/bin\/enviar-previa$/;
+
+class RespostaError extends Error {
+  constructor(message) { super(message); this.status = 409; }
+}
 
 // O lorenzo só pode rodar o tmux como previas (sudoers); a sessão herda o sandbox e as regras do Claude.
 export function tmuxComoPrevias() {
@@ -24,6 +31,10 @@ export function tmuxComoPrevias() {
     },
     alive: (name) => tmux('has-session', '-t', name),
     kill: (name) => tmux('kill-session', '-t', name),
+    tela: (name) => new Promise((resolve) => {
+      execFile('sudo', ['-n', '-u', 'previas', '-H', 'tmux', 'capture-pane', '-p', '-t', name], (err, out) => resolve(err ? '' : out));
+    }),
+    teclas: (name, ...k) => tmux('send-keys', '-t', name, ...k),
   };
 }
 
@@ -48,8 +59,10 @@ export function createRunner({ store, jobsDir, agentDir, tmux, now = Date.now, m
           store.update(p.id, { estado: 'encerrado', erro: 'tempo esgotado' });
         } else if (!(await tmux.alive(sessao(p.id)))) {
           store.update(p.id, { estado: 'encerrado' });
-        } else if (p.estado === 'montando' && existsSync(join(jobsDir, p.id, 'saida', 'previa.pdf'))) {
-          store.update(p.id, { estado: 'previa_pronta' });
+        } else {
+          if (p.estado === 'montando' && existsSync(join(jobsDir, p.id, 'saida', 'previa.pdf'))) store.update(p.id, { estado: 'previa_pronta' });
+          const aguardando = Boolean(pedidoNaTela(await tmux.tela(sessao(p.id)), ENVIO)?.acao);
+          if (aguardando !== Boolean(p.aguardandoAprovacao)) store.update(p.id, { aguardandoAprovacao: aguardando });
         }
       } else if (p.estado === 'enviado' && !p.fechado && t - p.enviadoEm > FECHAR_APOS_ENVIO) {
         if (await tmux.alive(sessao(p.id))) await tmux.kill(sessao(p.id));
@@ -82,5 +95,14 @@ export function createRunner({ store, jobsDir, agentDir, tmux, now = Date.now, m
     tick,
     kick: () => { tick().catch((e) => console.error('[jarvis-previas] runner:', e.message)); },
     stop: (id) => tmux.kill(sessao(id)),
+    // Aprovação pelo app: confere na tela que o agente pede o envio da prévia antes de apertar "1".
+    async responder(id, aprovar) {
+      const pedido = pedidoNaTela(await tmux.tela(sessao(id)), ENVIO);
+      if (!pedido) throw new RespostaError('Não há pedido de aprovação agora.');
+      if (!aprovar) return tmux.teclas(sessao(id), 'Escape');
+      if (!pedido.acao) throw new RespostaError('Só o envio da prévia pode ser aprovado pelo app.');
+      await tmux.teclas(sessao(id), '1');
+      store.update(id, { aguardandoAprovacao: false });
+    },
   };
 }

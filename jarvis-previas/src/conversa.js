@@ -8,18 +8,25 @@ import { randomBytes } from 'node:crypto';
 const MAX = 2000;
 const OCIOSO = 6 * 60 * 60 * 1000;
 const PERGUNTA = 'Do you want to proceed?';
-const ACAO = /\/srv\/jarvis-voz\/bin\/agir(?= |$)[^\n│]*/gm;
+// Comando inteiro, sem metacaracteres de shell: só isso pode ser aprovado pelo app.
+const ACAO = /^\/srv\/jarvis-voz\/bin\/agir( [A-Za-z0-9:/._-]+)+$/;
+const TRACEJADO = /^\s*╌{10,}\s*$/;
+export const PERGUNTA_PERMISSAO = PERGUNTA;
 
 export class ConversaError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
-// A ação pendente é a última linha de agir na tela, acima da pergunta de permissão.
-function pedidoNaTela(tela) {
-  const i = tela.lastIndexOf(PERGUNTA);
+// Na janela de permissão o comando fica sozinho entre duas linhas tracejadas, logo acima da pergunta.
+// Devolve undefined sem pergunta na tela; acao = o comando se ele for exatamente um comando válido, senão null.
+export function pedidoNaTela(tela, valido = ACAO) {
+  const linhas = tela.split('\n');
+  const i = linhas.findLastIndex((l) => l.includes(PERGUNTA));
   if (i < 0) return undefined;
-  const acoes = tela.slice(0, i).match(ACAO);
-  return { acao: acoes ? acoes.at(-1).trim() : null };
+  const tracejados = linhas.slice(0, i).flatMap((l, k) => (TRACEJADO.test(l) ? [k] : []));
+  if (tracejados.length < 2) return { acao: null };
+  const bloco = linhas.slice(tracejados.at(-2) + 1, tracejados.at(-1)).map((l) => l.trim()).filter(Boolean);
+  return { acao: bloco.length === 1 && valido.test(bloco[0]) ? bloco[0] : null };
 }
 
 export function createConversa({ tmux, respostaFile, falar, now = Date.now, esperaMax = 180000 }) {

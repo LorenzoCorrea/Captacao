@@ -14,7 +14,7 @@ async function start(t) {
   const root = mkdtempSync(join(tmpdir(), 'jp-srv-'));
   const jobsDir = join(root, 'jobs');
   const store = createStore(join(root, 'data'));
-  const runner = { kicks: 0, stopped: [], kick() { this.kicks++; }, stop(id) { this.stopped.push(id); } };
+  const runner = { kicks: 0, stopped: [], respostas: [], kick() { this.kicks++; }, stop(id) { this.stopped.push(id); }, async responder(id, aprovar) { this.respostas.push([id, aprovar]); } };
   const captacao = { leads: async () => LEADS };
   const conversa = {
     ocupado: false, respondidas: [], novas: 0,
@@ -144,4 +144,13 @@ test('jarvis: estado, áudio, aprovação e nova conversa', async (t) => {
   assert.deepEqual(conversa.respondidas, [['m1', true]]);
   assert.equal((await call('/jarvis/nova', { method: 'POST' })).status, 200);
   assert.equal(conversa.novas, 1);
+});
+
+test('pedido: aprovação pelo app chega ao runner', async (t) => {
+  const { call, novo, runner } = await start(t);
+  const id = await novo();
+  const aprova = (body) => call(`/pedidos/${id}/aprovacao`, { method: 'POST', type: 'application/json', body });
+  assert.equal((await aprova('{"aprovar":1}')).status, 400);
+  assert.equal((await aprova('{"aprovar":false}')).status, 200);
+  assert.deepEqual(runner.respostas, [[id, false]]);
 });

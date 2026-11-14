@@ -124,6 +124,13 @@ export function createServer({ store, captacao, runner, jobsDir, token, conversa
       store.update(id, { estado: 'encerrado' });
       return send(res, 200, { ok: true });
     }
+    if (m === 'POST' && acao === 'aprovacao') {
+      let body;
+      try { body = JSON.parse((await readBody(req, JSON_MAX)).toString('utf8')); } catch { throw new HttpError(400, 'JSON inválido.'); }
+      if (typeof body?.aprovar !== 'boolean') throw new HttpError(400, 'Informe aprovar: true ou false.');
+      try { await runner.responder(id, body.aprovar); } catch (e) { throw new HttpError(e.status ?? 500, e.message); }
+      return send(res, 200, { ok: true });
+    }
     if (m === 'POST' && acao === 'apagar') {
       await runner.stop(id);
       // shortcut: subpastas criadas pelo agente (usuário previas) podem resistir ao rm; o registro some mesmo assim.

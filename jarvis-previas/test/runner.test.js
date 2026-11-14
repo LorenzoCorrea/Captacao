@@ -23,6 +23,9 @@ function setup({ max = 2 } = {}) {
     async start(name, cwd, prompt) { this.started.push({ name, cwd, prompt }); vivas.add(name); },
     async alive(name) { return vivas.has(name); },
     async kill(name) { this.killed.push(name); vivas.delete(name); },
+    telas: {}, teclou: [],
+    async tela(name) { return this.telas[name] ?? ''; },
+    async teclas(name, ...k) { this.teclou.push([name, ...k]); },
   };
   const runner = createRunner({ store, jobsDir, agentDir, tmux, now, max });
   const fila = () => {
@@ -121,4 +124,36 @@ test('stop mata a sessão do pedido', async () => {
   await runner.tick();
   await runner.stop(id);
   assert.deepEqual(tmux.killed, [`previa-${id}`]);
+});
+
+const T = '╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌';
+const PEDE_ENVIO = ' Bash command\n Enviar prévia\n' + T + '\n   /srv/jarvis-previas/app/bin/enviar-previa\n' + T + '\n │ Permission rule Bash(/srv/jarvis-previas/app/bin/enviar-previa) requires confirmation\n Do you want to proceed?\n ❯ 1. Yes';
+
+test('tela pedindo o envio marca aguardandoAprovacao; sem pedido, desmarca', async () => {
+  const { store, runner, tmux, jobsDir, fila } = setup();
+  const id = fila();
+  await runner.tick();
+  writeFileSync(join(jobsDir, id, 'saida', 'previa.pdf'), '%PDF');
+  tmux.telas[`previa-${id}`] = PEDE_ENVIO;
+  await runner.tick();
+  assert.equal(store.get(id).aguardandoAprovacao, true);
+  tmux.telas[`previa-${id}`] = '● Prévia enviada.';
+  await runner.tick();
+  assert.equal(store.get(id).aguardandoAprovacao, false);
+});
+
+test('responder: aprova só o enviar-previa; recusar sempre pode', async () => {
+  const { runner, tmux, fila } = setup();
+  const id = fila();
+  await runner.tick();
+  const nome = `previa-${id}`;
+  await assert.rejects(runner.responder(id, true), /Não há pedido de aprovação/);
+  tmux.telas[nome] = ' Bash command\n' + T + '\n   rm -rf saida # /srv/jarvis-previas/app/bin/enviar-previa\n' + T + '\n Do you want to proceed?\n ❯ 1. Yes';
+  await assert.rejects(runner.responder(id, true), /Só o envio da prévia/);
+  assert.deepEqual(tmux.teclou, []);
+  await runner.responder(id, false);
+  assert.deepEqual(tmux.teclou.at(-1), [nome, 'Escape']);
+  tmux.telas[nome] = PEDE_ENVIO;
+  await runner.responder(id, true);
+  assert.deepEqual(tmux.teclou.at(-1), [nome, '1']);
 });
