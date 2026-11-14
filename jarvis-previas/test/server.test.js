@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStore } from '../src/store.js';
 import { createServer } from '../src/server.js';
+import { ConversaError } from '../src/conversa.js';
 
 const TOKEN = 'segredo-de-teste';
 const LEADS = [{ leadId: 'osm:node/1', name: 'Aurora', phone: '5551991234567', pediuPrevia: true }];
@@ -15,7 +16,15 @@ async function start(t) {
   const store = createStore(join(root, 'data'));
   const runner = { kicks: 0, stopped: [], kick() { this.kicks++; }, stop(id) { this.stopped.push(id); } };
   const captacao = { leads: async () => LEADS };
-  const server = createServer({ store, captacao, runner, jobsDir, token: TOKEN });
+  const conversa = {
+    ocupado: false, respondidas: [], novas: 0,
+    async enviar(texto) { if (!texto?.trim()) throw new ConversaError(400, 'Mensagem vazia.'); if (this.ocupado) throw new ConversaError(409, 'O Jarvis ainda está respondendo.'); return { id: 'm1' }; },
+    async estado(id) { if (id !== 'm1') throw new ConversaError(404, 'Mensagem não encontrada.'); return { estado: 'pronta', texto: 'Olá, senhor.', audio: true }; },
+    audio: (id) => (id === 'm1' ? Buffer.from('RIFFwav') : undefined),
+    async responder(id, aprovar) { this.respondidas.push([id, aprovar]); },
+    async nova() { this.novas++; },
+  };
+  const server = createServer({ store, captacao, runner, jobsDir, token: TOKEN, conversa });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   t.after(() => new Promise((r) => { server.close(r); server.closeAllConnections(); }));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -25,7 +34,7 @@ async function start(t) {
     body,
   });
   const novo = async () => (await (await call('/pedidos', { method: 'POST', type: 'application/json', body: JSON.stringify({ leadId: 'osm:node/1', observacao: 'tons de verde' }) })).json()).id;
-  return { call, novo, store, runner, jobsDir };
+  return { call, novo, store, runner, jobsDir, conversa };
 }
 
 const JPG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
@@ -106,4 +115,33 @@ test('apagar: para a sessão, remove a pasta e some da lista', async (t) => {
   assert.equal(existsSync(join(jobsDir, id)), false);
   assert.equal(store.get(id), undefined);
   assert.equal((await call(`/pedidos/${id}/apagar`, { method: 'POST' })).status, 404);
+});
+
+test('jarvis: mensagens exigem token, texto e uma por vez', async (t) => {
+  const { call, conversa } = await start(t);
+  const msg = (texto) => call('/jarvis/mensagens', { method: 'POST', type: 'application/json', body: JSON.stringify({ texto }) });
+  assert.equal((await call('/jarvis/mensagens', { method: 'POST', auth: false })).status, 401);
+  assert.equal((await msg('')).status, 400);
+  const r = await msg('como está o bot?');
+  assert.equal(r.status, 201);
+  assert.deepEqual(await r.json(), { id: 'm1' });
+  conversa.ocupado = true;
+  const o = await msg('de novo');
+  assert.equal(o.status, 409);
+  assert.equal((await o.json()).error, 'O Jarvis ainda está respondendo.');
+});
+
+test('jarvis: estado, áudio, aprovação e nova conversa', async (t) => {
+  const { call, conversa } = await start(t);
+  assert.deepEqual(await (await call('/jarvis/mensagens/m1')).json(), { estado: 'pronta', texto: 'Olá, senhor.', audio: true });
+  assert.equal((await call('/jarvis/mensagens/zz')).status, 404);
+  const a = await call('/jarvis/mensagens/m1/audio');
+  assert.equal(a.headers.get('content-type'), 'audio/wav');
+  assert.equal(Buffer.from(await a.arrayBuffer()).toString(), 'RIFFwav');
+  assert.equal((await call('/jarvis/mensagens/zz/audio')).status, 404);
+  assert.equal((await call('/jarvis/mensagens/m1/aprovacao', { method: 'POST', type: 'application/json', body: '{"aprovar":"sim"}' })).status, 400);
+  assert.equal((await call('/jarvis/mensagens/m1/aprovacao', { method: 'POST', type: 'application/json', body: '{"aprovar":true}' })).status, 200);
+  assert.deepEqual(conversa.respondidas, [['m1', true]]);
+  assert.equal((await call('/jarvis/nova', { method: 'POST' })).status, 200);
+  assert.equal(conversa.novas, 1);
 });

@@ -3,6 +3,7 @@ import http from 'node:http';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { ConversaError } from './conversa.js';
 
 const ID = /^[a-z0-9]{8}$/;
 const FOTO_MAX = 15 * 1024 * 1024;
@@ -38,7 +39,7 @@ const send = (res, status, body) => {
   res.end(JSON.stringify(body));
 };
 
-export function createServer({ store, captacao, runner, jobsDir, token }) {
+export function createServer({ store, captacao, runner, jobsDir, token, conversa }) {
   const esperado = hash(token);
   const autorizado = (req) => {
     const m = /^Bearer (.+)$/.exec(req.headers.authorization ?? '');
@@ -49,6 +50,30 @@ export function createServer({ store, captacao, runner, jobsDir, token }) {
     if (!p) throw new HttpError(404, 'Pedido não encontrado.');
     return p;
   };
+
+  // Jarvis de voz: /jarvis/mensagens[/:id[/audio|/aprovacao]] e /jarvis/nova.
+  async function rotaJarvis(req, res, [rec, id, acao], m) {
+    const corpo = async () => {
+      try { return JSON.parse((await readBody(req, JSON_MAX)).toString('utf8') || '{}'); } catch { throw new HttpError(400, 'JSON inválido.'); }
+    };
+    if (m === 'POST' && rec === 'nova' && !id) { await conversa.nova(); return send(res, 200, { ok: true }); }
+    if (rec !== 'mensagens') throw new HttpError(404, 'Rota não encontrada.');
+    if (m === 'POST' && !id) return send(res, 201, await conversa.enviar((await corpo()).texto));
+    if (m === 'GET' && id && !acao) return send(res, 200, await conversa.estado(id));
+    if (m === 'GET' && acao === 'audio') {
+      const wav = conversa.audio(id);
+      if (!wav) throw new HttpError(404, 'Sem áudio para esta mensagem.');
+      res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': wav.length });
+      return res.end(wav);
+    }
+    if (m === 'POST' && acao === 'aprovacao') {
+      const { aprovar } = await corpo();
+      if (typeof aprovar !== 'boolean') throw new HttpError(400, 'Informe aprovar: true ou false.');
+      await conversa.responder(id, aprovar);
+      return send(res, 200, { ok: true });
+    }
+    throw new HttpError(404, 'Rota não encontrada.');
+  }
 
   async function rota(req, res) {
     const url = new URL(req.url, 'http://x');
@@ -72,6 +97,7 @@ export function createServer({ store, captacao, runner, jobsDir, token }) {
       return send(res, 201, { id: p.id });
     }
 
+    if (raiz === 'jarvis' && conversa) return rotaJarvis(req, res, partes.slice(1), m);
     if (raiz !== 'pedidos' || partes.length !== 3) throw new HttpError(404, 'Rota não encontrada.');
     const p = pedido(id);
 
@@ -120,8 +146,9 @@ export function createServer({ store, captacao, runner, jobsDir, token }) {
       await rota(req, res);
     } catch (e) {
       if (res.headersSent) return res.destroy();
-      if (!(e instanceof HttpError)) console.error('[jarvis-previas]', e);
-      send(res, e.status ?? 500, { error: e instanceof HttpError ? e.message : 'Erro interno.' });
+      const conhecido = e instanceof HttpError || e instanceof ConversaError;
+      if (!conhecido) console.error('[jarvis-previas]', e);
+      send(res, conhecido ? e.status : 500, { error: conhecido ? e.message : 'Erro interno.' });
     }
   });
 }
