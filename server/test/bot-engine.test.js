@@ -204,6 +204,18 @@ test('sendAndRecord não envia a quem está na lista de saída', async () => {
   assert.deepEqual(log.sent, []);
 });
 
+test('sendAndRecord usa o envio dado e grava o corpo', async () => {
+  const { conv, log, deps } = setup(null);
+  const added = [];
+  const original = deps.db.botAddMessage;
+  deps.db.botAddMessage = async (m) => { added.push(m); return original?.(m); };
+  const id = await sendAndRecord(conv, 'legenda\n[PDF: previa.pdf]', deps, { allow: ['active'], send: async () => 'doc-1' });
+  assert.equal(id, 'doc-1');
+  assert.deepEqual(log.sent, []);
+  assert.equal(added.length, 1);
+  assert.deepEqual({ ...added[0], leadId: undefined }, { id: 'doc-1', leadId: undefined, direction: 'out', source: 'bot', body: 'legenda\n[PDF: previa.pdf]' });
+});
+
 test('áudio ou imagem: pausa e avisa, sem IA', async () => {
   const { conv, log, deps } = setup(ask(['price']));
   await handleInbound({ conv, id: 'a1', text: '', hasText: false }, deps);

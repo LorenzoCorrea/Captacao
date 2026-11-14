@@ -2,10 +2,10 @@ import crypto from 'node:crypto';
 
 const TIMEOUT_MS = 20000;
 
-async function evolution(path, { method = 'GET', body } = {}) {
+async function evolution(path, { method = 'GET', body, timeout = TIMEOUT_MS } = {}) {
   const r = await fetch(`${process.env.EVOLUTION_URL}${path}`, {
     method,
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeout),
     headers: { 'Content-Type': 'application/json', apikey: process.env.EVOLUTION_API_KEY },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -23,6 +23,15 @@ export function createGateway() {
     async send(phone, text) {
       if (!isLive()) return `sim-${crypto.randomUUID()}`;
       const data = await evolution(`/message/sendText/${instance()}`, { method: 'POST', body: { number: phone, text } });
+      const id = data?.key?.id;
+      if (!id) throw new Error('Evolution não retornou o id da mensagem');
+      return id;
+    },
+    // PDF como documento, com legenda. Arquivos de alguns MB levam mais que um texto.
+    async sendDocument(phone, { pdf, fileName, caption }) {
+      if (!isLive()) return `sim-${crypto.randomUUID()}`;
+      const body = { number: phone, mediatype: 'document', mimetype: 'application/pdf', media: pdf.toString('base64'), fileName, caption };
+      const data = await evolution(`/message/sendMedia/${instance()}`, { method: 'POST', body, timeout: 60000 });
       const id = data?.key?.id;
       if (!id) throw new Error('Evolution não retornou o id da mensagem');
       return id;

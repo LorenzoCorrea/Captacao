@@ -20,7 +20,8 @@ const sending = new Map();
 export const pendingSend = (phoneKey) => sending.get(phoneKey) ?? Promise.resolve();
 
 // Com "allow", relê o estado e a lista de saída logo antes de enviar. Devolve null se não enviou.
-export function sendAndRecord(conv, text, { db, gateway }, { allow } = {}) {
+// "send" troca o envio de texto por outro (ex.: documento); "text" segue como o corpo gravado.
+export function sendAndRecord(conv, text, { db, gateway }, { allow, send } = {}) {
   const previous = sending.get(conv.phone_key) ?? Promise.resolve();
   const run = (async () => {
     await previous.catch(() => {});
@@ -28,7 +29,7 @@ export function sendAndRecord(conv, text, { db, gateway }, { allow } = {}) {
       const fresh = await db.botGet(conv.lead_id);
       if (!allow.includes(fresh?.status) || await db.botIsOptedOut(conv.phone_key)) return null;
     }
-    const id = await gateway.send(conv.phone, text);
+    const id = await (send ? send() : gateway.send(conv.phone, text));
     await db.botAddMessage({ id, leadId: conv.lead_id, direction: 'out', source: 'bot', body: text });
     return id;
   })();
