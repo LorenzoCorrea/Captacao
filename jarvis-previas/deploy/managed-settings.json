@@ -9,10 +9,14 @@
       "Glob",
       "Grep",
       "Bash(ls:*)",
-      "Bash(/srv/jarvis-previas/app/bin/gerar-pdf)"
+      "Bash(/srv/jarvis-previas/app/bin/gerar-pdf)",
+      "Bash(/srv/jarvis-voz/bin/consultar:*)",
+      "Read(//srv/jarvis-voz/sessao/**)",
+      "Edit(//srv/jarvis-voz/sessao/**)"
     ],
     "ask": [
-      "Bash(/srv/jarvis-previas/app/bin/enviar-previa)"
+      "Bash(/srv/jarvis-previas/app/bin/enviar-previa)",
+      "Bash(/srv/jarvis-voz/bin/agir:*)"
     ],
     "deny": [
       "Bash(curl:*)",
@@ -37,7 +41,9 @@
     "allowUnsandboxedCommands": true,
     "excludedCommands": [
       "/srv/jarvis-previas/app/bin/enviar-previa",
-      "/srv/jarvis-previas/app/bin/gerar-pdf"
+      "/srv/jarvis-previas/app/bin/gerar-pdf",
+      "/srv/jarvis-voz/bin/consultar",
+      "/srv/jarvis-voz/bin/agir"
     ],
     "network": {
       "allowedDomains": []
