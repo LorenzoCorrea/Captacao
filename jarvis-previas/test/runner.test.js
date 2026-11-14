@@ -89,6 +89,22 @@ test('enviado: kill depois de 60 s', async () => {
   assert.equal(store.get(id).estado, 'enviado');
 });
 
+test('enviado já fechado: para de consultar o tmux', async () => {
+  const { store, runner, tmux, clock, fila } = setup();
+  const id = fila();
+  await runner.tick();
+  store.update(id, { estado: 'enviado', enviadoEm: clock.t });
+  clock.t += 61_000;
+  await runner.tick();
+  let consultas = 0;
+  const alive = tmux.alive;
+  tmux.alive = async (n) => { consultas++; return alive.call(tmux, n); };
+  await runner.tick();
+  await runner.tick();
+  assert.equal(consultas, 0);
+  assert.equal(store.get(id).fechado, true);
+});
+
 test('apaga pedidos com mais de 30 dias', async () => {
   const { store, runner, clock, jobsDir, fila } = setup();
   const id = fila();

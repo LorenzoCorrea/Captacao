@@ -51,8 +51,9 @@ export function createRunner({ store, jobsDir, agentDir, tmux, now = Date.now, m
         } else if (p.estado === 'montando' && existsSync(join(jobsDir, p.id, 'saida', 'previa.pdf'))) {
           store.update(p.id, { estado: 'previa_pronta' });
         }
-      } else if (p.estado === 'enviado' && t - p.enviadoEm > FECHAR_APOS_ENVIO && (await tmux.alive(sessao(p.id)))) {
-        await tmux.kill(sessao(p.id));
+      } else if (p.estado === 'enviado' && !p.fechado && t - p.enviadoEm > FECHAR_APOS_ENVIO) {
+        if (await tmux.alive(sessao(p.id))) await tmux.kill(sessao(p.id));
+        store.update(p.id, { fechado: true });
       }
       if (!p.apagado && t - p.criadoEm > GUARDAR) {
         if (ATIVOS.has(p.estado)) await tmux.kill(sessao(p.id));

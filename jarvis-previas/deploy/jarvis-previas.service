@@ -10,6 +10,8 @@ WorkingDirectory=/srv/jarvis-previas/app
 ExecStart=/usr/bin/node src/main.js
 Restart=always
 RestartSec=5
+# O tmux dos agentes nasce dentro deste cgroup; sem isto, reiniciar o serviço mata os pedidos em andamento.
+KillMode=process
 
 [Install]
 WantedBy=multi-user.target
