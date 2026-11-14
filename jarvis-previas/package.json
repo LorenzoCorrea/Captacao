@@ -1,0 +1,11 @@
+{
+  "name": "jarvis-previas",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Recebe pedidos de prévia do APK e abre um agente do Claude Code por pedido.",
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "node --test test/*.test.js"
+  }
+}
