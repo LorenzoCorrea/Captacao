@@ -78,7 +78,8 @@ public class MainActivity extends Activity {
 
     @Override public void onBackPressed() {
         if (office.getParent() != null) { setContentView(ui); js("window.onVoltou && onVoltou()"); }
-        else super.onBackPressed();
+        // Fora de Pedidos, o voltar leva para Pedidos; em Pedidos, sai do app.
+        else ui.evaluateJavascript("window.voltar ? voltar() : false", v -> { if (!"true".equals(v)) super.onBackPressed(); });
     }
 
     // ---- fotos recebidas pelo Compartilhar ou escolhidas na galeria ----

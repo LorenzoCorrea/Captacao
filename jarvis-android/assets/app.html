@@ -40,7 +40,8 @@
   .tela { display: none; } .tela.on { display: block; }
   .rotulo { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--sub); margin: 22px 18px 10px; display: flex; justify-content: space-between; }
   .rotulo span:last-child { color: var(--apagado); letter-spacing: 0; text-transform: none; font-weight: 500; }
-  .lista { display: grid; gap: 10px; padding: 0 14px; }
+  .lista { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 0 14px; }
+  .lista > * { min-width: 0; }
   .cartao { background: var(--surface); border: 1px solid var(--line); border-radius: var(--raio); padding: 14px; }
   .cartao.destaque { border-color: rgba(242,169,59,.45); background: linear-gradient(var(--ambar-suave), var(--ambar-suave)), var(--surface); }
   .linha { display: flex; align-items: center; gap: 10px; }
@@ -379,6 +380,8 @@ function salvarConfig() {
   ir('tPedidos');
 }
 
+// Chamado pelo voltar do Android: true se tratou aqui.
+window.voltar = () => { if (telaAtual === 'tPedidos') return false; ir('tPedidos'); return true; };
 window.onVoltou = () => { if (telaAtual === 'tPedidos') carregarPedidos(); };
 
 const cfg = JSON.parse(Jarvis.config());
