@@ -14,3 +14,10 @@ captacao.md
 .htpasswd
 .superpowers/
 .playwright-mcp/
+
+# APK do Jarvis: gerados no build e chave de assinatura (nunca no git)
+jarvis-android/build/
+jarvis-android/*.apk
+jarvis-android/*.apk.idsig
+jarvis-android/*.keystore
+jarvis-android/res/drawable/icon.png

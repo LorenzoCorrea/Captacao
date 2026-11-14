@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jarvis</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --txt:#e2e8f0; --sub:#94a3b8; --azul:#3b82f6; --verde:#22c55e; --verm:#f87171; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:16px/1.4 system-ui, sans-serif; padding-bottom:76px; }
+  header { position:sticky; top:0; background:var(--bg); padding:14px 16px 8px; display:flex; align-items:center; justify-content:space-between; z-index:2; }
+  h1 { font-size:20px; margin:0; }
+  h2 { font-size:15px; color:var(--sub); font-weight:600; margin:18px 16px 8px; text-transform:uppercase; letter-spacing:.04em; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; margin:8px 16px; padding:12px 14px; }
+  .row { display:flex; align-items:center; gap:10px; }
+  .grow { flex:1; min-width:0; }
+  .nome { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sub { color:var(--sub); font-size:13px; }
+  .tag { font-size:12px; padding:3px 8px; border-radius:999px; background:#1d4ed8; color:#fff; white-space:nowrap; }
+  .tag.ok { background:#15803d; } .tag.erro { background:#b91c1c; } .tag.cinza { background:#475569; }
+  button { font:inherit; border:0; border-radius:10px; padding:12px 16px; background:var(--azul); color:#fff; font-weight:600; }
+  button.sec { background:transparent; border:1px solid var(--line); color:var(--txt); }
+  button:disabled { opacity:.5; }
+  .full { width:calc(100% - 32px); margin:12px 16px; display:block; }
+  input, textarea { font:inherit; width:100%; background:#0b1222; color:var(--txt); border:1px solid var(--line); border-radius:10px; padding:12px; }
+  textarea { min-height:70px; }
+  .fotos { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:8px 16px; }
+  .fotos div { position:relative; aspect-ratio:1; border-radius:10px; overflow:hidden; background:#0b1222; }
+  .fotos img { width:100%; height:100%; object-fit:cover; }
+  .fotos b { position:absolute; top:4px; right:4px; background:#000a; color:#fff; border-radius:999px; width:26px; height:26px; text-align:center; line-height:26px; }
+  .lead { cursor:pointer; } .lead.sel { border-color:var(--azul); background:#172554; }
+  .msg { margin:8px 16px; padding:10px 12px; border-radius:10px; background:#7f1d1d; display:none; }
+  .msg.info { background:#1e3a8a; }
+  nav { position:fixed; bottom:0; left:0; right:0; display:flex; background:#0b1222; border-top:1px solid var(--line); }
+  nav button { flex:1; background:none; border-radius:0; padding:16px 0; color:var(--sub); font-size:14px; }
+  nav button.on { color:#fff; box-shadow:inset 0 3px 0 var(--azul); }
+  .pagina { width:calc(100% - 32px); margin:8px 16px; border-radius:6px; display:block; }
+  .vazio { color:var(--sub); text-align:center; margin:40px 16px; }
+  .tela { display:none; } .tela.on { display:block; }
+</style>
+</head>
+<body>
+<header><h1 id="titulo">Jarvis</h1><button class="sec" id="btAtualizar" onclick="carregarPedidos()">Atualizar</button></header>
+<div class="msg" id="msg"></div>
+
+<section class="tela" id="tPedidos">
+  <div id="listaPedidos"></div>
+</section>
+
+<section class="tela" id="tNovo">
+  <h2>Fotos</h2>
+  <div class="fotos" id="fotos"></div>
+  <button class="sec full" onclick="Jarvis.escolherFotos()">Adicionar da galeria</button>
+  <h2>Lead</h2>
+  <div style="margin:0 16px"><input id="busca" placeholder="Buscar pelo nome" oninput="mostrarLeads()"></div>
+  <div id="listaLeads"></div>
+  <h2>Observação (opcional)</h2>
+  <div style="margin:0 16px"><textarea id="obs" placeholder="Ex.: usar tons de verde"></textarea></div>
+  <button class="full" id="btMontar" onclick="montar()">Montar prévia</button>
+</section>
+
+<section class="tela" id="tPrevia">
+  <button class="sec full" onclick="ir('tPedidos')">← Voltar</button>
+  <div id="paginas"></div>
+</section>
+
+<section class="tela" id="tConfig">
+  <h2>Servidor</h2>
+  <div class="card">
+    <div class="sub">Endereço do Jarvis no Tailscale</div>
+    <input id="cfgServidor">
+    <div class="sub" style="margin-top:12px">Token (deixe em branco para manter o atual)</div>
+    <input id="cfgToken" type="password" autocomplete="off">
+  </div>
+  <button class="full" onclick="salvarConfig()">Salvar</button>
+</section>
+
+<nav>
+  <button id="nPedidos" onclick="ir('tPedidos')">Pedidos</button>
+  <button id="nNovo" onclick="ir('tNovo')">Novo pedido</button>
+  <button onclick="Jarvis.abrirEscritorio()">Escritório</button>
+  <button id="nConfig" onclick="ir('tConfig')">⚙</button>
+</nav>
+
+<script>
+const ESTADOS = {
+  recebendo: ['recebendo fotos', 'cinza'], na_fila: ['na fila', 'cinza'], montando: ['montando', ''],
+  previa_pronta: ['prévia pronta', 'ok'], enviado: ['enviado', 'ok'], encerrado: ['encerrado', 'cinza'], erro: ['erro', 'erro'],
+};
+let leads = [], leadSel = null, enviando = false, seq = 0;
+const cbs = {};
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// Ponte com o Java: cada chamada assíncrona volta por window.__cb.
+window.__cb = (id, ok, dado) => { const f = cbs[id]; delete cbs[id]; f && f(ok, dado); };
+const chamar = (metodo, ...args) => new Promise((res, rej) => {
+  const id = 'c' + (++seq);
+  cbs[id] = (ok, dado) => (ok ? res(dado) : rej(new Error(dado)));
+  Jarvis[metodo](id, ...args);
+});
+async function api(method, path, body) {
+  const r = JSON.parse(await chamar('api', method, path, body ? JSON.stringify(body) : ''));
+  if (r.status === 401) { ir('tConfig'); throw new Error('Token inválido: confira em ⚙.'); }
+  if (r.status >= 400) throw new Error(r.body?.error ?? `Erro ${r.status}`);
+  return r.body;
+}
+
+function aviso(texto, info) {
+  const m = $('msg');
+  m.textContent = texto; m.className = 'msg' + (info ? ' info' : ''); m.style.display = texto ? 'block' : 'none';
+}
+
+function ir(tela) {
+  for (const t of document.querySelectorAll('.tela')) t.classList.toggle('on', t.id === tela);
+  for (const [n, t] of [['nPedidos', 'tPedidos'], ['nNovo', 'tNovo'], ['nConfig', 'tConfig']]) $(n).classList.toggle('on', t === tela);
+  $('btAtualizar').style.display = tela === 'tPedidos' ? '' : 'none';
+  $('titulo').textContent = { tPedidos: 'Pedidos', tNovo: 'Nova prévia', tPrevia: 'Prévia', tConfig: 'Configuração' }[tela];
+  aviso('');
+  if (tela === 'tPedidos') carregarPedidos();
+  if (tela === 'tNovo') { onFotos(); carregarLeads(); }
+  if (tela === 'tConfig') $('cfgServidor').value = JSON.parse(Jarvis.config()).servidor;
+}
+
+async function carregarPedidos() {
+  try {
+    const { pedidos } = await api('GET', '/pedidos');
+    $('listaPedidos').innerHTML = pedidos.length ? pedidos.map((p) => {
+      const [txt, cls] = ESTADOS[p.estado] ?? [p.estado, 'cinza'];
+      const hora = new Date(p.atualizadoEm).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const ver = ['previa_pronta', 'enviado'].includes(p.estado) && !p.apagado;
+      return `<div class="card"><div class="row"><div class="grow"><div class="nome">${esc(p.leadName)}</div>
+        <div class="sub">${hora} · ${p.fotos} foto(s)${p.erro ? ' · ' + esc(p.erro) : ''}</div></div>
+        <span class="tag ${cls}">${txt}</span></div>
+        ${ver ? `<button class="sec" style="margin-top:10px;width:100%" onclick="verPrevia('${p.id}')">Ver prévia</button>` : ''}</div>`;
+    }).join('') : '<div class="vazio">Nenhum pedido ainda.<br>Compartilhe fotos com o Jarvis para começar.</div>';
+  } catch (e) { aviso(e.message); }
+}
+
+async function verPrevia(id) {
+  ir('tPrevia');
+  $('paginas').innerHTML = '<div class="vazio">Carregando…</div>';
+  try {
+    const paginas = JSON.parse(await chamar('verPrevia', id));
+    $('paginas').innerHTML = paginas.map((src) => `<img class="pagina" src="${src}">`).join('');
+  } catch (e) { $('paginas').innerHTML = ''; aviso(e.message); }
+}
+
+window.onFotos = () => {
+  const n = Jarvis.quantasFotos();
+  $('fotos').innerHTML = n ? Array.from({ length: n }, (_, i) => `<div id="f${i}"><b onclick="tirar(${i})">×</b></div>`).join('') : '';
+  if (n) chamar('miniaturas').then((lista) => JSON.parse(lista).forEach((src, i) => {
+    const d = $('f' + i); if (d && src) d.insertAdjacentHTML('afterbegin', `<img src="${src}">`);
+  }));
+  if (n && !document.querySelector('#tNovo.on') && !enviando) ir('tNovo');
+};
+function tirar(i) { Jarvis.tirarFoto(i); onFotos(); }
+
+async function carregarLeads() {
+  try { leads = (await api('GET', '/leads')).leads; mostrarLeads(); } catch (e) { aviso(e.message); }
+}
+function mostrarLeads() {
+  const q = $('busca').value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+  const lista = leads.filter((l) => l.name.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().includes(q)).slice(0, 30);
+  $('listaLeads').innerHTML = lista.map((l) => `<div class="card lead ${l.leadId === leadSel ? 'sel' : ''}" onclick="escolher('${encodeURIComponent(l.leadId)}')">
+    <div class="row"><div class="grow"><div class="nome">${esc(l.name)}</div><div class="sub">${esc(l.phone)}</div></div>
+    ${l.pediuPrevia ? '<span class="tag ok">pediu prévia</span>' : ''}</div></div>`).join('') || '<div class="vazio">Nenhum lead encontrado.</div>';
+}
+function escolher(id) { leadSel = decodeURIComponent(id); mostrarLeads(); }
+
+window.onProgresso = (n, total) => aviso(`Enviando foto ${n} de ${total}…`, true);
+async function montar() {
+  if (!Jarvis.quantasFotos()) return aviso('Adicione ao menos uma foto.');
+  if (!leadSel) return aviso('Escolha o lead.');
+  enviando = true; $('btMontar').disabled = true;
+  try {
+    await chamar('montar', leadSel, $('obs').value);
+    leadSel = null; $('obs').value = ''; ir('tPedidos');
+    aviso('Pedido criado. O agente já está montando a prévia: acompanhe no Escritório.', true);
+  } catch (e) { aviso(e.message); }
+  finally { enviando = false; $('btMontar').disabled = false; }
+}
+
+function salvarConfig() {
+  Jarvis.salvarConfig($('cfgServidor').value, $('cfgToken').value);
+  $('cfgToken').value = '';
+  ir('tPedidos');
+}
+
+window.onVoltou = () => { if (document.querySelector('#tPedidos.on')) carregarPedidos(); };
+
+const cfg = JSON.parse(Jarvis.config());
+ir(!cfg.temToken ? 'tConfig' : Jarvis.quantasFotos() ? 'tNovo' : 'tPedidos');
+</script>
+</body>
+</html>
