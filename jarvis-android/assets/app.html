@@ -166,7 +166,13 @@ function mostrarLeads() {
     <div class="row"><div class="grow"><div class="nome">${esc(l.name)}</div><div class="sub">${esc(l.phone)}</div></div>
     ${l.pediuPrevia ? '<span class="tag ok">pediu prévia</span>' : ''}</div></div>`).join('') || '<div class="vazio">Nenhum lead encontrado.</div>';
 }
-function escolher(id) { leadSel = decodeURIComponent(id); mostrarLeads(); }
+// Filtra a lista pelo escolhido para o botão Montar não ficar escondido abaixo de 30 cards.
+function escolher(id) {
+  leadSel = decodeURIComponent(id);
+  $('busca').value = leads.find((l) => l.leadId === leadSel)?.name ?? '';
+  mostrarLeads();
+  $('btMontar').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
 
 window.onProgresso = (n, total) => aviso(`Enviando foto ${n} de ${total}…`, true);
 async function montar() {
