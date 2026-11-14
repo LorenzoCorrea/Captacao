@@ -8,6 +8,7 @@ id mordomo >/dev/null 2>&1 || useradd -m -s /bin/bash mordomo
 install -d -o lorenzo -g lorenzo -m 755 $V
 install -d -o mordomo -g mordomo -m 755 $V/sessao $V/estado
 install -d -o root -g mordomo -m 750 $V/bin
+install -o root -g mordomo -m 750 $A/bin/consultar $A/bin/agir $V/bin/
 install -d -o root -g root -m 755 $V/hooks
 [ -f $V/acoes.log ] || install -o lorenzo -g lorenzo -m 644 /dev/null $V/acoes.log
 install -m 755 $A/hooks/ao-parar $V/hooks/ao-parar

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Ação do Jarvis: só roda depois da aprovação do Lorenzo (regra ask). Passa para o lado lorenzo.
+exec sudo -n -u lorenzo /srv/jarvis-previas/app/bin/jarvis-lorenzo agir "$@"

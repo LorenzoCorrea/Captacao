@@ -37,3 +37,14 @@ test('sendPreview ok', async () => {
   const c = createCaptacao({ url: 'http://c', auth: 'u:p', fetch });
   assert.deepEqual(await c.sendPreview('a', Buffer.from('%PDF'), 'previa.pdf'), { ok: true });
 });
+
+test('api: manda JSON com login e devolve o corpo; erro sobe com a mensagem do Captação', async () => {
+  const { fetch, calls } = fakeFetch((url) => (url.endsWith('/ruim') ? json(409, { error: 'Esta conversa não pode ser pausada.' }) : json(200, { ok: 1 })));
+  const c = createCaptacao({ url: 'http://c', auth: 'u:p', fetch });
+  assert.deepEqual(await c.api('PUT', '/api/bot/enabled', { enabled: false }), { ok: 1 });
+  assert.equal(calls[0].init.method, 'PUT');
+  assert.equal(calls[0].init.body, '{"enabled":false}');
+  assert.equal(calls[0].init.headers['Content-Type'], 'application/json');
+  assert.ok(calls[0].init.headers.Authorization.startsWith('Basic '));
+  await assert.rejects(c.api('POST', '/ruim'), /não pode ser pausada/);
+});
