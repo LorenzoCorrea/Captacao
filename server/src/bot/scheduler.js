@@ -199,7 +199,9 @@ async function nextOpenOnSaturday(now, deps) {
 const EXTRA_IF_SILENT = 2;
 const SILENT_AFTER_MS = 4 * 60 * 60 * 1000;
 async function dailyLimit(now, settings, sent, db) {
-  const base = Number(settings.limits?.whatsapp ?? 5);
+  // Extra pedido pelo Lorenzo (pelo Jarvis, com aprovação): soma ao limite e só vale no dia em que foi pedido.
+  const extra = settings.extraHoje?.date === hojeLocal(now) ? Number(settings.extraHoje.n) || 0 : 0;
+  const base = Number(settings.limits?.whatsapp ?? 5) + extra;
   if (sent < base) return base;
   const silent = await db.botSilentSince(new Date(now.getFullYear(), now.getMonth(), now.getDate()), new Date(now.getTime() - SILENT_AFTER_MS));
   return silent >= base - 1 ? base + EXTRA_IF_SILENT : base;

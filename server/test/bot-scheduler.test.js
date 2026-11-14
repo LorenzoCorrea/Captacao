@@ -444,3 +444,16 @@ test('nicho nacional: no máximo 2 por dia, sem aumentar o total', async () => {
     assert.deepEqual(log.sent, []);
   }
 });
+
+test('extra pedido pelo Lorenzo soma ao limite só no dia', async () => {
+  const run = async (sentToday, extraHoje) => {
+    const { log, deps, settings } = setup({ queued: [q], usage: { whatsapp: sentToday }, state: { lastCaptureDate: '2026-11-04' } });
+    settings.extraHoje = extraHoje;
+    await tick(WED_10, deps);
+    return log.sent.length;
+  };
+  assert.equal(await run(5, { date: '2026-11-04', n: 4 }), 1);
+  assert.equal(await run(9, { date: '2026-11-04', n: 4 }), 0);
+  assert.equal(await run(5, { date: '2026-11-03', n: 4 }), 0); // o de ontem não vale
+  assert.equal(await run(5, undefined), 0);
+});

@@ -90,8 +90,10 @@ export function createConversa({ tmux, respostaFile, falar, now = Date.now, espe
       return tmux.teclas('1');
     },
 
+    // Apagar a conversa: fecha a sessão e apaga o histórico guardado pelo Claude Code do mordomo.
     async nova() {
       await tmux.matar();
+      await tmux.apagarHistorico();
       atual = null;
       ultimaEm = null;
     },
@@ -123,6 +125,9 @@ export function tmuxDoMordomo({ nome = 'jarvis', cwd = '/srv/jarvis-voz/sessao',
     tela: async () => (await tmux('capture-pane', '-p', '-t', nome)).saida,
     teclas: async (...k) => { await tmux('send-keys', '-t', nome, ...k); },
     matar: async () => { await tmux('kill-session', '-t', nome); },
+    apagarHistorico: () => new Promise((resolve) => {
+      execFile('sudo', ['-n', '-u', 'mordomo', '/srv/jarvis-voz/hooks/apagar-historico'], () => resolve());
+    }),
   };
 }
 

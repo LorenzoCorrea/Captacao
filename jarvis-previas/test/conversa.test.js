@@ -33,6 +33,7 @@ function setup({ falhaVoz = false } = {}) {
     async tela() { return this.tela_; },
     async teclas(...k) { log.push(['teclas', ...k]); },
     async matar() { log.push('matar'); this.viva = false; },
+    async apagarHistorico() { log.push('apagarHistorico'); },
   };
   let falas = 0;
   const falar = async () => { falas++; if (falhaVoz) throw new Error('kokoro fora'); return Buffer.from('RIFF'); };
@@ -147,7 +148,7 @@ test('nova conversa mata a sessão e esquece a mensagem', async () => {
   const { c, log } = setup();
   const { id } = await c.enviar('oi');
   await c.nova();
-  assert.equal(log.at(-1), 'matar');
+  assert.deepEqual(log.slice(-2), ['matar', 'apagarHistorico']);
   await assert.rejects(c.estado(id), /Mensagem não encontrada/);
   await c.enviar('de novo');
 });

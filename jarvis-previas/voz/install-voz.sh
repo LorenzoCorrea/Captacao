@@ -11,7 +11,7 @@ install -d -o root -g mordomo -m 750 $V/bin
 install -o root -g mordomo -m 750 $A/bin/consultar $A/bin/agir $V/bin/
 install -d -o root -g root -m 755 $V/hooks
 [ -f $V/acoes.log ] || install -o lorenzo -g lorenzo -m 644 /dev/null $V/acoes.log
-install -m 755 $A/hooks/ao-parar $V/hooks/ao-parar
+install -m 755 $A/hooks/ao-parar $A/hooks/apagar-historico $V/hooks/
 install -o mordomo -g mordomo -m 644 $A/sessao/CLAUDE.md $V/sessao/CLAUDE.md
 [ -x /home/mordomo/.local/bin/claude ] || sudo -u mordomo -H sh -c 'curl -fsSL https://claude.ai/install.sh | bash' >/dev/null
 install -d -o mordomo -g mordomo -m 700 /home/mordomo/.claude

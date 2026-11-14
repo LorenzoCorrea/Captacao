@@ -7,7 +7,10 @@ const ID_PEDIDO = /^[a-z0-9]{8}$/;
 const conv = (id) => `/api/bot/conversations/${encodeURIComponent(id)}`;
 const data = (iso) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
-export function createFerramentas({ captacao, store, sistema, previas, log }) {
+const hojeSP = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+const EXTRA_MAX = 20;
+
+export function createFerramentas({ captacao, store, sistema, previas, log, hoje = hojeSP }) {
   const conversas = async () => (await captacao.api('GET', '/api/bot/conversations')).conversations ?? [];
   const exigeLead = async (id) => {
     if (!id) throw new Error('Informe o lead_id (use: consultar conversas).');
@@ -18,11 +21,14 @@ export function createFerramentas({ captacao, store, sistema, previas, log }) {
 
   const assuntos = {
     async bot() {
-      const s = await captacao.api('GET', '/api/bot/status');
+      const [s, { settings = {} }] = await Promise.all([captacao.api('GET', '/api/bot/status'), captacao.api('GET', '/api/settings')]);
+      const extra = settings.extraHoje?.date === hoje() ? Number(settings.extraHoje.n) || 0 : 0;
+      const c = s.config ?? {};
       return [
         `Bot ${s.config?.enabled ? 'ligado' : 'desligado'}${s.config?.disabledReason ? ` (${s.config.disabledReason})` : ''}, modo ${s.mode === 'live' ? 'real' : 'simulação'}.`,
         `WhatsApp ${s.connection === 'open' ? 'conectado' : `não conectado (${s.connection})`}.`,
-        `Enviados hoje: ${s.sentToday} de ${s.dailyLimit}.`,
+        `Enviados hoje: ${s.sentToday} de ${s.dailyLimit + extra}${extra ? ` (${s.dailyLimit} de sempre + ${extra} a mais hoje)` : ''}.`,
+        `Envia das ${c.sendFrom ?? '09:00'} às ${c.sendTo ?? '18:00'}${c.weekdaysOnly ? ', em dia útil (sábado só para quem está aberto)' : ''}.`,
       ].join('\n');
     },
     async conversas([status]) {
@@ -69,6 +75,17 @@ export function createFerramentas({ captacao, store, sistema, previas, log }) {
       if (!['ligar', 'desligar'].includes(o)) throw new Error('Use ligar ou desligar.');
       await captacao.api('PUT', '/api/bot/enabled', { enabled: o === 'ligar' });
       return `Bot ${o === 'ligar' ? 'ligado' : 'desligado'}.`;
+    },
+    // "Chame mais N leads hoje": soma ao limite só no dia (o bot zera sozinho amanhã).
+    async 'chamar-mais'([n]) {
+      const mais = Number(n);
+      if (!Number.isInteger(mais) || mais < 1 || mais > 10) throw new Error('Peça de 1 a 10 leads a mais por vez.');
+      const { settings = {} } = await captacao.api('GET', '/api/settings');
+      const atual = settings.extraHoje?.date === hoje() ? Number(settings.extraHoje.n) || 0 : 0;
+      if (atual + mais > EXTRA_MAX) throw new Error(`Hoje já há ${atual} a mais; o extra vai no máximo 20 por dia.`);
+      await captacao.api('PUT', '/api/settings/extraHoje', { value: { date: hoje(), n: atual + mais } });
+      const base = Number(settings.limits?.whatsapp ?? 5);
+      return `Limite de hoje: ${base + atual + mais} hoje (${base} de sempre + ${atual + mais} a mais). O bot envia no horário configurado, com intervalo entre mensagens, e o extra zera amanhã.`;
     },
     async 'apagar-pedido'([id]) {
       if (!ID_PEDIDO.test(id ?? '')) throw new Error('Pedido inválido.');

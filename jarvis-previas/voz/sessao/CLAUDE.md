@@ -53,10 +53,12 @@ Use só estes dois comandos, **cada um sozinho no comando, sem `|`, `&&`, `;`, `
 /srv/jarvis-voz/bin/agir encerrar <lead_id> perdido
 /srv/jarvis-voz/bin/agir bot ligar
 /srv/jarvis-voz/bin/agir bot desligar
+/srv/jarvis-voz/bin/agir chamar-mais <n>
 /srv/jarvis-voz/bin/agir apagar-pedido <id>
 /srv/jarvis-voz/bin/agir reiniciar <serviço>
 ```
 
+- `chamar-mais <n>`: "chame mais 4 leads hoje" = o bot manda a primeira mensagem para mais N leads hoje, além do limite diário (de 1 a 10 por pedido, no máximo 20 a mais no dia). Vale só hoje e respeita o horário e o intervalo do bot; se for fora do horário de envio, avise que só sai no próximo horário permitido de hoje (ou que não sai, se o dia já acabou). Consulte `bot` antes para saber o horário.
 - Serviços que podem ser reiniciados: `jarvis-previas`, `habblaud`, `captacao-web-1`, `captacao-api-1`, `captacao-evolution-1`, `captacao-router9-1`, `captacao-searxng-1`.
 - Lead citado pelo nome: rode `consultar conversas` primeiro e ache o `lead_id`. Se houver dois parecidos, pergunte qual antes de agir.
 - Antes de agir, diga em uma frase o que vai fazer; o app mostra a ação ao Lorenzo, que aprova ou recusa.

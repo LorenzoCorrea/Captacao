@@ -285,6 +285,8 @@ const validSetting = {
   limits: (v) => v !== null && typeof v === 'object' && !Array.isArray(v) &&
     ['whatsapp', 'instagram', 'minSpacingMin'].every((k) => v[k] === undefined || (Number.isFinite(v[k]) && v[k] >= 0)),
   lastSearchId: (v) => v === null || (typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v)),
+  // Leads a mais só no dia (pedido do Lorenzo pelo Jarvis, com aprovação).
+  extraHoje: (v) => v !== null && typeof v === 'object' && /^\d{4}-\d{2}-\d{2}$/.test(v.date) && Number.isInteger(v.n) && v.n >= 0 && v.n <= 20,
 };
 
 router.get('/api/settings', async (_req, res) => {

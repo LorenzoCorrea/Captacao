@@ -268,6 +268,7 @@ public class MainActivity extends Activity {
     SpeechRecognizer escuta;
     String cbOuvir;
     MediaPlayer voz;
+    String cbVoz;
 
     @JavascriptInterface public void ouvir(String cb) {
         runOnUiThread(() -> {
@@ -339,10 +340,11 @@ public class MainActivity extends Activity {
                 try (FileOutputStream o = new FileOutputStream(f)) { o.write(ler(c.getInputStream())); }
                 runOnUiThread(() -> {
                     try {
-                        if (voz != null) voz.release();
+                        terminarVoz();
                         voz = new MediaPlayer();
+                        cbVoz = cb;
                         voz.setDataSource(f.getPath());
-                        voz.setOnCompletionListener(m -> responder(cb, true, ""));
+                        voz.setOnCompletionListener(m -> terminarVoz());
                         voz.prepare();
                         voz.start();
                     } catch (Exception e) { responder(cb, false, "Não consegui tocar a resposta."); }
@@ -351,5 +353,11 @@ public class MainActivity extends Activity {
         });
     }
 
-    @JavascriptInterface public void pararDeFalar() { runOnUiThread(() -> { if (voz != null && voz.isPlaying()) voz.stop(); }); }
+    // Fim da fala (terminou ou foi cancelada): libera o player e avisa a página uma vez só.
+    void terminarVoz() {
+        if (voz != null) { try { voz.stop(); } catch (Exception e) {} voz.release(); voz = null; }
+        if (cbVoz != null) { responder(cbVoz, true, ""); cbVoz = null; }
+    }
+
+    @JavascriptInterface public void pararDeFalar() { runOnUiThread(this::terminarVoz); }
 }

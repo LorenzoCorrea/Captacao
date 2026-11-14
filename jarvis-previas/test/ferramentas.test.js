@@ -7,7 +7,7 @@ const CONVERSAS = [
   { lead_id: 'osm:node/2', name: 'Academia Evolução', status: 'active', reason: null },
 ];
 
-function setup({ falhar } = {}) {
+function setup({ falhar, extra } = {}) {
   const chamadas = [];
   const logs = [];
   const reinicios = [];
@@ -16,6 +16,7 @@ function setup({ falhar } = {}) {
       chamadas.push({ method, path, body });
       if (falhar && method !== 'GET') throw new Error(falhar);
       if (path === '/api/bot/conversations') return { conversations: CONVERSAS };
+      if (path === '/api/settings') return { settings: { limits: { whatsapp: 5 }, extraHoje: extra } };
       if (path === '/api/bot/status') return { mode: 'live', config: { enabled: true }, connection: 'open', sentToday: 2, dailyLimit: 5 };
       return { ok: true };
     },
@@ -23,7 +24,7 @@ function setup({ falhar } = {}) {
   const store = { list: () => [{ id: 'abcd1234', leadName: 'Barbearia Davi', estado: 'montando' }] };
   const sistema = { servicos: async () => ({ 'jarvis-previas': 'active' }), reiniciar: async (n) => { reinicios.push(n); } };
   const previas = { apagar: async (id) => { chamadas.push({ method: 'APAGAR', path: id }); } };
-  const f = createFerramentas({ captacao, store, sistema, previas, log: (l) => logs.push(l) });
+  const f = createFerramentas({ captacao, store, sistema, previas, log: (l) => logs.push(l), hoje: () => '2026-11-16' });
   return { f, chamadas, logs, reinicios };
 }
 
@@ -100,4 +101,26 @@ test('falha do Captação vira ok:false no log e sobe o erro', async () => {
   await assert.rejects(f.agir('pausar', ['osm:node/1']), /não pode ser pausada/);
   assert.equal(logs[0].ok, false);
   assert.match(logs[0].saida, /não pode ser pausada/);
+});
+
+test('agir chamar-mais soma ao extra de hoje, com teto', async () => {
+  const { f, chamadas } = setup({ extra: { date: '2026-11-16', n: 2 } });
+  const r = await f.agir('chamar-mais', ['4']);
+  assert.deepEqual(chamadas.at(-1), { method: 'PUT', path: '/api/settings/extraHoje', body: { value: { date: '2026-11-16', n: 6 } } });
+  assert.match(r, /11 hoje/);
+  await assert.rejects(f.agir('chamar-mais', ['0']), /de 1 a 10/);
+  await assert.rejects(f.agir('chamar-mais', ['quatro']), /de 1 a 10/);
+});
+
+test('agir chamar-mais: o extra de ontem não conta e o total para em 20', async () => {
+  const ontem = setup({ extra: { date: '2026-11-15', n: 7 } });
+  await ontem.f.agir('chamar-mais', ['3']);
+  assert.deepEqual(ontem.chamadas.at(-1).body, { value: { date: '2026-11-16', n: 3 } });
+  const cheio = setup({ extra: { date: '2026-11-16', n: 18 } });
+  await assert.rejects(cheio.f.agir('chamar-mais', ['5']), /no máximo 20/);
+});
+
+test('consultar bot mostra o extra de hoje', async () => {
+  const { f } = setup({ extra: { date: '2026-11-16', n: 4 } });
+  assert.match(await f.consultar('bot', []), /2 de 9 \(5 de sempre \+ 4 a mais hoje\)/);
 });

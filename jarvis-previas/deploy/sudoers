@@ -3,3 +3,4 @@ lorenzo ALL=(previas) NOPASSWD: /usr/bin/tmux
 lorenzo ALL=(mordomo) NOPASSWD: /usr/bin/tmux
 mordomo ALL=(lorenzo) NOPASSWD: /srv/jarvis-previas/app/bin/jarvis-lorenzo consultar *, /srv/jarvis-previas/app/bin/jarvis-lorenzo agir *
 lorenzo ALL=(root) NOPASSWD: /usr/bin/systemctl restart jarvis-previas, /usr/bin/systemctl restart habblaud, /usr/bin/systemctl restart jarvis-kokoro
+lorenzo ALL=(mordomo) NOPASSWD: /srv/jarvis-voz/hooks/apagar-historico
