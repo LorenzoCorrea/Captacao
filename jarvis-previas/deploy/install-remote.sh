@@ -25,10 +25,21 @@ setfacl -R -m u:lorenzo:rwX /srv/jarvis-previas/jobs
 setfacl -R -d -m u:lorenzo:rwX /srv/jarvis-previas/jobs
 # Fontes, referências (Supahero, Three.js, GSAP) e skills de design não ficam no git (terceiros e pesadas):
 # ficam em /usr/local/share/fonts/jarvis, /srv/jarvis-previas/referencias e /home/previas/.claude/skills.
-install -m 644 $A/deploy/habblaud.service $A/deploy/jarvis-previas.service /etc/systemd/system/
+# Jarvis de voz: usuário mordomo, ferramentas, hook e persona; voz Kokoro (venv + modelo, baixados uma vez).
+sh $A/voz/install-voz.sh
+K=/srv/jarvis-voz/kokoro
+install -m 644 -o lorenzo -g lorenzo $A/voz/kokoro/servidor.py $K/servidor.py
+if [ ! -x $K/venv/bin/python ]; then
+  sudo -u lorenzo python3 -m venv $K/venv
+  sudo -u lorenzo $K/venv/bin/pip install -q -r $A/voz/kokoro/requirements.txt
+fi
+for f in kokoro-v1.0.onnx voices-v1.0.bin; do
+  [ -s $K/cache/$f ] || sudo -u lorenzo sh -c "mkdir -p $K/cache && curl -fsSL -o $K/cache/$f https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/$f"
+done
+install -m 644 $A/deploy/habblaud.service $A/deploy/jarvis-previas.service $A/deploy/jarvis-kokoro.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now habblaud jarvis-previas >/dev/null 2>&1
+systemctl enable --now habblaud jarvis-previas jarvis-kokoro >/dev/null 2>&1
 systemctl restart jarvis-previas
 tailscale serve --bg --https=8095 http://127.0.0.1:8095 >/dev/null
 tailscale serve --bg --https=4747 https+insecure://127.0.0.1:4748 >/dev/null
-systemctl is-active habblaud jarvis-previas
+systemctl is-active habblaud jarvis-previas jarvis-kokoro

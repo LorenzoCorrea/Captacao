@@ -27,4 +27,9 @@ sudo -u mordomo -H /home/mordomo/.local/bin/claude plugin marketplace add /srv/h
 for p in habblaud habblaud-permissoes habblaud-mensagens; do
   sudo -u mordomo -H /home/mordomo/.local/bin/claude plugin install "$p@habblaud" >/dev/null 2>&1 || true
 done
+# O Habblaud (usuário previas) precisa ver as sessões do mordomo para o personagem do Jarvis aparecer.
+grep -q '^HABBLAUD_CLAUDE_DIRS=' /srv/habblaud/.env || { echo 'HABBLAUD_CLAUDE_DIRS=/home/previas/.claude,/home/mordomo/.claude' >> /srv/habblaud/.env; systemctl restart habblaud; }
+setfacl -m u:previas:x /home/mordomo
+setfacl -R -m u:previas:rX /home/mordomo/.claude
+setfacl -R -d -m u:previas:rX /home/mordomo/.claude
 echo "voz: ok"
