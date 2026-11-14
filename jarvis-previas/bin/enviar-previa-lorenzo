@@ -1,0 +1,3 @@
+#!/bin/sh
+# provisório do teste de infraestrutura (Task 1); a Task 7 troca por src/enviar.js
+echo "ENVIO SIMULADO do pedido $1" | tee /tmp/enviar-previa-teste.log

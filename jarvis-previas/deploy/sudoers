@@ -1,0 +1,2 @@
+previas ALL=(lorenzo) NOPASSWD: /srv/jarvis-previas/app/bin/enviar-previa-lorenzo [a-z0-9]*
+lorenzo ALL=(previas) NOPASSWD: /usr/bin/tmux

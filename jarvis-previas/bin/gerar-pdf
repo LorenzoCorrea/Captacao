@@ -1,0 +1,21 @@
+#!/bin/sh
+# Gera saida/previa.pdf a partir de saida/site.html do pedido atual (diretório corrente).
+# Roda fora do sandbox do Claude Code (que bloqueia os sockets que o Chromium usa), mas dentro
+# de uma caixa própria: sem rede (nem localhost), sem /tmp do usuário (onde fica o socket do tmux)
+# e com escrita só em saida/. (Desligar JavaScript impede o Chromium de imprimir.)
+set -eu
+JOB=$(pwd -P)
+case "$JOB" in
+  /srv/jarvis-previas/jobs/*) ;;
+  *) echo "gerar-pdf: rode dentro da pasta do pedido" >&2; exit 2 ;;
+esac
+rm -f "$JOB/saida/previa.pdf"
+[ -f "$JOB/saida/site.html" ] || { echo "gerar-pdf: falta saida/site.html" >&2; exit 2; }
+bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --tmpfs /run --tmpfs "$HOME" \
+  --bind "$JOB/saida" "$JOB/saida" --unshare-all --die-with-parent --new-session \
+  --setenv HOME /tmp --chdir "$JOB" \
+  chromium --headless --no-sandbox --no-zygote --disable-gpu --disable-dev-shm-usage \
+    --disable-crash-reporter --disable-breakpad \
+    --user-data-dir=/tmp/chrome --no-pdf-header-footer \
+    --print-to-pdf="$JOB/saida/previa.pdf" "file://$JOB/saida/site.html" 2>&1 | grep -v dbus || true
+[ -s "$JOB/saida/previa.pdf" ] || { echo "gerar-pdf: o PDF não foi gerado" >&2; exit 1; }

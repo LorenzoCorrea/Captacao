@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "defaultMode": "default",
+    "allow": [
+      "Read(//srv/jarvis-previas/jobs/**)",
+      "Edit(//srv/jarvis-previas/jobs/**)",
+      "Glob",
+      "Grep",
+      "Bash(ls:*)",
+      "Bash(/srv/jarvis-previas/app/bin/gerar-pdf)"
+    ],
+    "ask": [
+      "Bash(/srv/jarvis-previas/app/bin/enviar-previa)"
+    ],
+    "deny": [
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(ssh:*)",
+      "WebFetch",
+      "WebSearch",
+      "Read(//srv/jarvis-previas/config/**)",
+      "Bash(tmux:*)",
+      "Bash(chromium:*)",
+      "Bash(sudo:*)"
+    ],
+    "disableBypassPermissionsMode": "disable"
+  },
+  "env": {
+    "HABBLAUD_PERMISSION_TIMEOUT": "86400"
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "allowUnsandboxedCommands": true,
+    "excludedCommands": [
+      "/srv/jarvis-previas/app/bin/enviar-previa",
+      "/srv/jarvis-previas/app/bin/gerar-pdf"
+    ],
+    "network": {
+      "allowedDomains": []
+    }
+  }
+}

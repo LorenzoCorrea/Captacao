@@ -155,3 +155,18 @@ Aba "Escritório" ◄── Habblaud ◄────┘                         
 - A estrutura interna do APK, os ícones e as telas.
 - Como guardar o token no servidor e no APK.
 - A forma exata de abrir a sessão interativa do `claude` com a primeira mensagem.
+
+## Resultado do teste de infraestrutura (2026-11-14)
+
+Tudo confirmado no servidor, com o celular do Lorenzo pelo Tailscale:
+
+- **Aprovar pelo celular funciona:** o personagem levanta a mão no Habblaud e uma aprovação roda o comando. **Mensagens pelo celular** chegam à sessão quando o agente está parado.
+- **Habblaud:** roda em Node no host (`/srv/habblaud`, usuário `previas`, unit `jarvis-previas/deploy/habblaud.service`). A porta 4747 sem login fica só em localhost. A porta remota 4748, com login, HTTPS e `HABBLAUD_REMOTE_ALLOW=permissions,messages`, fica em `127.0.0.1` e é publicada só na tailnet por `tailscale serve --https=4747 https+insecure://127.0.0.1:4748`. O endereço é `https://servidor.tail1458e4.ts.net:4747`. No modo Node, o bind remoto se chama `HABBLAUD_REMOTE_HOST`, não `..._BIND`. O `remote:setup` precisa de `TMPDIR` no home, porque `/tmp` é outro sistema de arquivos.
+- **Confiança na pasta:** basta marcar `/srv/jarvis-previas/jobs` como confiável uma vez em `~previas/.claude.json`, e as subpastas de pedidos não perguntam mais.
+- **Permissões:** ficam em `/etc/claude-code/managed-settings.json` (`jarvis-previas/deploy/managed-settings.json`), que pertence ao root e que o agente e a tela do Claude não alteram. Um teste anterior chegou a gravar `defaultMode: auto` nas configurações do usuário. O modo é `default`: `dontAsk` nega também as regras `ask`, e o envio nunca pediria aprovação.
+- **Sandbox do Claude Code** (bubblewrap): os comandos do agente rodam sem rede e são liberados sem perguntar. `allowUnsandboxedCommands` precisa ficar `true`, porque com `false` nem os `excludedCommands` saem do sandbox. Um comando fora do sandbox que não esteja em `allow` continua pedindo aprovação.
+- **Unix sockets continuam bloqueados no sandbox**, de propósito: com eles, o agente poderia falar com o tmux e aprovar o próprio envio.
+- **PDF:** sai pelo `/srv/jarvis-previas/app/bin/gerar-pdf`, sem argumentos, liberado e fora do sandbox. Ele roda o Chromium numa caixa bwrap própria, sem rede nem `/tmp` do usuário e com escrita só em `saida/`. Desligar JavaScript faz o Chromium não imprimir.
+- **Envio:** é `/srv/jarvis-previas/app/bin/enviar-previa`, **sem argumentos**. O pedido vem da pasta atual. O comando é `ask` e fica fora do sandbox, e depois de aprovado faz `sudo -n -u lorenzo .../enviar-previa-lorenzo <id>`. O `excludedCommands` só funcionou com o comando exato. Com `sudo`, com prefixos com argumentos ou com o formato `:*`, ele não saiu do sandbox e exigia duas aprovações. `Bash(sudo:*)` e `Bash(tmux:*)` ficam em `deny`.
+- **Arquivos:** criar com `>` no shell pede permissão. O agente deve usar a ferramenta de escrita, que está liberada.
+- **Pendente:** o login do Habblaud dentro de um WebView ainda não foi testado e fica para a Task 9.
