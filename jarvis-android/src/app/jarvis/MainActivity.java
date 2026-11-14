@@ -46,9 +46,11 @@ public class MainActivity extends Activity {
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
-        getWindow().setStatusBarColor(Color.parseColor("#0f172a"));
+        getWindow().setStatusBarColor(Color.parseColor("#111315"));
+        getWindow().setNavigationBarColor(Color.parseColor("#17191c"));
         prefs = getSharedPreferences("jarvis", MODE_PRIVATE);
         ui = new WebView(this);
+        ui.setBackgroundColor(Color.parseColor("#111315")); // sem clarão branco ao abrir
         WebSettings s = ui.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
