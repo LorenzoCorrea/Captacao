@@ -39,5 +39,10 @@ export function createStore(dataDir, { now = Date.now } = {}) {
       salvar();
       return { ...pedidos[id] };
     },
+    remove(id) {
+      ler();
+      delete pedidos[id];
+      salvar();
+    },
   };
 }

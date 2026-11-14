@@ -1,7 +1,7 @@
 // API dos pedidos para o APK. Só escuta em localhost; o Tailscale (tailscale serve) põe HTTPS na frente.
 import http from 'node:http';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ID = /^[a-z0-9]{8}$/;
@@ -96,6 +96,13 @@ export function createServer({ store, captacao, runner, jobsDir, token }) {
     if (m === 'POST' && acao === 'cancelar') {
       runner.stop(id);
       store.update(id, { estado: 'encerrado' });
+      return send(res, 200, { ok: true });
+    }
+    if (m === 'POST' && acao === 'apagar') {
+      await runner.stop(id);
+      // shortcut: subpastas criadas pelo agente (usuário previas) podem resistir ao rm; o registro some mesmo assim.
+      try { rmSync(join(jobsDir, id), { recursive: true, force: true }); } catch (e) { console.error('[jarvis-previas] apagar:', e.message); }
+      store.remove(id);
       return send(res, 200, { ok: true });
     }
     if (m === 'GET' && acao === 'previa.pdf') {

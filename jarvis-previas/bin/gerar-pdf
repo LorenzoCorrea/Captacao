@@ -15,6 +15,7 @@ bwrap --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --tmpfs /run --tmpfs "$
   --bind "$JOB/saida" "$JOB/saida" --unshare-all --die-with-parent --new-session \
   --setenv HOME /tmp --chdir "$JOB" \
   chromium --headless --no-sandbox --no-zygote --disable-gpu --disable-dev-shm-usage \
+    --enable-unsafe-swiftshader \
     --disable-crash-reporter --disable-breakpad \
     --user-data-dir=/tmp/chrome --no-pdf-header-footer \
     --print-to-pdf="$JOB/saida/previa.pdf" "file://$JOB/saida/site.html" 2>&1 | grep -v dbus || true

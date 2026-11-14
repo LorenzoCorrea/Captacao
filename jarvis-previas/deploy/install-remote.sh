@@ -19,6 +19,12 @@ d = json.load(open(p))
 d.setdefault("projects", {}).setdefault("/srv/jarvis-previas/jobs", {})["hasTrustDialogAccepted"] = True
 json.dump(d, open(p, "w"), indent=2)
 PY
+# O lorenzo (serviço) precisa apagar o que o agente criar dentro dos pedidos (botão Apagar do APK).
+command -v setfacl >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq acl >/dev/null
+setfacl -R -m u:lorenzo:rwX /srv/jarvis-previas/jobs
+setfacl -R -d -m u:lorenzo:rwX /srv/jarvis-previas/jobs
+# Fontes, referências (Supahero, Three.js, GSAP) e skills de design não ficam no git (terceiros e pesadas):
+# ficam em /usr/local/share/fonts/jarvis, /srv/jarvis-previas/referencias e /home/previas/.claude/skills.
 install -m 644 $A/deploy/habblaud.service $A/deploy/jarvis-previas.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now habblaud jarvis-previas >/dev/null 2>&1

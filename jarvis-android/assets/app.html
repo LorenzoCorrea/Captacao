@@ -132,9 +132,22 @@ async function carregarPedidos() {
       return `<div class="card"><div class="row"><div class="grow"><div class="nome">${esc(p.leadName)}</div>
         <div class="sub">${hora} · ${p.fotos} foto(s)${p.erro ? ' · ' + esc(p.erro) : ''}</div></div>
         <span class="tag ${cls}">${txt}</span></div>
-        ${ver ? `<button class="sec" style="margin-top:10px;width:100%" onclick="verPrevia('${p.id}')">Ver prévia</button>` : ''}</div>`;
+        <div class="row" style="margin-top:10px">
+        ${ver ? `<button class="sec grow" onclick="verPrevia('${p.id}')">Ver prévia</button>` : ''}
+        <button class="sec apagar" onclick="apagar(this, '${p.id}')">Apagar</button></div></div>`;
     }).join('') : '<div class="vazio">Nenhum pedido ainda.<br>Compartilhe fotos com o Jarvis para começar.</div>';
   } catch (e) { aviso(e.message); }
+}
+
+// Confirma com um segundo toque (sem confirm(), que o WebView não mostra).
+async function apagar(bt, id) {
+  if (!bt.dataset.armado) {
+    bt.dataset.armado = '1'; bt.textContent = 'Toque de novo para apagar'; bt.style.color = 'var(--verm)';
+    setTimeout(() => { if (bt.isConnected) { delete bt.dataset.armado; bt.textContent = 'Apagar'; bt.style.color = ''; } }, 4000);
+    return;
+  }
+  bt.disabled = true;
+  try { await api('POST', `/pedidos/${id}/apagar`); carregarPedidos(); } catch (e) { aviso(e.message); bt.disabled = false; }
 }
 
 async function verPrevia(id) {

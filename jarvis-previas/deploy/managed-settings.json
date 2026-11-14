@@ -4,6 +4,8 @@
     "allow": [
       "Read(//srv/jarvis-previas/jobs/**)",
       "Edit(//srv/jarvis-previas/jobs/**)",
+      "Read(//srv/jarvis-previas/referencias/**)",
+      "Read(//home/previas/.claude/skills/**)",
       "Glob",
       "Grep",
       "Bash(ls:*)",
@@ -21,7 +23,8 @@
       "Read(//srv/jarvis-previas/config/**)",
       "Bash(tmux:*)",
       "Bash(chromium:*)",
-      "Bash(sudo:*)"
+      "Bash(sudo:*)",
+      "mcp__plugin_playwright_playwright"
     ],
     "disableBypassPermissionsMode": "disable"
   },
@@ -39,5 +42,6 @@
     "network": {
       "allowedDomains": []
     }
-  }
+  },
+  "allowedMcpServers": []
 }

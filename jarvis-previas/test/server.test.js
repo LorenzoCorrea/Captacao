@@ -97,3 +97,13 @@ test('previa.pdf servido quando existe; cancelar para o runner', async (t) => {
   assert.deepEqual(runner.stopped, [id]);
   assert.equal(store.get(id).estado, 'encerrado');
 });
+
+test('apagar: para a sessão, remove a pasta e some da lista', async (t) => {
+  const { call, novo, store, runner, jobsDir } = await start(t);
+  const id = await novo();
+  assert.equal((await call(`/pedidos/${id}/apagar`, { method: 'POST' })).status, 200);
+  assert.deepEqual(runner.stopped, [id]);
+  assert.equal(existsSync(join(jobsDir, id)), false);
+  assert.equal(store.get(id), undefined);
+  assert.equal((await call(`/pedidos/${id}/apagar`, { method: 'POST' })).status, 404);
+});
