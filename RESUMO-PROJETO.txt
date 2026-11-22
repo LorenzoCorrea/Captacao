@@ -18,12 +18,20 @@ A OFERTA (fixa no código, server/src/bot/offer.js)
 COMO FUNCIONA, PASSO A PASSO
 ----------------------------
 1. Captação (1 vez por dia útil)
-   - Busca comércios por cidade e nicho numa base local do OpenStreetMap
-     (tabela osm_places no Postgres; server/src/data/osmProvider.js).
+   - Busca comércios por cidade e nicho numa base local (tabela osm_places
+     no Postgres; server/src/data/osmProvider.js) que junta duas fontes
+     gratuitas:
+       * OpenStreetMap (scripts/import_osm.py), mais antigo;
+       * Overture Maps (scripts/import_overture.py), atualizado todo mês e
+         com telefones vindos de páginas do Facebook. Só o RS. Um cron no
+         servidor reimporta todo dia 25, às 3h.
    - Fica só com quem NÃO tem site e TEM celular (lead "quente").
-   - Hoje: 6 cidades do interior do RS (Santa Maria, Santo Ângelo, Pelotas,
-     Rio Grande, Caxias do Sul, Passo Fundo), raio de 5 km; nichos salão de
-     beleza, academia e escritório de advocacia.
+     Instagram, Linktree e wa.me não contam como site.
+   - Hoje: 14 cidades do RS (Santa Maria, Santo Ângelo, Pelotas, Rio Grande,
+     Passo Fundo, Gramado, Santa Cruz do Sul, Lajeado, Bento Gonçalves,
+     Erechim, Ijuí, Santa Rosa, Cruz Alta, Bagé), raio de 10 km; nichos de
+     saúde (clínica médica, dentista, psicólogo, fisioterapia,
+     nutricionista) e rastreamento veicular no Brasil todo (até 2 por dia).
 
 2. Enriquecimento (achar o celular que o mapa não tem)
    - workers/enrich.py (Python) procura o comércio na internet e extrai
@@ -35,9 +43,9 @@ COMO FUNCIONA, PASSO A PASSO
 
 3. Abordagem pelo WhatsApp (server/src/bot/scheduler.js)
    - Envio das 09:00 às 18:00, só em dias úteis.
-   - Anti-ban: no máximo 5 leads novos por dia, com pelo menos 8 min entre
+   - Anti-ban: no máximo 7 leads novos por dia (subir para 10 aos poucos), com pelo menos 8 min entre
      envios. A primeira mensagem é curta, se identifica como Lorenzo e
-     oferece saída ("não te chamo mais").
+     abre pelo benefício do ramo do lead.
    - Lembretes para quem não respondeu: no dia útil seguinte e 3 dias
      úteis depois, só à tarde, com cota própria.
 
@@ -76,13 +84,18 @@ ARQUITETURA
             Kanban/CRM, conversas do bot, estatísticas.
 - workers/  Enriquecimento em Python (chamado pelo Node via child_process).
 - searxng/  Configuração do buscador próprio.
+- jarvis-previas/  Pedidos de prévia: o app manda fotos, sessões do Claude
+            Code montam a prévia e Lorenzo aprova o envio pelo app.
+            voz/ tem o Jarvis de voz (Claude Code do usuário mordomo + Kokoro).
+- jarvis-android/  App Android do Jarvis (pedidos, prévias e conversa por voz).
 - docker-compose.yml: api, web (nginx), evolution (gateway do WhatsApp,
   Evolution API), router9 (roteador de modelos de IA), searxng.
 - Postgres roda fora do compose, como container separado no servidor.
 
 ONDE RODA
 ---------
-- Tudo roda num servidor caseiro (ZimaOS) com Docker. O notebook Linux é só
+- Tudo roda num servidor caseiro ("servidor", Debian 13) com Docker, em
+  /srv/captacao. O ZimaOS antigo foi desligado em nov/2026. O notebook Linux é só
   para desenvolver e administrar; o compose NUNCA deve subir no notebook
   (o mesmo número de WhatsApp ficaria conectado em dois lugares).
 - Deploy: copiar o código para o servidor (rsync) e rodar
@@ -92,7 +105,8 @@ ONDE RODA
 
 TESTES
 ------
-- cd server && npm test   (node:test; ~134 testes do bot e da API)
+- cd server && npm test   (node:test; ~150 testes do bot e da API)
+- python3 scripts/test_import_overture.py   (mapeamento do Overture)
 - Os testes de banco são pulados por padrão: eles apagam as tabelas do bot
   e nunca devem rodar contra o banco real.
 
@@ -107,7 +121,11 @@ REGRAS DO PROJETO
 
 ESTADO ATUAL (novembro de 2026)
 -------------------------------
-- Bot em produção, começando a abordar clientes reais.
+- Bot em produção desde 05/11. Até 22/11: ~50 comércios abordados, poucos
+  interessados e nenhuma venda. Os leads quentes se perderam por demora no
+  follow-up, decisor que não era quem respondeu e falta de orçamento.
+- Custo atual: R$ 0. Nenhum projeto Google tem faturamento ligado; a IA
+  (Gemini Flash Lite pelo 9router) usa o plano gratuito.
 - Pendências: testar ao vivo alguns cenários (pausa pelo celular, desconto
   insistente, parcelamento, pedido de saída) e trocar chaves/senhas que
   apareceram em conversas.
