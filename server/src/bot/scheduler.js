@@ -149,6 +149,20 @@ async function sendFollowUp(now, conv, deps) {
   }
 }
 
+// Quem recebeu a prévia e sumiu. `nudges` conta os lembretes já enviados depois da prévia (vem do banco).
+async function sendPreviewNudge(now, conv, deps) {
+  const { db, gateway } = deps;
+  try {
+    if ((await gateway.state()) !== 'open') return deps.disableBot('whatsapp_disconnected');
+    await db.incrementUsage('followup', hojeLocal(now), now.getTime());
+    await sendAndRecord(conv, conv.nudges === 0 ? FIXED.previewNudge : FIXED.previewNudgeLast, deps, { allow: ['active'] });
+  } catch (e) {
+    console.error('[bot] falha no lembrete da prévia:', e.message);
+    await db.botTransition(conv.lead_id, ['active'], 'paused', 'send_failed');
+    return deps.disableBot('send_failed');
+  }
+}
+
 const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
 // Dias de uma regra do opening_hours ("Mo-Fr", "Tu-Sa", "Mo,We,Sa"); null se não entender.
@@ -234,8 +248,11 @@ async function sendNext(now, config, settings, deps) {
   const saturday = saturdayOnly(now, config);
   // Lembrete só em dia útil.
   if (!saturday && now.getHours() >= FOLLOW_UP_HOUR && (today.followup ?? 0) < MAX_FOLLOW_UPS_PER_DAY) {
-    const due = await db.botDueFollowUp(FOLLOW_UP_AFTER_DAYS.map((days) => sentUpTo(now, days)));
+    const cutoffs = FOLLOW_UP_AFTER_DAYS.map((days) => sentUpTo(now, days));
+    const due = await db.botDueFollowUp(cutoffs);
     if (due) return sendFollowUp(now, due, deps);
+    const previewDue = await db.botDuePreviewFollowUp(cutoffs);
+    if (previewDue) return sendPreviewNudge(now, previewDue, deps);
   }
   if ((today.whatsapp ?? 0) >= (await dailyLimit(now, settings, today.whatsapp ?? 0, db))) return;
   const national = new Set(config.nationalNiches ?? []);

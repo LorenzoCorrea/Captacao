@@ -51,6 +51,9 @@ export const FIXED = {
   busy: 'Tranquilo, sem pressa! Quando puder, é só me chamar por aqui.',
   wrongContact: 'Ah, desculpa pelo engano! Obrigado por avisar e bom trabalho 🙏',
   followUpLast: 'Oi, tudo bem? Vou parar de te chamar por aqui para não incomodar. Se em algum momento fizer sentido ter um site, é só me mandar uma mensagem 👍',
+  // Lead recebeu a prévia e não respondeu: 1 e 3 dias úteis depois.
+  previewNudge: 'Oi, tudo bem? Conseguiu dar uma olhada na prévia do site? Se quiser, ajusto cores, textos e fotos do jeito que preferir. E, se gostar, consigo começar ainda esta semana.',
+  previewNudgeLast: 'Oi! Vou parar de te chamar por aqui para não incomodar. A prévia fica com você: se quiser seguir com o site, é só me mandar uma mensagem 👍',
 };
 
 // Abertura e benefício mudam com o ramo. `kw` casa por trecho do nicho + nome, sem acento:

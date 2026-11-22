@@ -6,6 +6,7 @@
 // string fica em server/.env (DATABASE_URL=postgresql://user:senha@100.x:5432/db).
 import pg from 'pg';
 import { hojeLocal } from './date.js';
+import { FIXED } from './bot/offer.js';
 
 const { Pool } = pg;
 const url = process.env.DATABASE_URL;
@@ -599,6 +600,22 @@ export const botDueFollowUp = async (sentBefore) => (await botRows(
      AND f.first_out < ($1::timestamptz[])[c.followups + 1]
    ORDER BY f.first_out LIMIT 1`,
   [sentBefore]
+))[0] ?? null;
+
+// Lead que recebeu a prévia e não respondeu (nem Lorenzo escreveu) depois dela. Os prazos contam a partir da prévia;
+// `nudges` = lembretes da prévia já enviados.
+export const botDuePreviewFollowUp = async (sentBefore) => (await botRows(
+  `SELECT * FROM (
+     SELECT c.*, p.at AS preview_at,
+       (SELECT count(*) FROM bot_messages n WHERE n.lead_id = c.lead_id AND n.source = 'bot' AND n.created_at > p.at AND n.body = ANY($2::text[]))::int AS nudges
+     FROM bot_conversations c
+     CROSS JOIN LATERAL (SELECT max(created_at) AS at FROM bot_messages m WHERE m.lead_id = c.lead_id AND m.source = 'bot' AND starts_with(m.body, $3)) p
+     WHERE c.status = 'active' AND p.at IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM bot_messages m WHERE m.lead_id = c.lead_id AND m.source IN ('lead', 'owner') AND m.created_at > p.at)
+   ) d
+   WHERE d.nudges < cardinality($1::timestamptz[]) AND d.preview_at < ($1::timestamptz[])[d.nudges + 1]
+   ORDER BY d.preview_at LIMIT 1`,
+  [sentBefore, [FIXED.previewNudge, FIXED.previewNudgeLast], FIXED.previewCaption]
 ))[0] ?? null;
 
 // Leads abordados pela primeira vez entre `since` e `until` que ainda não responderam (resposta automática não conta).

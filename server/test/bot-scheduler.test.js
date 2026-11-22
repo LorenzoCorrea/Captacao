@@ -44,6 +44,7 @@ function setup({ config = {}, queued = [], leads = [], usage = {}, limits = {}, 
       botAddMessage: async () => true,
       botQueuedCount: async () => queue.length,
       botDueFollowUp: async () => null,
+      botDuePreviewFollowUp: async () => null,
       botSilentSince: async () => 0,
       incrementUsage: async (canal) => { log.usage.push(canal); return {}; },
     },
@@ -467,4 +468,27 @@ test('órgão público não é lead: UPA, UBS, prefeitura, hospital municipal...
   for (const name of ['Clínica Sorriso', 'Upaon Academia', 'Studio Lais Vargas', 'Hospital Veterinário Pet Care', 'Odonto Federal Plus', 'Capsula Estética']) {
     assert.equal(isPublicBody(name), false, name);
   }
+});
+
+test('lembrete da prévia: quem recebeu e sumiu é cobrado à tarde; o 2º se despede', async () => {
+  for (const [nudges, text] of [[0, FIXED.previewNudge], [1, FIXED.previewNudgeLast]]) {
+    const { log, deps } = setup({ usage: { whatsapp: 5 } });
+    const seen = {};
+    const conv = { ...due(0), nudges };
+    deps.db.botDuePreviewFollowUp = async (cutoffs) => { seen.cutoffs = cutoffs; return seen.sent ? null : conv; };
+    deps.db.botGet = async () => ({ ...conv });
+    await tick(WED_15, deps);
+    seen.sent = true;
+    assert.deepEqual(log.sent, [text]);
+    assert.deepEqual(log.usage, ['followup'], 'cota dos lembretes, não a de lead novo');
+    // Mesmos prazos dos outros lembretes: 1 e 3 dias úteis depois da prévia.
+    assert.deepEqual(seen.cutoffs, [new Date(2026, 10, 4), new Date(2026, 9, 31)]);
+  }
+});
+
+test('lembrete da prévia: de manhã não sai', async () => {
+  const { log, deps } = setup();
+  deps.db.botDuePreviewFollowUp = async () => ({ ...due(0), nudges: 0 });
+  await tick(WED_10, deps);
+  assert.deepEqual(log.sent, []);
 });
