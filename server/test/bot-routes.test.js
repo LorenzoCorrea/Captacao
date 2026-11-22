@@ -6,9 +6,9 @@ import { FIXED } from '../src/bot/offer.js';
 
 process.env.BOT_WEBHOOK_SECRET = 's';
 
-async function start(t, { status = 'paused', mode = 'simulate', connection = 'open', optedOut = false } = {}) {
+async function start(t, { status = 'paused', reason = 'manual', mode = 'simulate', connection = 'open', optedOut = false, photo = null } = {}) {
   process.env.BOT_MODE = mode;
-  const conv = { lead_id: 'osm:node/1', phone: '5551991234567', phone_key: '5191234567', name: 'Aurora', status, reason: 'manual', search_id: 's' };
+  const conv = { lead_id: 'osm:node/1', phone: '5551991234567', phone_key: '5191234567', name: 'Aurora', status, reason, search_id: 's' };
   const log = { stages: [], saved: [], msgs: [], qr: 0, docs: [], notes: [] };
   const deps = {
     db: {
@@ -27,7 +27,7 @@ async function start(t, { status = 'paused', mode = 'simulate', connection = 'op
       saveSetting: async (k, v) => log.saved.push([k, v]),
     },
     settings: async () => ({ botConfig: { enabled: false, cities: [] }, limits: { whatsapp: 5 }, usage: { date: '2020-01-01', whatsapp: 3 } }),
-    gateway: { state: async () => connection, linkState: async () => connection, send: async () => 'x', connect: async () => { log.qr++; return { qr: 'data:image/png;base64,AAA' }; }, sendDocument: async (phone, doc) => { log.docs.push({ phone, ...doc }); return 'doc-1'; } },
+    gateway: { state: async () => connection, linkState: async () => connection, send: async () => 'x', connect: async () => { log.qr++; return { qr: 'data:image/png;base64,AAA' }; }, sendDocument: async (phone, doc) => { log.docs.push({ phone, ...doc }); return 'doc-1'; }, profilePicture: async () => photo },
     notify: async (t) => log.notes.push(t),
     setStage: async (_, s) => log.stages.push(s),
     disableBot: async () => {},
@@ -166,6 +166,37 @@ test('prévia: recusa corpo que não é PDF', async (t) => {
   const { log, conversation, pdf } = await start(t, { status: 'paused' });
   assert.equal((await pdf(`${conversation}/preview`, Buffer.from('hello'))).status, 400);
   assert.equal(log.docs.length, 0);
+});
+
+test('prévia pedida pelo lead: depois do envio, a conversa volta para o bot', async (t) => {
+  const { conv, conversation, pdf } = await start(t, { status: 'paused', reason: 'preview_requested' });
+  assert.equal((await pdf(`${conversation}/preview`, PDF)).status, 200);
+  assert.equal(conv.status, 'active');
+});
+
+test('prévia em conversa assumida pelo Lorenzo continua pausada', async (t) => {
+  const { conv, conversation, pdf } = await start(t, { status: 'paused', reason: 'owner_replied' });
+  assert.equal((await pdf(`${conversation}/preview`, PDF)).status, 200);
+  assert.equal(conv.status, 'paused');
+});
+
+test('foto de perfil: devolve a imagem ou 404', async (t) => {
+  const com = await start(t, { photo: { buffer: Buffer.from('img'), type: 'image/jpeg' } });
+  const r = await com.call(`${com.conversation}/photo`, 'GET');
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('content-type'), 'image/jpeg');
+  assert.equal(await r.text(), 'img');
+  const sem = await start(t);
+  assert.equal((await sem.call(`${sem.conversation}/photo`, 'GET')).status, 404);
+});
+
+test('prévia pronta avisa o Lorenzo; conversa encerrada não', async (t) => {
+  const ok = await start(t, { status: 'paused' });
+  assert.equal((await ok.call(`${ok.conversation}/preview-ready`)).status, 200);
+  assert.deepEqual(ok.log.notes, ['Prévia de Aurora pronta. Aprove no app Jarvis.']);
+  const fechada = await start(t, { status: 'closed' });
+  assert.equal((await fechada.call(`${fechada.conversation}/preview-ready`)).status, 409);
+  assert.deepEqual(fechada.log.notes, []);
 });
 
 test('prévia: aceita PDF de 5 MB', async (t) => {

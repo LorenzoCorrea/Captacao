@@ -153,8 +153,24 @@ export function createBotRouter(deps) {
       send: () => gateway.sendDocument(conv.phone, { pdf, fileName, caption: FIXED.previewCaption }),
     });
     if (!id) return res.status(409).json({ error: 'O lead saiu da conversa ou pediu para não receber mensagens.' });
+    // Pausa só pelo pedido de prévia: o bot retoma. Se Lorenzo assumiu a conversa, segue com ele.
+    if (conv.status === 'paused' && conv.reason === 'preview_requested') await db.botTransition(conv.lead_id, ['paused'], 'active');
     await deps.notify(`Prévia enviada para ${conv.name ?? conv.phone}.`);
     res.json({ ok: true, id });
+  }));
+
+  // Foto de perfil do WhatsApp do lead, para a prévia automática (costuma ser a logo).
+  router.get('/api/bot/conversations/:leadId/photo', withConversation(async (conv, _req, res) => {
+    const photo = await gateway.profilePicture(conv.phone);
+    if (!photo) return res.status(404).json({ error: 'Sem foto de perfil.' });
+    res.type(photo.type).send(photo.buffer);
+  }));
+
+  // O agente terminou a prévia e espera a aprovação no app.
+  router.post('/api/bot/conversations/:leadId/preview-ready', withConversation(async (conv, _req, res) => {
+    if (!PREVIEW_OK.includes(conv.status)) return res.status(409).json({ error: 'Esta conversa não pode receber a prévia.' });
+    await deps.notify(`Prévia de ${conv.name ?? conv.phone} pronta. Aprove no app Jarvis.`);
+    res.json({ ok: true });
   }));
 
   router.post('/api/bot/conversations/:leadId/finish', withConversation(async (conv, req, res) => {

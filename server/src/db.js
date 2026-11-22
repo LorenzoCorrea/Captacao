@@ -506,7 +506,9 @@ export async function botSetLid(leadId, lid) {
 }
 
 export const botList = () => botRows(
-  `SELECT c.*, (SELECT body FROM bot_messages m WHERE m.lead_id = c.lead_id ORDER BY created_at DESC, id DESC LIMIT 1) AS last_body
+  `SELECT c.*, (SELECT body FROM bot_messages m WHERE m.lead_id = c.lead_id ORDER BY created_at DESC, id DESC LIMIT 1) AS last_body,
+     (SELECT address FROM leads l WHERE l.lead_id = c.lead_id AND l.address NOT LIKE 'Endereço não informado%' LIMIT 1) AS address,
+     (SELECT city FROM searches s WHERE s.id = c.search_id) AS city
    FROM bot_conversations c ORDER BY c.updated_at DESC LIMIT 200`
 );
 

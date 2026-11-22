@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 const TIMEOUT_MS = 20000;
+const PHOTO_MAX = 5 * 1024 * 1024;
 
 async function evolution(path, { method = 'GET', body, timeout = TIMEOUT_MS } = {}) {
   const r = await fetch(`${process.env.EVOLUTION_URL}${path}`, {
@@ -35,6 +36,21 @@ export function createGateway() {
       const id = data?.key?.id;
       if (!id) throw new Error('Evolution não retornou o id da mensagem');
       return id;
+    },
+    // Só leitura: funciona também em simulação. Sem foto, perfil privado ou falha, devolve null.
+    async profilePicture(phone) {
+      try {
+        const data = await evolution(`/chat/fetchProfilePictureUrl/${instance()}`, { method: 'POST', body: { number: phone } });
+        const url = data?.profilePictureUrl;
+        if (!/^https:\/\//.test(url ?? '')) return null;
+        const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+        const type = (r.headers.get('content-type') ?? '').split(';')[0];
+        if (!r.ok || !/^image\/(jpeg|png|webp)$/.test(type)) return null;
+        const buffer = Buffer.from(await r.arrayBuffer());
+        return buffer.length && buffer.length <= PHOTO_MAX ? { buffer, type } : null;
+      } catch {
+        return null;
+      }
     },
     async isOnWhatsApp(phone) {
       if (!isLive()) return true;
