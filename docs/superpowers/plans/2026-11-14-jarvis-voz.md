@@ -274,3 +274,20 @@ Comportamento:
   - `jarvis-kokoro`, `jarvis-previas` e `habblaud` voltam ativos;
   - a primeira mensagem no app recria a sessão `jarvis` e responde.
 - [ ] **Step 3:** Atualizar as memórias e o mapa e fazer o commit (`chore(jarvis-voz): instalação e documentação`).
+
+---
+
+## Emenda (14/11, aprovada pelo Lorenzo): aprovação direto no app
+
+O Habblaud só repassa um pedido de aprovação se o Escritório estiver aberto no instante do pedido. Então a aprovação passa a ser feita pelo app, tanto no Jarvis quanto nas prévias:
+
+- **Task 4:**
+  - `conversa.responder(aprovar: boolean) -> Promise<void>`. Lê a tela da sessão e só age se ela contiver `Do you want to proceed?` e a mesma linha `/srv/jarvis-voz/bin/agir ...` informada em `estado().acao`. Aprovar digita `1`; recusar digita `Escape`. Se a tela mudou, lança `O pedido mudou; confira de novo.`
+  - Rota `POST /jarvis/mensagens/:id/aprovacao {aprovar: boolean}`.
+  - Testes: tela sem pedido → erro; ação diferente → erro, sem tecla; aprovar → `1`; recusar → `Escape`.
+- **Task 4b (nova): aprovação das prévias.**
+  - O `tmuxComoPrevias` ganha `tela(nome)` e `teclas(nome, ...teclas)`.
+  - O `runner.tick` marca `aguardandoAprovacao: true` no pedido quando a tela da sessão pede permissão para `/srv/jarvis-previas/app/bin/enviar-previa`, e `false` no caso contrário.
+  - Rota `POST /pedidos/:id/aprovacao {aprovar}` com a mesma conferência: só para `enviar-previa`.
+  - Testes no `runner.test.js` e no `server.test.js`.
+- **Task 6:** botões **Aprovar** e **Recusar** no balão do Jarvis e no cartão do pedido (no lugar de "Aprovar no Escritório").
