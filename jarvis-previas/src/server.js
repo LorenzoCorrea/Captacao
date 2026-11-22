@@ -4,6 +4,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConversaError } from './conversa.js';
+import { escreverLead } from './auto.js';
 
 const ID = /^[a-z0-9]{8}$/;
 const FOTO_MAX = 15 * 1024 * 1024;
@@ -93,7 +94,7 @@ export function createServer({ store, captacao, runner, jobsDir, token, conversa
       const p = store.create({ leadId: lead.leadId, leadName: lead.name, phone: lead.phone, observacao });
       const dir = join(jobsDir, p.id);
       mkdirSync(join(dir, 'fotos'), { recursive: true });
-      writeFileSync(join(dir, 'lead.json'), JSON.stringify({ nome: lead.name, telefone: lead.phone, observacao }, null, 2));
+      escreverLead(dir, lead, observacao);
       return send(res, 201, { id: p.id });
     }
 

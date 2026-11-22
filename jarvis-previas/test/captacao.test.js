@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCaptacao } from '../src/captacao.js';
 
-const conv = (name, status, reason = null) => ({ lead_id: `id-${name}`, name, phone: '55', status, reason });
+const conv = (name, status, reason = null) => ({ lead_id: `id-${name}`, name, phone: '55', status, reason, niche: 'dentista', address: null, city: 'Pelotas', updated_at: '2026-11-22T10:00:00.000Z' });
 
 function fakeFetch(handler) {
   const calls = [];
@@ -19,7 +19,7 @@ test('leads filtra status e põe quem pediu prévia no topo', async () => {
   const c = createCaptacao({ url: 'http://c', auth: 'u:p', fetch });
   const leads = await c.leads();
   assert.deepEqual(leads.map((l) => l.name), ['Zélia', 'Ana', 'Bruno']);
-  assert.deepEqual(leads[0], { leadId: 'id-Zélia', name: 'Zélia', phone: '55', pediuPrevia: true });
+  assert.deepEqual(leads[0], { leadId: 'id-Zélia', name: 'Zélia', phone: '55', pediuPrevia: true, niche: 'dentista', address: null, city: 'Pelotas', pausadoEm: Date.parse('2026-11-22T10:00:00.000Z') });
   assert.equal(calls[0].url, 'http://c/api/bot/conversations');
   assert.equal(calls[0].init.headers.Authorization, `Basic ${Buffer.from('u:p').toString('base64')}`);
 });
@@ -47,4 +47,25 @@ test('api: manda JSON com login e devolve o corpo; erro sobe com a mensagem do C
   assert.equal(calls[0].init.headers['Content-Type'], 'application/json');
   assert.ok(calls[0].init.headers.Authorization.startsWith('Basic '));
   await assert.rejects(c.api('POST', '/ruim'), /não pode ser pausada/);
+});
+
+test('photo devolve a imagem, ou null sem foto', async () => {
+  const { fetch, calls } = fakeFetch(() => new Response(Buffer.from('img'), { status: 200, headers: { 'Content-Type': 'image/png' } }));
+  const c = createCaptacao({ url: 'http://c', auth: 'u:p', fetch });
+  const foto = await c.photo('osm:node/1');
+  assert.equal(foto.type, 'image/png');
+  assert.equal(foto.buffer.toString(), 'img');
+  assert.equal(calls[0].url, 'http://c/api/bot/conversations/osm%3Anode%2F1/photo');
+  const sem = createCaptacao({ url: 'http://c', auth: 'u:p', fetch: fakeFetch(() => json(404, { error: 'x' })).fetch });
+  assert.equal(await sem.photo('a'), null);
+  const erro = createCaptacao({ url: 'http://c', auth: 'u:p', fetch: fakeFetch(() => json(500, { error: 'x' })).fetch });
+  await assert.rejects(erro.photo('a'));
+});
+
+test('previewReady avisa o Captação', async () => {
+  const { fetch, calls } = fakeFetch(() => json(200, { ok: true }));
+  const c = createCaptacao({ url: 'http://c', auth: 'u:p', fetch });
+  await c.previewReady('osm:node/1');
+  assert.equal(calls[0].url, 'http://c/api/bot/conversations/osm%3Anode%2F1/preview-ready');
+  assert.equal(calls[0].init.method, 'POST');
 });

@@ -12,7 +12,10 @@ export function createCaptacao({ url, auth, fetch = globalThis.fetch }) {
       const { conversations = [] } = await r.json();
       return conversations
         .filter((c) => PODE_RECEBER.has(c.status))
-        .map((c) => ({ leadId: c.lead_id, name: c.name ?? c.phone, phone: c.phone, pediuPrevia: c.status === 'paused' && c.reason === 'preview_requested' }))
+        .map((c) => ({
+          leadId: c.lead_id, name: c.name ?? c.phone, phone: c.phone, pediuPrevia: c.status === 'paused' && c.reason === 'preview_requested',
+          niche: c.niche ?? null, address: c.address ?? null, city: c.city ?? null, pausadoEm: Date.parse(c.updated_at),
+        }))
         .sort((a, b) => Number(b.pediuPrevia) - Number(a.pediuPrevia) || a.name.localeCompare(b.name, 'pt-BR'));
     },
     // Chamada genérica para as ferramentas do Jarvis de voz.
@@ -26,6 +29,16 @@ export function createCaptacao({ url, auth, fetch = globalThis.fetch }) {
       const dados = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(dados.error ?? `Captação respondeu HTTP ${r.status}`);
       return dados;
+    },
+    // Foto de perfil do WhatsApp do lead; null quando ele não tem.
+    async photo(leadId) {
+      const r = await fetch(`${url}/api/bot/conversations/${encodeURIComponent(leadId)}/photo`, { headers: { ...headers }, signal: AbortSignal.timeout(30000) });
+      if (r.status === 404) return null;
+      if (!r.ok) throw new Error(`Captação respondeu HTTP ${r.status}`);
+      return { buffer: Buffer.from(await r.arrayBuffer()), type: (r.headers.get('content-type') ?? '').split(';')[0] };
+    },
+    async previewReady(leadId) {
+      await this.api('POST', `/api/bot/conversations/${encodeURIComponent(leadId)}/preview-ready`);
     },
     async sendPreview(leadId, pdf, fileName) {
       const r = await fetch(`${url}/api/bot/conversations/${encodeURIComponent(leadId)}/preview?file=${encodeURIComponent(fileName)}`, {

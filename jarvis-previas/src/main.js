@@ -4,6 +4,7 @@ import { createStore } from './store.js';
 import { createCaptacao } from './captacao.js';
 import { createServer } from './server.js';
 import { createRunner, tmuxComoPrevias } from './runner.js';
+import { createAuto } from './auto.js';
 import { createConversa, tmuxDoMordomo, falarNoKokoro } from './conversa.js';
 
 const BASE = '/srv/jarvis-previas';
@@ -15,9 +16,12 @@ process.umask(0o002);
 const store = createStore(`${BASE}/data`);
 const captacao = createCaptacao({ url: config.captacaoUrl, auth: config.captacaoAuth });
 const runner = createRunner({ store, jobsDir: `${BASE}/jobs`, agentDir: `${BASE}/app/agent`, tmux: tmuxComoPrevias() });
+const auto = createAuto({ store, captacao, jobsDir: `${BASE}/jobs` });
 const conversa = createConversa({ tmux: tmuxDoMordomo(), respostaFile: '/srv/jarvis-voz/estado/resposta.json', falar: falarNoKokoro });
 const server = createServer({ store, captacao, runner, jobsDir: `${BASE}/jobs`, token: config.token, conversa });
 
 server.listen(config.porta ?? 8095, '127.0.0.1', () => console.log(`[jarvis-previas] ouvindo em 127.0.0.1:${config.porta ?? 8095}`));
-setInterval(() => runner.tick().catch((e) => console.error('[jarvis-previas] runner:', e.message)), 10000);
-runner.tick().catch((e) => console.error('[jarvis-previas] runner:', e.message));
+// A cada ciclo: abre os pedidos automáticos e avisa as prévias prontas, depois anda a fila.
+const ciclo = () => auto.passo().then(() => runner.tick()).catch((e) => console.error('[jarvis-previas] runner:', e.message));
+setInterval(ciclo, 10000);
+ciclo();
