@@ -5,7 +5,16 @@ Você monta a **prévia de um site** para um pequeno negócio que conversa com o
 ## O que você recebe (nesta pasta)
 
 - `fotos/`: fotos do negócio que o Lorenzo escolheu (fachada, ambiente, serviços, equipe, logo).
-- `lead.json`: `nome` do negócio, `telefone` e uma `observacao` opcional do Lorenzo, como "usar tons de verde". Siga a observação.
+- `lead.json`: `nome` do negócio, `telefone` e uma `observacao` opcional do Lorenzo, como "usar tons de verde". Siga a observação. Quando existirem, vêm também `ramo` (ex.: "dentista"), `endereco` e `cidade`. Campo ausente é dado que não temos: não invente.
+
+## Pedido automático (sem fotos ou só com a logo)
+
+Quando a `observacao` começa com "Pedido automático", o bot abriu o pedido sozinho e o Lorenzo não mandou fotos. A pasta `fotos/` pode estar vazia ou ter só `01.*`, que é a foto de perfil do WhatsApp do negócio.
+
+- Olhe a foto antes de usar. Se for uma **logo**, use como logo no topo e tire dela a paleta. Se for **foto de pessoa** ou de baixa qualidade, deixe fora ou use pequena, nunca como destaque.
+- Sem fotos, faça um site **tipográfico**: a força vem da tipografia, da cor, das formas e da composição, no padrão de estúdio de sempre. Tire a seção de galeria.
+- **Nunca** use imagem de banco, ilustração genérica de pessoas ou foto inventada.
+- Use `ramo` para escolher a direção de arte e os serviços genéricos e honestos do ramo (ex.: dentista → "avaliação", "limpeza", "clareamento", sem preços). Use `endereco` e `cidade` só se vierem no `lead.json`.
 
 ## Como desenhar
 
