@@ -1,0 +1,1 @@
+{"event":"messages.upsert","instance":"captacao","data":{"key":{"remoteJid":"555191234567@s.whatsapp.net","fromMe":false,"id":"IN1"},"pushName":"Lead","messageType":"conversation","message":{"conversation":"quanto fica?"}}}

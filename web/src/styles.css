@@ -3,11 +3,11 @@ html, body, #root { height: 100%; margin: 0; }
 body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1f2328; }
 
 /* ── Layout: lista à esquerda, mapa à direita (estilo busca imobiliária) ── */
-.app { display: grid; grid-template-columns: 400px 1fr; height: 100%; }
-.map-wrap { min-width: 0; }
+.app { display: grid; grid-template-columns: 400px 1fr; grid-template-rows: minmax(0, 1fr); height: 100%; }
+.map-wrap { min-width: 0; min-height: 0; }
 .map { height: 100%; width: 100%; }
 
-.sidebar { display: flex; flex-direction: column; border-right: 1px solid #e2e2e2; min-width: 0; }
+.sidebar { display: flex; flex-direction: column; border-right: 1px solid #e2e2e2; min-width: 0; min-height: 0; overflow-y: auto; }
 .sidebar-header { padding: 16px 16px 12px; border-bottom: 1px solid #eee; }
 .sidebar-header h1 { margin: 0 0 12px; font-size: 20px; }
 .sidebar-header h1 span { color: #1f6feb; }
@@ -395,7 +395,32 @@ body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1f
 
 /* ── Responsivo simples: empilha em telas estreitas ── */
 @media (max-width: 760px) {
-  .app { grid-template-columns: 1fr; grid-template-rows: 45% 55%; }
+  .app { grid-template-columns: 1fr; grid-template-rows: minmax(0, 45%) minmax(0, 55%); }
   .sidebar { order: 2; border-right: 0; border-top: 1px solid #e2e2e2; }
   .map-wrap { order: 1; }
 }
+
+/* Conversas do bot */
+.bot-panel { max-width: 860px; }
+@media (max-width: 760px) {
+  .app--conversas { grid-template-rows: minmax(0, 80%) minmax(0, 20%); }
+  .bot-panel { padding: 12px 16px; }
+}
+.bot-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin: 8px 0; }
+.bot-row button { min-height: 40px; padding: 6px 12px; }
+.bot-settings label { display: block; font-size: 13px; }
+.bot-settings input:not([type='checkbox']) { display: block; width: 100%; min-height: 36px; box-sizing: border-box; }
+.bot-settings .bot-row label { flex: 1 1 110px; }
+.bot-settings .bot-check { display: flex; gap: 6px; align-items: center; }
+.bot-settings .bot-check input { width: auto; }
+.bot-conv-head { display: block; width: 100%; padding: 8px 0; text-align: left; background: none; border: 0; cursor: pointer; font: inherit; color: inherit; }
+.bot-status { display: block; margin-top: 4px; font-size: 13px; font-weight: 600; }
+.bot-last { display: block; margin-top: 4px; font-size: 13px; color: #57606a; overflow-wrap: anywhere; }
+.bot-history { border-top: 1px solid #e2e2e2; padding-top: 8px; }
+.bot-msg { margin: 6px 0; padding: 8px 10px; border-radius: 8px; background: #f0f2f5; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bot-msg small { display: block; font-weight: 600; color: #57606a; }
+.bot-msg--bot { background: #e7f7ed; }
+.bot-msg--owner { background: #e8f0fe; }
+.bot-history label { flex: 1 1 200px; font-size: 13px; }
+.bot-history input { display: block; width: 100%; min-height: 36px; box-sizing: border-box; }
+.bot-qr { display: block; max-width: 280px; width: 100%; margin-top: 8px; background: #fff; }

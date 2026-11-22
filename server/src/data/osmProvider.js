@@ -7,6 +7,7 @@
 // que é exatamente o filtro do produto ("negócios sem site").
 
 import https from 'node:https';
+import { buscarOsmLocal } from '../db.js';
 
 const ENDPOINTS = [
   // Mirrors públicos do Overpass — se o primeiro estiver enfileirado/lento,
@@ -37,6 +38,8 @@ const NICHE_GROUPS = [
   { kw: ['arquitet'], tags: ['office=architect'] },
   { kw: ['psicol', 'terapeut', 'terapia'], tags: ['healthcare=psychotherapist', 'office=therapist'] },
   { kw: ['fisio'], tags: ['healthcare=physiotherapist'] },
+  // Rastreadora não tem tag própria no OSM: só a busca por nome acha.
+  { kw: ['rastre'], tags: [] },
   { kw: ['otica', 'oculos'], tags: ['shop=optician'] },
   { kw: ['mecanic', 'funilaria', 'oficina', 'autocenter'], tags: ['shop=car_repair', 'craft=car_repair'] },
   // Construção civil: empreiteiras, construtoras, reformas. Cobre vários
@@ -69,6 +72,12 @@ const COMMERCIAL_KEYS = ['shop', 'amenity', 'office', 'craft', 'healthcare', 'le
 const ALL_AMENITY = 'restaurant|fast_food|cafe|bar|pub|ice_cream|dentist|clinic|doctors|veterinary|pharmacy|driving_school|language_school|music_school|events_venue|car_wash|coworking_space';
 const ALL_LEISURE = 'fitness_centre|sports_centre|dance|spa|bowling_alley';
 const ALL_TOURISM = 'hotel|guest_house|hostel';
+const ALL_LOCAL_TAGS = [
+  'shop', 'office', 'craft', 'healthcare',
+  ...ALL_AMENITY.split('|').map((v) => `amenity=${v}`),
+  ...ALL_LEISURE.split('|').map((v) => `leisure=${v}`),
+  ...ALL_TOURISM.split('|').map((v) => `tourism=${v}`),
+];
 
 // Regex tolerante a acento: os radicais dos nichos são sem acento, mas os nomes
 // no OSM têm ("estetic" precisa casar com "Estética"). Duas pegadinhas do
@@ -204,19 +213,28 @@ const SEARCH_BUDGET_MS = 40000;
 const NAME_BUDGET_MS = 18000;
 const PER_MIRROR_MS = 15000;
 
-async function fetchOverpass(query, budgetMs = SEARCH_BUDGET_MS) {
+async function fetchOverpass(query, budgetMs = SEARCH_BUDGET_MS, perMirrorMs = PER_MIRROR_MS) {
   const deadline = Date.now() + budgetMs;
   let lastErr;
   for (const url of ENDPOINTS) {
     const remaining = deadline - Date.now();
     if (remaining <= 1000) break; // orçamento esgotado
     try {
-      return await overpassPost(url, query, Math.min(PER_MIRROR_MS, remaining));
+      return await overpassPost(url, query, Math.min(perMirrorMs, remaining));
     } catch (e) {
       lastErr = e; // tenta o próximo endpoint
     }
   }
   throw lastErr ?? new Error('Overpass indisponível');
+}
+
+// Horário de funcionamento (tag opening_hours) dos leads do OSM, por id do lead.
+export async function openingHours(leadIds) {
+  const refs = leadIds.map((id) => String(id).match(/^osm:(node|way|relation)\/(\d+)$/)).filter(Boolean);
+  if (!refs.length) return new Map();
+  // Roda no agendador, sem ninguém esperando: aguenta o Overpass lento (já levou 40s).
+  const els = await fetchOverpass(`[out:json][timeout:60];(${refs.map(([, t, n]) => `${t}(${n});`).join('')});out tags;`, 150000, 70000);
+  return new Map(els.map((e) => [`osm:${e.type}/${e.id}`, e.tags?.opening_hours ?? null]));
 }
 
 function assembleAddress(t) {
@@ -274,6 +292,16 @@ export async function buscarEstabelecimentos({ niche, city, lat, lng, radiusKm }
   const elements = [];
   let erroFase1 = null;
 
+  // Base local (scripts/import_osm.py): responde na hora e não depende do
+  // Overpass público. Sem a base carregada, cai nas duas fases abaixo.
+  const todos = isAllNiches(niche);
+  const local = await buscarOsmLocal({
+    tags: todos ? ALL_LOCAL_TAGS : tags,
+    nameRegex: todos ? '' : kws.join('|'),
+    lat, lng, radiusKm,
+  });
+  if (local) return guardarResultado(cacheKey, local, niche);
+
   // FASE 1 — tags: é o que traz o grosso e quase nunca falha.
   const tagQuery = buildTagQuery({ tags, niche, lat, lng, radiusKm });
   if (tagQuery) {
@@ -298,7 +326,19 @@ export async function buscarEstabelecimentos({ niche, city, lat, lng, radiusKm }
   }
   // Falhou tudo e não sobrou nada: aí sim é erro de verdade (502 pro usuário).
   if (erroFase1 && !elements.length) throw erroFase1;
+  return guardarResultado(cacheKey, elements, niche);
+}
 
+// Nicho do Brasil todo: só busca por nome na base local. Sem fallback no Overpass, que não aguenta um raio desse tamanho.
+const CENTRO_BRASIL = { lat: -14.2, lng: -51.9, radiusKm: 2600 };
+export async function buscarNacional(niche) {
+  const { kws } = resolveNiche(niche);
+  const local = await buscarOsmLocal({ tags: [], nameRegex: kws.join('|'), ...CENTRO_BRASIL, limit: 2000 });
+  if (!local) throw new Error('base local de estabelecimentos indisponível');
+  return guardarResultado(`nacional|${normalize(niche)}`, local, niche);
+}
+
+function guardarResultado(cacheKey, elements, niche) {
   const seen = new Set();
   const all = [];
   for (const el of elements) {

@@ -11,18 +11,21 @@ Estratégia de performance (o usuário não espera demais):
   2. 2ª consulta só dispara se o e-mail não apareceu na primeira.
   3. Orçamento de tempo rígido (TIMEOUT_LEAD): estourou, devolve parcial — nunca trava.
 
-SERP: DuckDuckGo HTML (gratuito, sem JS, sem cadastro). Em escala troque por
-Brave Search API (free tier) ou Serper.dev. A Bing Web Search API foi aposentada
-pela Microsoft em ago/2025.
+Busca: com SEARXNG_URL (buscador próprio, grátis, no compose) usa o SearXNG. Com BRAVE_API_KEY, usa a API oficial da Brave. Sem a chave, usa
+o DuckDuckGo HTML, que é gratuito mas pode bloquear uso automatizado; bloqueio
+vira resultado parcial, para não marcar o lead como "sem contatos" por engano.
 """
 
 import asyncio
 import json
+import os
 import re
 import sys
 import unicodedata
+from dataclasses import dataclass
 from datetime import date
 from html import unescape
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 
@@ -32,6 +35,7 @@ UA = {
     "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
 }
 DDG = "https://html.duckduckgo.com/html/"
+BRAVE = "https://api.search.brave.com/res/v1/web/search"
 BRASILAPI_CNPJ = "https://brasilapi.com.br/api/cnpj/v1/"
 TIMEOUT_LEAD = 14.0  # orçamento total por lead, em segundos
 TIMEOUT_CNPJ = 5.0  # sub-orçamento da etapa de CNPJ (não pode comer os contatos)
@@ -65,9 +69,100 @@ def _first_mobile(html: str) -> str | None:
         if len(local) == 9 and local.startswith("9"):
             return f"({ddd}) {local[:5]}-{local[5:]}"
     return None
-# Resultados do DDG HTML usam <a class="result__a" href="https://destino-real">.
-# (Em 2024 deixaram de usar o redirect /l/?uddg=, então lemos a href direta.)
-HREF_RE = re.compile(r'href="(https?://[^"]+)"', re.I)
+
+
+@dataclass
+class Result:
+    url: str
+    title: str
+    text: str
+
+
+class SearchBlocked(httpx.HTTPError):
+    """O buscador devolveu bloqueio ou uma página que não é de resultados."""
+
+
+TAG_RE = re.compile(r"<[^>]+>")
+RESULT_START_RE = re.compile(r'<div[^>]*class="[^"]*\bresult\b[^"]*"')
+RESULT_LINK_RE = re.compile(r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', re.S)
+RESULT_LINK_ALT_RE = re.compile(r'<a[^>]*href="([^"]+)"[^>]*class="[^"]*result__a[^"]*"[^>]*>(.*?)</a>', re.S)
+RESULT_SNIPPET_RE = re.compile(r'class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</(?:a|div|td)>', re.S)
+BLOCK_MARKERS = ("anomaly-modal", "challenge-form", "bots use duckduckgo")
+
+
+def _clean(html: str) -> str:
+    return " ".join(unescape(TAG_RE.sub(" ", html)).split())
+
+
+def _real_url(href: str) -> str | None:
+    """O DDG entrega links diretos ou redirecionados em /l/?uddg=<destino>."""
+    url = unescape(href)
+    if url.startswith("//"):
+        url = "https:" + url
+    parsed = urlparse(url)
+    if parsed.hostname and parsed.hostname.endswith("duckduckgo.com"):
+        target = parse_qs(parsed.query).get("uddg", [None])[0]
+        return target if target and target.startswith("http") else None
+    return url if parsed.scheme in ("http", "https") else None
+
+
+def _parse_ddg(html: str) -> list[Result]:
+    low = html.lower()
+    if any(marker in low for marker in BLOCK_MARKERS):
+        raise SearchBlocked("DuckDuckGo bloqueou a consulta")
+    starts = [m.start() for m in RESULT_START_RE.finditer(html)]
+    results = []
+    for start, end in zip(starts, starts[1:] + [len(html)]):
+        block = html[start:end]
+        link = RESULT_LINK_RE.search(block) or RESULT_LINK_ALT_RE.search(block)
+        if not link:
+            continue
+        url = _real_url(link.group(1))
+        if not url:
+            continue
+        snippet = RESULT_SNIPPET_RE.search(block)
+        results.append(Result(url, _clean(link.group(2)), _clean(snippet.group(1)) if snippet else ""))
+    if not results and "no-results" not in low and "no results" not in low:
+        raise SearchBlocked("Página do DuckDuckGo sem resultados reconhecíveis")
+    return results
+
+
+def _parse_brave(data: dict) -> list[Result]:
+    results = []
+    for item in (data.get("web") or {}).get("results") or []:
+        if not item.get("url"):
+            continue
+        text = " ".join([item.get("description") or "", *(item.get("extra_snippets") or [])])
+        results.append(Result(item["url"], _clean(item.get("title") or ""), _clean(text)))
+    return results
+
+
+GENERIC_TOKENS = {
+    "de", "do", "da", "dos", "das", "e", "associados", "advogados", "advocacia", "studio",
+    "salao", "clinica", "consultorio", "instituto", "centro", "espaco", "atelie", "casa",
+    "vila", "ltda", "the", "bar", "loja", "restaurante", "academia", "farmacia", "barbearia",
+    "padaria", "oficina", "mecanica", "beleza", "estetica", "pet", "shop",
+}
+
+
+def _name_tokens(name: str) -> set[str]:
+    return {
+        t for t in re.sub(r"[^a-z0-9 ]", " ", _norm_txt(name)).split()
+        if len(t) >= 3 and t not in GENERIC_TOKENS
+    }
+
+
+def _about_lead(results: list[Result], name: str) -> list[Result]:
+    """Só resultados que citam a empresa: a página traz contatos de outras também."""
+    tokens = _name_tokens(name)
+    if not tokens:
+        return []
+    return [
+        r for r in results
+        if any(t in _norm_txt(f"{r.url} {r.title} {r.text}") for t in tokens)
+    ]
+
+
 EMAIL_BLOCK = (".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif")
 DOMAIN_BLOCK = ("duckduckgo.com", "example.com", "w3.org", "sentry", "wixpress.com", "@2x")
 
@@ -126,15 +221,6 @@ def _is_official_website(url: str, lead_name: str) -> bool:
     return any(t in host_clean for t in tokens)
 
 
-def _decode_links(html: str) -> list[str]:
-    links = []
-    for m in HREF_RE.finditer(html):
-        url = unescape(m.group(1))  # &amp; -> &
-        if "duckduckgo.com" not in url.lower():
-            links.append(url)
-    return links
-
-
 def _first_social(links: list[str], domain: str, bad: tuple[str, ...]) -> str | None:
     for url in links:
         low = url.lower()
@@ -191,9 +277,9 @@ def _same_business(lead_name: str, razao: str) -> bool:
 
 
 async def _cnpj_lookup(client: httpx.AsyncClient, name: str, city: str, out: dict) -> None:
-    html = await _serp(client, f'"{name}" {city} CNPJ')
+    results = _about_lead(await _serp(client, f'"{name}" {city} CNPJ'), name)
     tried = set()
-    for m in CNPJ_RE.finditer(html):
+    for m in CNPJ_RE.finditer(" ".join(f"{r.url} {r.title} {r.text}" for r in results)):
         digits = re.sub(r"\D", "", m.group(0))
         if len(digits) != 14 or digits in tried:
             continue
@@ -225,12 +311,35 @@ async def _cnpj_lookup(client: httpx.AsyncClient, name: str, city: str, out: dic
         return
 
 
-async def _serp(client: httpx.AsyncClient, query: str) -> str:
+def _parse_searxng(data: dict) -> list[Result]:
+    results = [Result(r["url"], r.get("title") or "", r.get("content") or "") for r in data.get("results", []) if r.get("url")]
+    # Sem resultado e com buscadores fora: bloqueio, não "não achou".
+    if not results and data.get("unresponsive_engines"):
+        raise SearchBlocked("SearXNG sem buscadores respondendo")
+    return results
+
+
+async def _serp(client: httpx.AsyncClient, query: str) -> list[Result]:
+    searx = os.environ.get("SEARXNG_URL")
+    if searx:
+        r = await client.get(f"{searx.rstrip('/')}/search", params={"q": query, "format": "json", "language": "pt-BR"})
+        r.raise_for_status()
+        return _parse_searxng(r.json())
+    key = os.environ.get("BRAVE_API_KEY")
+    if key:
+        r = await client.get(
+            BRAVE,
+            params={"q": query, "country": "BR", "search_lang": "pt-br", "count": 10, "extra_snippets": "true"},
+            headers={"Accept": "application/json", "X-Subscription-Token": key},
+        )
+        r.raise_for_status()
+        return _parse_brave(r.json())
     r = await client.post(DDG, data={"q": query}, headers=UA)
-    # 403/429/CAPTCHA = bloqueio do DDG. Sem este check, o HTML de erro seria
-    # parseado normalmente e o lead viraria um falso "not_found" permanente.
     r.raise_for_status()
-    return r.text
+    # O DDG costuma sinalizar bloqueio com 202, que não é erro para o httpx.
+    if r.status_code != 200:
+        raise SearchBlocked(f"DuckDuckGo respondeu {r.status_code}")
+    return _parse_ddg(r.text)
 
 
 def _base(lead: dict, partial: bool = False) -> dict:
@@ -252,15 +361,18 @@ async def _enrich(lead: dict) -> dict:
     out = _base(lead)
     async with httpx.AsyncClient(timeout=6, follow_redirects=True) as client:
         # Caminho quente: 1 consulta, extrai tudo
-        html = await _serp(client, f'"{name}" {city}')
-        links = _decode_links(html)
+        results = await _serp(client, f'"{name}" {city}')
+        relevant = _about_lead(results, name)
+        links = [r.url for r in relevant]
+        text = " ".join(f"{r.title} {r.text}" for r in relevant)
         out["instagram"] = _first_social(links, "instagram.com", ("/p/", "/reel/", "/explore", "/accounts"))
         out["facebook"] = _first_social(links, "facebook.com", ("/sharer", "/tr?", "/events", "/groups"))
         out["linkedin"] = _first_social(links, "linkedin.com", ("/posts/", "/feed/"))
-        out["email"] = _first_email(html)
-        out["mobilePhone"] = _first_mobile(html)
+        out["email"] = _first_email(text)
+        out["mobilePhone"] = _first_mobile(text)
         if out["instagram"]:
-            out["igFollowers"] = _ig_followers(html)
+            profile = next((r for r in relevant if r.url.split("?")[0].rstrip("/") == out["instagram"]), None)
+            out["igFollowers"] = _ig_followers(profile.text) if profile else None
         # Pega o 1º link que pareça o site OFICIAL do negócio (corrige o falso
         # positivo do OSM, em que a tag `website` não foi preenchida).
         for url in links:
@@ -273,9 +385,10 @@ async def _enrich(lead: dict) -> dict:
         # não descarta o que a 1ª consulta já achou.
         if not out["email"] or not out["mobilePhone"]:
             try:
-                html2 = await _serp(client, f'"{name}" {city} whatsapp contato')
-                out["email"] = out["email"] or _first_email(html2)
-                out["mobilePhone"] = out["mobilePhone"] or _first_mobile(html2)
+                extra = _about_lead(await _serp(client, f'"{name}" {city} whatsapp contato'), name)
+                text2 = " ".join(f"{r.title} {r.text}" for r in extra)
+                out["email"] = out["email"] or _first_email(text2)
+                out["mobilePhone"] = out["mobilePhone"] or _first_mobile(text2)
             except httpx.HTTPError:
                 out["partial"] = True
 
@@ -286,7 +399,7 @@ async def _enrich(lead: dict) -> dict:
         except (asyncio.TimeoutError, httpx.HTTPError, ValueError):
             pass
 
-    found = sum(1 for k in ("email", "instagram", "facebook", "linkedin") if out[k])
+    found = sum(1 for k in ("email", "instagram", "facebook", "linkedin", "mobilePhone") if out[k])
     out["confidence"] = round(min(1.0, 0.55 + 0.15 * found), 2) if found else 0.0
     return out
 

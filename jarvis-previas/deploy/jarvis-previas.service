@@ -1,0 +1,17 @@
+# API dos pedidos de prévia (APK) e fila das sessões do Claude Code.
+# Escuta em 127.0.0.1:8095; `tailscale serve --https=8095 http://127.0.0.1:8095` publica só na tailnet.
+[Unit]
+Description=Jarvis de prévias (pedidos do APK)
+After=network-online.target habblaud.service
+
+[Service]
+User=lorenzo
+WorkingDirectory=/srv/jarvis-previas/app
+ExecStart=/usr/bin/node src/main.js
+Restart=always
+RestartSec=5
+# O tmux dos agentes nasce dentro deste cgroup; sem isto, reiniciar o serviço mata os pedidos em andamento.
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

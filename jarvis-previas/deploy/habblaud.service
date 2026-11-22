@@ -1,0 +1,20 @@
+# Habblaud do Jarvis de prévias: escritório dos agentes, só no Tailscale.
+# Porta 4747 (sem login) fica em localhost; a 4748 (login + HTTPS) é publicada
+# por `tailscale serve --https=4747 https+insecure://127.0.0.1:4748`.
+[Unit]
+Description=Habblaud (escritório dos agentes de prévias)
+After=network-online.target
+
+[Service]
+User=previas
+WorkingDirectory=/srv/habblaud
+EnvironmentFile=/srv/habblaud/.env
+Environment=HOME=/home/previas
+Environment=PATH=/home/previas/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HABBLAUD_HOST=127.0.0.1
+Environment=HABBLAUD_REMOTE_HOST=127.0.0.1
+ExecStart=/usr/bin/node dist/server/index.js
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

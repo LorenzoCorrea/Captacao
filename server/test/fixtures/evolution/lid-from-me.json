@@ -1,0 +1,1 @@
+{"event":"messages.upsert","instance":"captacao","data":{"key":{"id":"OWN1","fromMe":true,"remoteJid":"111122223333@lid"},"messageType":"conversation","message":{"conversation":"aqui é o Lorenzo","messageContextInfo":{}}}}

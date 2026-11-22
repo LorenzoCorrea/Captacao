@@ -9,3 +9,15 @@ __pycache__/
 # Local, específico da máquina
 .claude/settings.local.json
 update.log
+homeserver.md
+captacao.md
+.htpasswd
+.superpowers/
+.playwright-mcp/
+
+# APK do Jarvis: gerados no build e chave de assinatura (nunca no git)
+jarvis-android/build/
+jarvis-android/*.apk
+jarvis-android/*.apk.idsig
+jarvis-android/*.keystore
+jarvis-android/res/drawable/icon.png

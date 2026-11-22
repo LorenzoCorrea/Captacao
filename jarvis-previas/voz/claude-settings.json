@@ -1,0 +1,19 @@
+{
+  "env": {
+    "HABBLAUD_PERMISSION_TIMEOUT": "86400"
+  },
+  "hooks": {
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "/srv/jarvis-voz/hooks/ao-parar" }] }
+    ]
+  },
+  "enabledPlugins": {
+    "habblaud@habblaud": true,
+    "habblaud-permissoes@habblaud": true,
+    "habblaud-mensagens@habblaud": true
+  },
+  "extraKnownMarketplaces": {
+    "habblaud": { "source": { "source": "directory", "path": "/srv/habblaud" } }
+  },
+  "theme": "dark"
+}

@@ -1,0 +1,1 @@
+{"event":"messages.upsert","instance":"captacao","data":{"key":{"id":"L1","fromMe":false,"remoteJid":"111122223333@lid","participant":"","remoteJidAlt":"5551991234567@s.whatsapp.net","addressingMode":"lid"},"messageType":"conversation","message":{"conversation":"oi","messageContextInfo":{}}}}

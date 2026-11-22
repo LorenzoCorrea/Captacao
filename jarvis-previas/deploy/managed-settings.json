@@ -1,0 +1,53 @@
+{
+  "permissions": {
+    "defaultMode": "default",
+    "allow": [
+      "Read(//srv/jarvis-previas/jobs/**)",
+      "Edit(//srv/jarvis-previas/jobs/**)",
+      "Read(//srv/jarvis-previas/referencias/**)",
+      "Read(//home/previas/.claude/skills/**)",
+      "Glob",
+      "Grep",
+      "Bash(ls:*)",
+      "Bash(/srv/jarvis-previas/app/bin/gerar-pdf)",
+      "Bash(/srv/jarvis-voz/bin/consultar:*)",
+      "Read(//srv/jarvis-voz/sessao/**)",
+      "Edit(//srv/jarvis-voz/sessao/**)"
+    ],
+    "ask": [
+      "Bash(/srv/jarvis-previas/app/bin/enviar-previa)",
+      "Bash(/srv/jarvis-voz/bin/agir:*)"
+    ],
+    "deny": [
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(ssh:*)",
+      "WebFetch",
+      "WebSearch",
+      "Read(//srv/jarvis-previas/config/**)",
+      "Bash(tmux:*)",
+      "Bash(chromium:*)",
+      "Bash(sudo:*)",
+      "mcp__plugin_playwright_playwright"
+    ],
+    "disableBypassPermissionsMode": "disable"
+  },
+  "env": {
+    "HABBLAUD_PERMISSION_TIMEOUT": "86400"
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "allowUnsandboxedCommands": true,
+    "excludedCommands": [
+      "/srv/jarvis-previas/app/bin/enviar-previa",
+      "/srv/jarvis-previas/app/bin/gerar-pdf",
+      "/srv/jarvis-voz/bin/consultar",
+      "/srv/jarvis-voz/bin/agir"
+    ],
+    "network": {
+      "allowedDomains": []
+    }
+  },
+  "allowedMcpServers": []
+}

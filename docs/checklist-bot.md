@@ -1,0 +1,24 @@
+# Checklist do bot de WhatsApp
+
+- [x] **1. Como o bot responde.** As palavras-chave cuidam de "parar" e "é robô?". A IA só classifica a mensagem. Todo texto enviado é fixo e vem de `server/src/bot/offer.js`.
+- [ ] **2. Onde o sistema roda e avisos no celular**
+  - [x] Decidido: tudo roda no ZimaOS; o notebook só administra
+  - [x] Migrado para o Zima em 05/11: app em `/DATA/AppData/captacao`, site em `http://IP-DO-ZIMA:8090`, WhatsApp conectado sem novo QR code. O notebook não roda mais nada
+  - [x] Aviso imediato no WhatsApp quando o bot pausa ou o lead aceita (`OWNER_WHATSAPP`)
+  - [x] Assumir a conversa: responder ao lead pelo celular pausa o bot
+  - [x] Resumo a cada 5 min, só quando há novidade: quem foi chamado (com nicho), quem respondeu, quantos faltam
+  - [ ] Ver o resumo chegando no celular durante o teste real
+- [ ] **3. Roteiro de teste com WhatsApp real**
+  - [x] Aceite (completo e curto)
+  - [x] Desconto (1º pedido)
+  - [ ] Desconto insistente, parcelar, robô, pausa pelo celular, reinício, queda, saída
+  - [ ] Novos: recepcionista, ocupado, "é pagamento único?", "em outro momento", prévia
+- [x] **3b. Melhorias a partir das conversas reais (05/11):** ignora respostas automáticas, novas respostas fixas, 1 lembrete após 2 dias úteis, benefício por nicho, oferta de prévia
+  - [x] Funnel ligado no Zima (05/11): prévias em `https://SEU-HOST.SEU-TAILNET.ts.net/previa/...`, o resto responde 404
+- [x] **3c. Limpeza mensal** no 3º dia útil (textos de conversas paradas e cópias da Evolution)
+- [x] **4. Horário de envio** 09:00–18:00 em dias úteis (restaurado em 05/11). Lembretes: 1º no dia útil seguinte e 2º (despedida) 3 dias úteis depois, só a partir das 14h, com cota própria
+- [x] **5. Cidades e nichos** (05/11): Santa Maria, Santo Ângelo, Pelotas, Rio Grande, Caxias do Sul e Passo Fundo, raio 5 km; nichos salão de beleza, academia e advocacia ("clínica de estética" e "barbearia" faziam a mesma busca no mapa). Quem não tem celular no mapa é procurado na internet (até 40 por dia)
+- [x] **5b. Busca de celular na internet** sem custo: SearXNG próprio no compose (o DuckDuckGo direto bloqueava o Zima). 15 comércios por dia, 30 s entre cada um; só aceita celular com o DDD da cidade
+- [ ] **6. Começar com 1 lead por dia**
+- [ ] **7. Trocar a chave do Gemini e as outras senhas**
+- [ ] **8. Enviar a branch ao GitHub** (`git push -u origin fix/boot-e-seguranca-docker`)

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Apaga o histórico das conversas do Jarvis (botão Apagar conversa do app). Roda como mordomo, via sudo do lorenzo.
+find /home/mordomo/.claude/projects/-srv-jarvis-voz-sessao -mindepth 1 -delete 2>/dev/null
+rm -f /srv/jarvis-voz/estado/resposta.json

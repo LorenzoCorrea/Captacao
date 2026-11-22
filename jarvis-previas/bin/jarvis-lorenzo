@@ -1,0 +1,60 @@
+#!/usr/bin/env node
+// Lado lorenzo das ferramentas do Jarvis de voz (sudo vindo do mordomo): tem as credenciais e valida tudo.
+// Uso: jarvis-lorenzo consultar <assunto> [args] | jarvis-lorenzo agir <acao> [args]
+import { readFileSync, appendFileSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { createStore } from '../src/store.js';
+import { createCaptacao } from '../src/captacao.js';
+import { createFerramentas } from '../src/ferramentas.js';
+
+const run = promisify(execFile);
+const BASE = '/srv/jarvis-previas';
+const config = JSON.parse(readFileSync(`${BASE}/config/config.json`, 'utf8'));
+const UNITS = ['jarvis-previas', 'habblaud', 'jarvis-kokoro'];
+const saida = async (cmd, args) => (await run(cmd, args).catch((e) => ({ stdout: e.stdout ?? '' }))).stdout.trim();
+
+const sistema = {
+  async servicos() {
+    const r = {};
+    const ativos = (await saida('systemctl', ['is-active', ...UNITS])).split('\n');
+    UNITS.forEach((u, i) => { r[u] = ativos[i] ?? '?'; });
+    for (const l of (await saida('docker', ['ps', '-a', '--format', '{{.Names}}\t{{.Status}}'])).split('\n').filter(Boolean)) {
+      const [n, s] = l.split('\t');
+      r[n] = s;
+    }
+    r.disco = (await saida('df', ['-h', '--output=used,size,pcent', '/'])).split('\n').at(-1).trim();
+    const mem = (await saida('free', ['-m'])).split('\n')[1]?.split(/\s+/) ?? [];
+    r.memoria = `${mem[6] ?? '?'} MB livres de ${mem[1] ?? '?'} MB`;
+    try { r.temperatura = `${Math.round(Number(readFileSync('/sys/class/thermal/thermal_zone0/temp', 'utf8')) / 1000)} °C`; } catch {}
+    return r;
+  },
+  async reiniciar(nome) {
+    if (UNITS.includes(nome)) await run('sudo', ['-n', '/usr/bin/systemctl', 'restart', nome]);
+    else await run('docker', ['restart', nome]);
+  },
+};
+
+const previas = {
+  async apagar(id) {
+    const r = await fetch(`http://127.0.0.1:${config.porta ?? 8095}/pedidos/${id}/apagar`, { method: 'POST', headers: { Authorization: `Bearer ${config.token}` } });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+  },
+};
+
+const f = createFerramentas({
+  captacao: createCaptacao({ url: config.captacaoUrl, auth: config.captacaoAuth }),
+  store: createStore(`${BASE}/data`),
+  sistema,
+  previas,
+  log: (l) => appendFileSync('/srv/jarvis-voz/acoes.log', `${JSON.stringify(l)}\n`),
+});
+
+const [modo, nome, ...args] = process.argv.slice(2);
+try {
+  if (modo !== 'consultar' && modo !== 'agir') throw new Error('Use consultar ou agir.');
+  console.log(await f[modo](nome ?? '', args));
+} catch (e) {
+  console.log(`Erro: ${e.message}`);
+  process.exit(1);
+}

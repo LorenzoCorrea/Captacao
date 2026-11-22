@@ -1,0 +1,45 @@
+#!/bin/sh
+# Roda no servidor, como root (o install.sh chama). Idempotente.
+set -eu
+A=/srv/jarvis-previas/app
+[ -f /srv/jarvis-previas/config/config.json ] || { echo "falta /srv/jarvis-previas/config/config.json (token, captacaoUrl, captacaoAuth, porta)"; exit 1; }
+chown -R lorenzo:lorenzo $A /srv/jarvis-previas/data /srv/jarvis-previas/config
+chmod -R go-w $A
+chmod 700 /srv/jarvis-previas/data /srv/jarvis-previas/config
+chmod 600 /srv/jarvis-previas/config/config.json
+install -d -m 755 /etc/claude-code
+install -m 644 -o root $A/deploy/managed-settings.json /etc/claude-code/managed-settings.json
+visudo -cf $A/deploy/sudoers
+install -m 440 -o root $A/deploy/sudoers /etc/sudoers.d/jarvis-previas
+# A pasta-mãe dos pedidos é confiável para o Claude do previas (as subpastas não perguntam).
+sudo -u previas python3 - <<'PY'
+import json
+p = "/home/previas/.claude.json"
+d = json.load(open(p))
+d.setdefault("projects", {}).setdefault("/srv/jarvis-previas/jobs", {})["hasTrustDialogAccepted"] = True
+json.dump(d, open(p, "w"), indent=2)
+PY
+# O lorenzo (serviço) precisa apagar o que o agente criar dentro dos pedidos (botão Apagar do APK).
+command -v setfacl >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -qq acl >/dev/null
+setfacl -R -m u:lorenzo:rwX /srv/jarvis-previas/jobs
+setfacl -R -d -m u:lorenzo:rwX /srv/jarvis-previas/jobs
+# Fontes, referências (Supahero, Three.js, GSAP) e skills de design não ficam no git (terceiros e pesadas):
+# ficam em /usr/local/share/fonts/jarvis, /srv/jarvis-previas/referencias e /home/previas/.claude/skills.
+# Jarvis de voz: usuário mordomo, ferramentas, hook e persona; voz Kokoro (venv + modelo, baixados uma vez).
+sh $A/voz/install-voz.sh
+K=/srv/jarvis-voz/kokoro
+install -m 644 -o lorenzo -g lorenzo $A/voz/kokoro/servidor.py $K/servidor.py
+if [ ! -x $K/venv/bin/python ]; then
+  sudo -u lorenzo python3 -m venv $K/venv
+  sudo -u lorenzo $K/venv/bin/pip install -q -r $A/voz/kokoro/requirements.txt
+fi
+for f in kokoro-v1.0.onnx voices-v1.0.bin; do
+  [ -s $K/cache/$f ] || sudo -u lorenzo sh -c "mkdir -p $K/cache && curl -fsSL -o $K/cache/$f https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/$f"
+done
+install -m 644 $A/deploy/habblaud.service $A/deploy/jarvis-previas.service $A/deploy/jarvis-kokoro.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now habblaud jarvis-previas jarvis-kokoro >/dev/null 2>&1
+systemctl restart jarvis-previas
+tailscale serve --bg --https=8095 http://127.0.0.1:8095 >/dev/null
+tailscale serve --bg --https=4747 https+insecure://127.0.0.1:4748 >/dev/null
+systemctl is-active habblaud jarvis-previas jarvis-kokoro

@@ -1,0 +1,15 @@
+# Voz do Jarvis (Kokoro pm_alex): POST 127.0.0.1:8096/falar {"texto"} -> audio/wav.
+[Unit]
+Description=Voz do Jarvis (Kokoro)
+After=network.target
+
+[Service]
+User=lorenzo
+WorkingDirectory=/srv/jarvis-voz/kokoro
+ExecStart=/srv/jarvis-voz/kokoro/venv/bin/python /srv/jarvis-voz/kokoro/servidor.py
+Restart=always
+RestartSec=5
+MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,17 @@
+#!/usr/bin/env node
+// Parte do envio que roda como lorenzo (sudo, só depois da aprovação no Habblaud): tem as credenciais.
+import { readFileSync } from 'node:fs';
+import { createStore } from '../src/store.js';
+import { createCaptacao } from '../src/captacao.js';
+import { enviar } from '../src/enviar.js';
+
+const BASE = '/srv/jarvis-previas';
+const config = JSON.parse(readFileSync(`${BASE}/config/config.json`, 'utf8'));
+const r = await enviar({
+  id: process.argv[2],
+  store: createStore(`${BASE}/data`),
+  captacao: createCaptacao({ url: config.captacaoUrl, auth: config.captacaoAuth }),
+  jobsDir: `${BASE}/jobs`,
+}).catch((e) => ({ ok: false, motivo: e.message }));
+console.log(r.ok ? 'Prévia enviada ao lead.' : `Não enviado: ${r.motivo}`);
+process.exit(r.ok ? 0 : 1);

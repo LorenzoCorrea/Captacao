@@ -1,0 +1,10 @@
+#!/bin/sh
+# Pedido de envio feito pelo agente, sem argumentos: o pedido é a pasta atual.
+# Roda fora do sandbox do Claude Code (excludedCommands) e só depois da aprovação do Lorenzo
+# (regra "ask"). Passa a vez para a parte que roda como lorenzo e tem as credenciais.
+set -eu
+JOB=$(pwd -P)
+ID=${JOB#/srv/jarvis-previas/jobs/}
+case "$JOB" in /srv/jarvis-previas/jobs/*) ;; *) echo "enviar-previa: rode dentro da pasta do pedido" >&2; exit 2 ;; esac
+case "$ID" in *[!a-z0-9]*|'') echo "enviar-previa: pasta de pedido inválida" >&2; exit 2 ;; esac
+exec sudo -n -u lorenzo /srv/jarvis-previas/app/bin/enviar-previa-lorenzo "$ID"

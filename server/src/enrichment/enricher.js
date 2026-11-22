@@ -20,6 +20,8 @@ const MAX_CONCURRENCY = Number(process.env.ENRICH_CONCURRENCY ?? 2);
 const BACKGROUND = process.env.ENRICH_BACKGROUND !== 'false'; // pré-aquece todos por padrão
 const USE_MOCK = process.env.ENRICH_PROVIDER === 'mock'; // demo offline sem rede
 const TTL_MS = 30 * 60 * 1000; // tempo OCIOSO até liberar a memória (deslizante)
+// Pausa entre leads: o DuckDuckGo bloqueia rajadas (no Zima, 30 s).
+const GAP_MS = Number(process.env.ENRICH_GAP_MS ?? 200);
 const RETRY_DELAY_MS = 20000; // espera antes de re-tentar um lead bloqueado pelo DDG
 const MAX_ATTEMPTS = 2;
 
@@ -32,7 +34,29 @@ const touch = (s) => (s.lastActivity = Date.now());
 // continuam respeitando o limite total de chamadas simultâneas ao DDG.
 let globalRunning = 0;
 
-export function createSearch(leads, meta = {}) {
+// Campos de CRM e contatos que acompanham a empresa, em qualquer busca.
+const SHARED_FIELDS = ['stage', 'notes', 'followUpAt', 'tags', 'estimatedValue', 'interactions', 'msgVariant'];
+
+function fromKnown(known) {
+  if (!known) return {};
+  const state = Object.fromEntries(SHARED_FIELDS.map((k) => [k, known[k]]));
+  // not_found pode ter vindo de um bloqueio da busca: vale tentar de novo.
+  if (known.enrichmentStatus === 'done') {
+    state.enrichment = known.enrichment;
+    state.enrichmentStatus = 'done';
+  }
+  return state;
+}
+
+function syncOtherSessions(source, leadId, fields) {
+  for (const s of searches.values()) {
+    if (s === source) continue;
+    const other = s.leads.get(leadId);
+    if (other) for (const k of fields) other[k] = source.leads.get(leadId)[k];
+  }
+}
+
+export function createSearch(leads, meta = {}, known = new Map(), { enrich = true } = {}) {
   const { city, niche } = meta;
   const id = crypto.randomUUID();
   const session = {
@@ -41,7 +65,7 @@ export function createSearch(leads, meta = {}) {
     niche: niche ?? '',
     query: { niche: niche ?? '', city: city ?? '', lat: meta.lat, lng: meta.lng, radiusKm: meta.radiusKm },
     found: meta.found ?? null,
-    leads: new Map(leads.map((l) => [l.id, { ...l, enrichment: null, enrichmentStatus: 'pending', stage: 'novo', notes: '', followUpAt: null, tags: [], estimatedValue: null, interactions: [] }])),
+    leads: new Map(leads.map((l) => [l.id, { ...l, enrichment: null, enrichmentStatus: 'pending', stage: 'novo', notes: '', followUpAt: null, tags: [], estimatedValue: null, interactions: [], ...fromKnown(known.get(l.id)) }])),
     clients: new Set(),
     queue: [],
     inFlight: new Set(),
@@ -54,8 +78,8 @@ export function createSearch(leads, meta = {}) {
   // garante que os UPDATEs de enriquecimento/estágio só rodem após o INSERT.
   session.dbReady = db.saveSearch(session, meta).catch((e) => console.error('[db]', e.message));
 
-  if (BACKGROUND) {
-    session.queue = [...session.leads.keys()];
+  if (BACKGROUND && enrich) {
+    session.queue = [...session.leads.values()].filter((l) => l.enrichmentStatus === 'pending').map((l) => l.id);
     pump(session);
   }
   return id;
@@ -124,7 +148,8 @@ export async function updateLead(searchId, leadId, patch = {}) {
       : [];
     fields.interactions = JSON.stringify(lead.interactions);
   }
-  if (Object.keys(fields).length && db.dbEnabled && s.dbReady) {
+  syncOtherSessions(s, leadId, SHARED_FIELDS);
+  if (Object.keys(fields).length && s.dbReady) {
     s.dbReady.then(() => db.saveLeadFields(searchId, leadId, fields)).catch(() => {});
   }
   return true;
@@ -236,10 +261,10 @@ function pumpAll() {
 }
 
 async function runOne(session, lead) {
-  await sleep(200 + Math.random() * 800); // jitter: educado com o DuckDuckGo
+  await sleep(GAP_MS + Math.random() * 800); // jitter: educado com o DuckDuckGo
   const enrichment = USE_MOCK ? mockEnrichment(lead) : await spawnPython(lead, session.city);
 
-  const achou = enrichment && (enrichment.email || enrichment.instagram || enrichment.facebook || enrichment.linkedin);
+  const achou = enrichment && (enrichment.email || enrichment.instagram || enrichment.facebook || enrichment.linkedin || enrichment.mobilePhone);
   // Falha transitória (worker caiu, DDG bloqueou/timeout) SEM nenhum contato:
   // re-tenta com backoff em vez de gravar "not_found" — bloqueio de rate-limit
   // não pode virar veredito definitivo no banco.
@@ -257,8 +282,9 @@ async function runOne(session, lead) {
   lead.enrichment = enrichment;
   lead.enrichmentStatus = achou ? 'done' : 'not_found';
 
+  syncOtherSessions(session, lead.id, ['enrichment', 'enrichmentStatus']);
   broadcast(session, 'enrichment', payloadOf(lead));
-  if (db.dbEnabled) session.dbReady.then(() => db.saveEnrichment(session.id, lead)).catch(() => {});
+  session.dbReady.then(() => db.saveEnrichment(session.id, lead)).catch(() => {});
   if (allSettled(session)) broadcast(session, 'done', { searchId: session.id });
 }
 

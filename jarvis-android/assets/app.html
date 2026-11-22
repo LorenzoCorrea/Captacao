@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jarvis</title>
+<style>
+  @font-face { font-family: Onest; src: url(fonts/onest-400.ttf); font-weight: 400; }
+  @font-face { font-family: Onest; src: url(fonts/onest-500.ttf); font-weight: 500; }
+  @font-face { font-family: Onest; src: url(fonts/onest-600.ttf); font-weight: 600; }
+  @font-face { font-family: Bricolage; src: url(fonts/bricolage-700.ttf); font-weight: 700; }
+  :root {
+    --bg: #111315; --surface: #1a1d20; --raised: #22262a; --line: #2c3136; --line-forte: #3a4047;
+    --txt: #eceae6; --sub: #9a9fa5; --apagado: #6b7178;
+    --ambar: #f2a93b; --ambar-tinta: #1d1608; --ambar-suave: rgba(242,169,59,.12);
+    --azul: #7aa7ff; --verde: #57c88a; --verm: #ff7a6b; --cinza: #8b9198;
+    --raio: 14px; --nav: 64px;
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--txt); }
+  body { font: 15px/1.45 Onest, system-ui, sans-serif; padding-bottom: calc(var(--nav) + 12px); }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--ambar); outline-offset: 2px; }
+
+  /* Cabeçalho */
+  header { position: sticky; top: 0; z-index: 3; background: var(--bg); padding: 18px 18px 12px; display: flex; align-items: flex-end; gap: 12px; }
+  header .tit { flex: 1; min-width: 0; }
+  h1 { font: 700 27px/1.1 Bricolage, Onest, sans-serif; margin: 0; letter-spacing: -.01em; }
+  .resumo { color: var(--sub); font-size: 13px; margin-top: 4px; display: flex; align-items: center; gap: 7px; }
+  .conexao { width: 7px; height: 7px; border-radius: 50%; background: var(--apagado); flex: none; }
+  .conexao.ok { background: var(--verde); } .conexao.falha { background: var(--verm); }
+  .icone { width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; flex: none; }
+  .icone svg { width: 19px; height: 19px; }
+  .girando svg { animation: gira .8s linear infinite; }
+  @keyframes gira { to { transform: rotate(360deg); } }
+
+  /* Seções e cartões */
+  .tela { display: none; } .tela.on { display: block; }
+  .rotulo { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--sub); margin: 22px 18px 10px; display: flex; justify-content: space-between; }
+  .rotulo span:last-child { color: var(--apagado); letter-spacing: 0; text-transform: none; font-weight: 500; }
+  .lista { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 0 14px; }
+  .lista > * { min-width: 0; }
+  .cartao { background: var(--surface); border: 1px solid var(--line); border-radius: var(--raio); padding: 14px; }
+  .cartao.destaque { border-color: rgba(242,169,59,.45); background: linear-gradient(var(--ambar-suave), var(--ambar-suave)), var(--surface); }
+  .linha { display: flex; align-items: center; gap: 10px; }
+  .cresce { flex: 1; min-width: 0; }
+  .nome { font-weight: 600; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta { color: var(--sub); font-size: 13px; margin-top: 2px; }
+  .erro-txt { color: var(--verm); font-size: 13px; margin-top: 8px; }
+  .dica { color: var(--ambar); font-size: 13px; margin-top: 10px; display: flex; gap: 6px; align-items: center; }
+
+  .estado { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 5px 9px 5px 8px; border-radius: 99px; background: var(--raised); color: var(--cor, var(--cinza)); white-space: nowrap; }
+  .estado::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .estado.vivo::before { animation: pulsa 1.4s ease-in-out infinite; }
+  @keyframes pulsa { 50% { opacity: .25; } }
+
+  .acoes { display: flex; gap: 8px; margin-top: 12px; }
+  .bt { border: 0; border-radius: 11px; padding: 11px 14px; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+  .bt svg { width: 17px; height: 17px; }
+  .bt.pri { background: var(--ambar); color: var(--ambar-tinta); }
+  .bt.sec { background: var(--raised); color: var(--txt); }
+  .bt.fant { background: transparent; color: var(--sub); border: 1px solid var(--line); }
+  .bt.perigo { color: var(--verm); border-color: rgba(255,122,107,.5); }
+  .bt:disabled { opacity: .45; }
+  .bt.cheio { width: 100%; }
+
+  .vazio { text-align: center; color: var(--sub); padding: 56px 28px; }
+  .vazio svg { width: 56px; height: 56px; color: var(--apagado); margin-bottom: 14px; }
+  .vazio b { display: block; color: var(--txt); font-size: 16px; margin-bottom: 4px; }
+  .esqueleto { height: 76px; border-radius: var(--raio); background: linear-gradient(90deg, var(--surface), var(--raised), var(--surface)); background-size: 200% 100%; animation: brilho 1.2s linear infinite; }
+  @keyframes brilho { to { background-position: -200% 0; } }
+
+  /* Novo pedido */
+  .fotos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 14px; }
+  .foto { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: var(--surface); }
+  .foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .foto button { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); color: #fff; display: grid; place-items: center; }
+  .foto button svg { width: 14px; height: 14px; }
+  .mais { aspect-ratio: 1; border-radius: 12px; border: 1.5px dashed var(--line-forte); background: transparent; color: var(--sub); display: grid; place-items: center; align-content: center; gap: 6px; font-size: 13px; }
+  .mais svg { width: 24px; height: 24px; color: var(--ambar); }
+  .campo { margin: 0 14px; position: relative; }
+  .campo svg { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--apagado); pointer-events: none; }
+  input, textarea { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 13px 14px; outline: none; }
+  input::placeholder, textarea::placeholder { color: var(--apagado); }
+  input:focus, textarea:focus { border-color: var(--ambar); }
+  .campo input { padding-left: 40px; }
+  textarea { min-height: 84px; resize: none; }
+  .lead { width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .lead.sel { border-color: var(--ambar); }
+  .tel { color: var(--sub); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .pediu { font-size: 11px; font-weight: 600; color: var(--verde); background: rgba(87,200,138,.12); padding: 4px 8px; border-radius: 99px; white-space: nowrap; }
+
+  .barra-acao { position: fixed; left: 0; right: 0; bottom: var(--nav); z-index: 4; padding: 10px 14px 12px; background: linear-gradient(transparent, var(--bg) 30%); }
+  .falta { text-align: center; color: var(--apagado); font-size: 12px; margin-bottom: 8px; }
+  .progresso { height: 3px; border-radius: 3px; background: var(--raised); overflow: hidden; margin-bottom: 8px; display: none; }
+  .progresso i { display: block; height: 100%; width: 0; background: var(--ambar); transition: width .3s; }
+  #tNovo { padding-bottom: 110px; }
+
+  /* Jarvis */
+  #tJarvis { padding-bottom: 104px; }
+  .conversa { display: grid; gap: 10px; padding: 4px 14px 0; }
+  .balao { max-width: 86%; padding: 11px 14px; border-radius: 16px; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; }
+  .balao.eu { justify-self: end; background: var(--raised); border-bottom-right-radius: 5px; }
+  .balao.ele { justify-self: start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 5px; }
+  .balao.ele.erro { border-color: rgba(255,122,107,.5); color: var(--verm); }
+  .balao .quem { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ambar); margin-bottom: 3px; display: flex; align-items: center; gap: 6px; }
+  .balao .quem button { margin-left: auto; border: 0; background: none; color: var(--sub); padding: 0; display: grid; }
+  .balao .quem svg { width: 16px; height: 16px; }
+  .pontos { display: inline-flex; gap: 4px; padding: 6px 0; }
+  .pontos i { width: 6px; height: 6px; border-radius: 50%; background: var(--sub); animation: pulsa 1.2s infinite; }
+  .pontos i:nth-child(2) { animation-delay: .2s; } .pontos i:nth-child(3) { animation-delay: .4s; }
+  .aprovacao { margin-top: 8px; padding: 10px; border-radius: 10px; background: var(--ambar-suave); border: 1px solid rgba(242,169,59,.35); }
+  .aprovacao code { display: block; font: 12px/1.4 ui-monospace, monospace; color: var(--txt); margin: 4px 0 10px; overflow-wrap: anywhere; }
+  .aprovacao .acoes { margin-top: 0; }
+  .saudacao { text-align: center; padding: 40px 24px 16px; color: var(--sub); }
+  .saudacao b { display: block; font: 700 22px/1.2 Bricolage, Onest, sans-serif; color: var(--txt); margin-bottom: 6px; }
+  .sugestoes { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 8px 14px; }
+  .sugestoes button { border: 1px solid var(--line); background: var(--surface); color: var(--txt); border-radius: 99px; padding: 9px 13px; font-size: 13px; }
+  .falar { display: flex; gap: 8px; align-items: center; }
+  .falar input { flex: 1; min-width: 0; border-radius: 99px; padding: 13px 16px; }
+  .mic { width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--ambar); color: var(--ambar-tinta); display: grid; place-items: center; flex: none; transition: transform .1s; }
+  .mic svg { width: 24px; height: 24px; }
+  .mic.ouvindo { background: var(--verm); color: #fff; box-shadow: 0 0 0 calc(var(--nivel, 0) * 1.2px + 4px) rgba(255,122,107,.25); }
+  .mic:disabled { opacity: .45; }
+
+  /* Prévia e configuração */
+  .pagina { display: block; width: calc(100% - 28px); margin: 0 14px 14px; border-radius: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.45); background: #fff; }
+  .ajuda { color: var(--sub); font-size: 13px; margin: 8px 2px 0; }
+  label { display: block; font-size: 13px; font-weight: 600; color: var(--sub); margin: 0 2px 7px; }
+
+  /* Aviso flutuante */
+  #toast { position: fixed; left: 14px; right: 14px; bottom: calc(var(--nav) + 14px); z-index: 6; background: var(--raised); border: 1px solid var(--line-forte); border-left: 3px solid var(--ambar); border-radius: 12px; padding: 12px 14px; font-size: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.4); transform: translateY(12px); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; }
+  #toast.on { opacity: 1; transform: none; pointer-events: auto; }
+  #toast.erro { border-left-color: var(--verm); }
+  body.com-barra #toast { bottom: calc(var(--nav) + 96px); }
+  nav button { font-size: 10.5px; }
+
+  /* Navegação */
+  nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 5; height: var(--nav); display: flex; background: #17191c; border-top: 1px solid var(--line); }
+  nav button { flex: 1; border: 0; background: none; color: var(--apagado); display: grid; place-items: center; align-content: center; gap: 3px; font-size: 11px; font-weight: 500; position: relative; }
+  nav svg { width: 22px; height: 22px; }
+  nav button.on { color: var(--txt); }
+  nav button.on svg { color: var(--ambar); }
+  nav .bolinha { position: absolute; top: 9px; left: calc(50% + 8px); min-width: 16px; height: 16px; border-radius: 8px; background: var(--ambar); color: var(--ambar-tinta); font-size: 10px; font-weight: 700; display: none; place-items: center; padding: 0 4px; }
+
+  @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-lista" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="3.5" width="16" height="17" rx="3"/><path d="M8 8.5h8M8 12h8M8 15.5h5"/></symbol>
+  <symbol id="i-mais" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/></symbol>
+  <symbol id="i-predio" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 20.5V8l8-4.5L20 8v12.5"/><path d="M3 20.5h18M9.5 20.5v-5h5v5M8 10.5h.01M12 10.5h.01M16 10.5h.01" stroke-linecap="round"/></symbol>
+  <symbol id="i-ajuste" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+  <symbol id="i-atualizar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4.5h-4.5"/></symbol>
+  <symbol id="i-olho" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-lixo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-busca" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></symbol>
+  <symbol id="i-foto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M21 15.5l-5-4.5-8 8"/></symbol>
+  <symbol id="i-voltar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-onda" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></symbol>
+  <symbol id="i-enviar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-som" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+  <symbol id="i-parar" viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="2"/></symbol>
+  <symbol id="i-nova" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></symbol>
+  <symbol id="i-mao" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11V5.5a1.5 1.5 0 0 1 3 0V10m0-5.5a1.5 1.5 0 0 1 3 0V10m0-4a1.5 1.5 0 0 1 3 0v7a7 7 0 0 1-7 7h-.5A6.5 6.5 0 0 1 5 14.5V12a1.5 1.5 0 0 1 3 0"/></symbol>
+</svg>
+
+<header>
+  <button class="icone" id="btVoltar" onclick="ir('tPedidos')" aria-label="Voltar" hidden><svg><use href="#i-voltar"/></svg></button>
+  <div class="tit"><h1 id="titulo">Pedidos</h1><div class="resumo"><i class="conexao" id="conexao"></i><span id="resumo">Conectando…</span></div></div>
+  <button class="icone" id="btNova" onclick="novaConversa(this)" aria-label="Apagar conversa" hidden><svg><use href="#i-lixo"/></svg></button>
+  <button class="icone" id="btAtualizar" onclick="carregarPedidos(true)" aria-label="Atualizar"><svg><use href="#i-atualizar"/></svg></button>
+</header>
+
+<section class="tela" id="tPedidos"><div id="listaPedidos"></div></section>
+
+<section class="tela" id="tNovo">
+  <div class="rotulo"><span>Fotos</span><span id="nFotos"></span></div>
+  <div class="fotos" id="fotos"></div>
+  <div class="rotulo"><span>Lead</span><span></span></div>
+  <div id="leadEscolhido"></div>
+  <div id="buscaLead">
+    <div class="campo"><svg><use href="#i-busca"/></svg><input id="busca" placeholder="Buscar pelo nome" oninput="mostrarLeads()" autocomplete="off"></div>
+    <div class="lista" id="listaLeads" style="margin-top:10px"></div>
+  </div>
+  <div class="rotulo"><span>Observação</span><span>opcional</span></div>
+  <div class="campo"><textarea id="obs" placeholder="Ex.: usar tons de verde, destacar a fachada"></textarea></div>
+  <div class="barra-acao" id="barraAcao">
+    <div class="progresso" id="progresso"><i id="progressoBarra"></i></div>
+    <div class="falta" id="falta"></div>
+    <button class="bt pri cheio" id="btMontar" onclick="montar()">Montar prévia</button>
+  </div>
+</section>
+
+<section class="tela" id="tJarvis">
+  <div id="conversa" class="conversa"></div>
+  <div class="barra-acao">
+    <div class="falar">
+      <input id="pergunta" placeholder="Pergunte ao Jarvis" autocomplete="off" oninput="atualizarMic()" onkeydown="if (event.key === 'Enter') enviarPergunta()">
+      <button class="mic" id="mic" onclick="micOuEnviar()" aria-label="Falar"><svg><use href="#i-mic"/></svg></button>
+    </div>
+  </div>
+</section>
+
+<section class="tela" id="tPrevia"><div id="paginas"></div></section>
+
+<section class="tela" id="tConfig">
+  <div class="lista" style="margin-top:8px">
+    <div class="cartao">
+      <label for="cfgServidor">Endereço do Jarvis</label>
+      <input id="cfgServidor" autocomplete="off" spellcheck="false">
+      <p class="ajuda">O servidor só responde com o Tailscale ligado.</p>
+    </div>
+    <div class="cartao">
+      <label for="cfgToken">Token</label>
+      <input id="cfgToken" type="password" autocomplete="off" placeholder="Deixe em branco para manter o atual">
+    </div>
+    <button class="bt pri cheio" onclick="salvarConfig()">Salvar</button>
+  </div>
+</section>
+
+<div id="toast" role="status"></div>
+
+<nav>
+  <button id="nPedidos" onclick="ir('tPedidos')"><svg><use href="#i-lista"/></svg>Pedidos<span class="bolinha" id="bolinha"></span></button>
+  <button id="nNovo" onclick="ir('tNovo')"><svg><use href="#i-mais"/></svg>Novo pedido</button>
+  <button id="nJarvis" onclick="ir('tJarvis')"><svg><use href="#i-onda"/></svg>Jarvis</button>
+  <button onclick="Jarvis.abrirEscritorio()"><svg><use href="#i-predio"/></svg>Escritório</button>
+  <button id="nConfig" onclick="ir('tConfig')"><svg><use href="#i-ajuste"/></svg>Ajustes</button>
+</nav>
+
+<script>
+const ESTADOS = {
+  recebendo: ['Recebendo fotos', '--cinza', true], na_fila: ['Na fila', '--cinza', true], montando: ['Montando', '--azul', true],
+  previa_pronta: ['Aguardando você', '--ambar', true], enviado: ['Enviado', '--verde', false], encerrado: ['Encerrado', '--cinza', false], erro: ['Erro', '--verm', false],
+};
+const TITULOS = { tPedidos: 'Pedidos', tNovo: 'Nova prévia', tJarvis: 'Jarvis', tPrevia: 'Prévia', tConfig: 'Ajustes' };
+let leads = [], leadSel = null, enviando = false, seq = 0, telaAtual = '', relogio = null, toastT = null;
+const cbs = {};
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const icone = (n) => `<svg><use href="#i-${n}"/></svg>`;
+const semAcento = (s) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+
+// Ponte com o Java: cada chamada assíncrona volta por window.__cb.
+window.__cb = (id, ok, dado) => { const f = cbs[id]; delete cbs[id]; f && f(ok, dado); };
+const chamar = (metodo, ...args) => new Promise((res, rej) => {
+  const id = 'c' + (++seq);
+  cbs[id] = (ok, dado) => (ok ? res(dado) : rej(new Error(dado)));
+  Jarvis[metodo](id, ...args);
+});
+async function api(method, path, body) {
+  let r;
+  try { r = JSON.parse(await chamar('api', method, path, body ? JSON.stringify(body) : '')); }
+  catch (e) { conexao(false); throw new Error('Sem conexão com o servidor. O Tailscale está ligado?'); }
+  conexao(r.status !== 401);
+  if (r.status === 401) { ir('tConfig'); throw new Error('Token inválido: confira em Ajustes.'); }
+  if (r.status >= 400) throw new Error(r.body?.error ?? `Erro ${r.status}`);
+  return r.body;
+}
+function conexao(ok) { $('conexao').className = 'conexao ' + (ok ? 'ok' : 'falha'); }
+
+function aviso(texto, erro) {
+  const t = $('toast');
+  clearTimeout(toastT);
+  if (!texto) { t.classList.remove('on'); return; }
+  t.textContent = texto; t.className = 'on' + (erro ? ' erro' : '');
+  toastT = setTimeout(() => t.classList.remove('on'), erro ? 6000 : 3500);
+}
+
+function ir(tela) {
+  telaAtual = tela;
+  for (const t of document.querySelectorAll('.tela')) t.classList.toggle('on', t.id === tela);
+  for (const [n, t] of [['nPedidos', 'tPedidos'], ['nNovo', 'tNovo'], ['nJarvis', 'tJarvis'], ['nConfig', 'tConfig']]) $(n).classList.toggle('on', t === tela);
+  $('titulo').textContent = TITULOS[tela];
+  $('btAtualizar').hidden = tela !== 'tPedidos';
+  $('btNova').hidden = tela !== 'tJarvis';
+  $('btVoltar').hidden = tela !== 'tPrevia';
+  document.body.classList.toggle('com-barra', tela === 'tNovo' || tela === 'tJarvis');
+  aviso('');
+  scrollTo(0, 0);
+  if (tela === 'tPedidos') carregarPedidos();
+  if (tela === 'tNovo') { onFotos(); carregarLeads(); atualizarBarra(); $('resumo').textContent = 'Fotos, lead e, se quiser, uma observação'; }
+  if (tela === 'tJarvis') { $('resumo').textContent = 'Seu mordomo, às ordens'; desenharConversa(); }
+  if (tela === 'tConfig') { $('cfgServidor').value = JSON.parse(Jarvis.config()).servidor; $('resumo').textContent = 'Conexão com o servidor'; }
+}
+
+function haQuanto(ms) {
+  const min = Math.round((Date.now() - ms) / 60000);
+  if (min < 1) return 'agora';
+  if (min < 60) return `há ${min} min`;
+  if (min < 24 * 60) return `há ${Math.round(min / 60)} h`;
+  return new Date(ms).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+}
+
+function cartaoPedido(p) {
+  const [txt, cor, ativo] = ESTADOS[p.estado] ?? [p.estado, '--cinza', false];
+  const ver = ['previa_pronta', 'enviado'].includes(p.estado) && !p.apagado;
+  const pronta = p.estado === 'previa_pronta';
+  const pede = pronta && p.aguardandoAprovacao;
+  const vivo = ['montando', 'na_fila'].includes(p.estado);
+  return `<div class="cartao${pede ? ' destaque' : ''}">
+    <div class="linha"><div class="cresce"><div class="nome">${esc(p.leadName)}</div>
+      <div class="meta">${haQuanto(p.atualizadoEm)} · ${p.fotos} foto${p.fotos === 1 ? '' : 's'}</div></div>
+      <span class="estado${vivo ? ' vivo' : ''}" style="--cor:var(${cor})">${txt}</span></div>
+    ${p.erro ? `<div class="erro-txt">${esc(p.erro)}</div>` : ''}
+    ${pede ? `<div class="dica">${icone('mao').replace('<svg>', '<svg width="16" height="16">')}O agente pede para enviar a prévia ao lead. Confira antes.</div>` : ''}
+    ${pede ? `<div class="acoes"><button class="bt sec" style="flex:1" onclick="verPrevia('${p.id}')">${icone('olho')}Ver prévia</button></div>` : ''}
+    <div class="acoes">
+      ${ver && !pede ? `<button class="bt sec" style="flex:1" onclick="verPrevia('${p.id}')">${icone('olho')}Ver prévia</button>` : ''}
+      ${pede ? `<button class="bt pri" style="flex:1" onclick="aprovarPedido(this, '${p.id}', true)">Enviar</button><button class="bt fant" onclick="aprovarPedido(this, '${p.id}', false)">Recusar</button>` : ''}
+      <button class="bt fant" style="${ver || pede ? '' : 'margin-left:auto'}" onclick="apagar(this, '${p.id}')" aria-label="Apagar">${icone('lixo')}<span hidden>Confirmar</span></button>
+    </div></div>`;
+}
+
+async function carregarPedidos(manual) {
+  const bt = $('btAtualizar');
+  if (manual) bt.classList.add('girando');
+  if (!$('listaPedidos').innerHTML) $('listaPedidos').innerHTML = '<div class="lista" style="margin-top:8px"><div class="esqueleto"></div><div class="esqueleto"></div></div>';
+  try {
+    const { pedidos } = await api('GET', '/pedidos');
+    const ativos = pedidos.filter((p) => ESTADOS[p.estado]?.[2]);
+    const feitos = pedidos.filter((p) => !ESTADOS[p.estado]?.[2]);
+    const aguardando = pedidos.filter((p) => p.estado === 'previa_pronta' && p.aguardandoAprovacao).length;
+    if (telaAtual === 'tPedidos') $('resumo').textContent = !pedidos.length ? 'Nenhum pedido' : ativos.length ? `${ativos.length} em andamento` + (aguardando ? ` · ${aguardando} aguardando você` : '') : 'Tudo em dia';
+    $('bolinha').textContent = aguardando; $('bolinha').style.display = aguardando ? 'grid' : 'none';
+    const grupo = (titulo, lista) => lista.length ? `<div class="rotulo"><span>${titulo}</span><span>${lista.length}</span></div><div class="lista">${lista.map(cartaoPedido).join('')}</div>` : '';
+    $('listaPedidos').innerHTML = pedidos.length ? grupo('Em andamento', ativos) + grupo('Concluídos', feitos)
+      : `<div class="vazio">${icone('foto')}<b>Nenhum pedido ainda</b>Compartilhe fotos de um negócio com o Jarvis, ou toque em Novo pedido.</div>`;
+    // Enquanto houver pedido andando, a lista se atualiza sozinha.
+    clearTimeout(relogio);
+    if (ativos.length) relogio = setTimeout(() => telaAtual === 'tPedidos' && carregarPedidos(), 8000);
+  } catch (e) {
+    if (telaAtual === 'tPedidos') $('resumo').textContent = 'Sem conexão';
+    if ($('listaPedidos').querySelector('.esqueleto')) $('listaPedidos').innerHTML = `<div class="vazio">${icone('atualizar')}<b>Não consegui falar com o servidor</b>${esc(e.message)}</div>`;
+    aviso(e.message, true);
+  } finally { bt.classList.remove('girando'); }
+}
+
+// Confirma com um segundo toque (sem confirm(), que o WebView não mostra).
+async function apagar(bt, id) {
+  if (!bt.dataset.armado) {
+    bt.dataset.armado = '1'; bt.classList.add('perigo'); bt.querySelector('span').hidden = false;
+    setTimeout(() => { if (bt.isConnected) { delete bt.dataset.armado; bt.classList.remove('perigo'); bt.querySelector('span').hidden = true; } }, 4000);
+    return;
+  }
+  bt.disabled = true;
+  try { await api('POST', `/pedidos/${id}/apagar`); aviso('Pedido apagado.'); carregarPedidos(); } catch (e) { aviso(e.message, true); bt.disabled = false; }
+}
+
+async function verPrevia(id) {
+  ir('tPrevia');
+  $('resumo').textContent = 'Carregando…';
+  $('paginas').innerHTML = '<div class="lista"><div class="esqueleto" style="height:420px"></div></div>';
+  try {
+    const paginas = JSON.parse(await chamar('verPrevia', id));
+    $('resumo').textContent = `${paginas.length} página${paginas.length === 1 ? '' : 's'}`;
+    $('paginas').innerHTML = paginas.map((src) => `<img class="pagina" src="${src}" alt="">`).join('');
+  } catch (e) { $('paginas').innerHTML = ''; $('resumo').textContent = 'Não abriu'; aviso(e.message, true); }
+}
+
+window.onFotos = () => {
+  const n = Jarvis.quantasFotos();
+  $('nFotos').textContent = n ? `${n} escolhida${n === 1 ? '' : 's'}` : '';
+  $('fotos').innerHTML = Array.from({ length: n }, (_, i) => `<div class="foto" id="f${i}"><button onclick="tirar(${i})" aria-label="Tirar foto">${icone('x')}</button></div>`).join('')
+    + `<button class="mais" onclick="Jarvis.escolherFotos()">${icone('mais')}Adicionar</button>`;
+  if (n) chamar('miniaturas').then((lista) => JSON.parse(lista).forEach((src, i) => {
+    const d = $('f' + i); if (d && src) d.insertAdjacentHTML('afterbegin', `<img src="${src}" alt="">`);
+  }));
+  atualizarBarra();
+  if (n && telaAtual !== 'tNovo' && !enviando) ir('tNovo');
+};
+function tirar(i) { Jarvis.tirarFoto(i); onFotos(); }
+
+async function carregarLeads() {
+  try { leads = (await api('GET', '/leads')).leads; mostrarLeads(); } catch (e) { aviso(e.message, true); }
+}
+const telefone = (t) => String(t).replace(/^55(\d\d)(\d{4,5})(\d{4})$/, '+55 $1 $2-$3');
+function mostrarLeads() {
+  const escolhido = leads.find((l) => l.leadId === leadSel);
+  $('leadEscolhido').innerHTML = escolhido ? `<div class="lista"><div class="lead sel"><div class="linha"><div class="cresce"><div class="nome">${esc(escolhido.name)}</div><div class="tel">${esc(telefone(escolhido.phone))}</div></div>
+    <button class="bt fant" onclick="trocarLead()">Trocar</button></div></div></div>` : '';
+  $('buscaLead').hidden = !!escolhido;
+  const q = semAcento($('busca').value);
+  const lista = leads.filter((l) => semAcento(l.name).includes(q)).slice(0, 30);
+  $('listaLeads').innerHTML = lista.map((l) => `<button class="lead" onclick="escolher('${encodeURIComponent(l.leadId)}')">
+    <div class="linha"><div class="cresce"><div class="nome">${esc(l.name)}</div><div class="tel">${esc(telefone(l.phone))}</div></div>
+    ${l.pediuPrevia ? '<span class="pediu">pediu prévia</span>' : ''}</div></button>`).join('')
+    || `<div class="vazio" style="padding:28px">${leads.length ? 'Nenhum lead com esse nome.' : 'Nenhum lead em conversa agora.'}</div>`;
+  atualizarBarra();
+}
+function escolher(id) { leadSel = decodeURIComponent(id); $('busca').value = ''; mostrarLeads(); }
+function trocarLead() { leadSel = null; mostrarLeads(); $('busca').focus(); }
+
+function atualizarBarra() {
+  const falta = [!Jarvis.quantasFotos() && 'fotos', !leadSel && 'o lead'].filter(Boolean);
+  $('falta').textContent = enviando ? '' : falta.length ? `Falta escolher ${falta.join(' e ')}` : 'Tudo pronto';
+  $('btMontar').disabled = enviando || falta.length > 0;
+}
+
+window.onProgresso = (n, total) => {
+  $('progresso').style.display = 'block';
+  $('progressoBarra').style.width = `${Math.round((n / total) * 100)}%`;
+  $('btMontar').textContent = `Enviando foto ${n} de ${total}…`;
+};
+async function montar() {
+  if (!Jarvis.quantasFotos() || !leadSel) return atualizarBarra();
+  enviando = true; atualizarBarra(); $('btMontar').textContent = 'Criando pedido…';
+  try {
+    await chamar('montar', leadSel, $('obs').value);
+    leadSel = null; $('obs').value = ''; ir('tPedidos');
+    aviso('Pedido criado. Acompanhe o agente no Escritório.');
+  } catch (e) { aviso(e.message, true); }
+  finally {
+    enviando = false; $('btMontar').textContent = 'Montar prévia';
+    $('progresso').style.display = 'none'; $('progressoBarra').style.width = '0';
+    atualizarBarra();
+  }
+}
+
+function salvarConfig() {
+  Jarvis.salvarConfig($('cfgServidor').value.trim(), $('cfgToken').value.trim());
+  $('cfgToken').value = '';
+  aviso('Configuração salva.');
+  ir('tPedidos');
+}
+
+async function aprovarPedido(bt, id, aprovar) {
+  bt.disabled = true;
+  try {
+    await api('POST', `/pedidos/${id}/aprovacao`, { aprovar });
+    aviso(aprovar ? 'Envio aprovado. O agente está mandando a prévia.' : 'Envio recusado.');
+    setTimeout(carregarPedidos, 1500);
+  } catch (e) { aviso(e.message, true); bt.disabled = false; }
+}
+
+// ---- Jarvis ----
+const SUGESTOES = ['Como está o bot?', 'Quantas conversas estão pausadas?', 'Algum pedido de prévia?', 'Como está o servidor?'];
+const falas = [];
+let jarvisOcupado = false, ouvindo = false, falando = false, idAtual = null;
+
+function desenharConversa() {
+  const c = $('conversa');
+  if (!falas.length) {
+    c.innerHTML = `<div class="saudacao"><b>Às suas ordens, senhor.</b>Toque no microfone e fale, ou escolha uma pergunta.</div>
+      <div class="sugestoes">${SUGESTOES.map((q) => `<button onclick="perguntar(this.textContent)">${esc(q)}</button>`).join('')}</div>`;
+  } else {
+    c.innerHTML = falas.map((f, i) => {
+      if (f.eu) return `<div class="balao eu">${esc(f.texto)}</div>`;
+      const corpo = f.estado === 'pensando' ? '<span class="pontos"><i></i><i></i><i></i></span>'
+        : f.estado === 'aguardando_aprovacao' ? `Preciso da sua aprovação, senhor.<div class="aprovacao">${f.acao ? `<code>${esc(f.acao.replace('/srv/jarvis-voz/bin/agir ', ''))}</code>` : '<code>Um comando fora da lista do Jarvis. Só dá para recusar.</code>'}
+            <div class="acoes">${f.acao ? `<button class="bt pri" style="flex:1" onclick="responderJarvis(this, true)">Aprovar</button>` : ''}<button class="bt fant" style="flex:1" onclick="responderJarvis(this, false)">Recusar</button></div></div>`
+        : esc(f.texto);
+      const som = f.audio ? `<button onclick="tocarDeNovo('${f.id}')" aria-label="Ouvir de novo">${icone('som')}</button>` : '';
+      return `<div class="balao ele${f.estado === 'erro' ? ' erro' : ''}"><div class="quem">Jarvis${som}</div>${corpo}</div>`;
+    }).join('');
+  }
+  atualizarMic();
+  if (telaAtual === 'tJarvis') scrollTo(0, document.body.scrollHeight);
+}
+
+function atualizarMic() {
+  const tem = $('pergunta').value.trim().length > 0 && !ouvindo && !falando;
+  $('mic').innerHTML = icone(falando ? 'parar' : tem ? 'enviar' : 'mic');
+  $('mic').setAttribute('aria-label', falando ? 'Parar o áudio' : tem ? 'Enviar' : ouvindo ? 'Parar' : 'Falar');
+  $('mic').classList.toggle('ouvindo', ouvindo);
+  $('mic').disabled = jarvisOcupado && !ouvindo && !falando;
+}
+
+function micOuEnviar() {
+  if (falando) return Jarvis.pararDeFalar();
+  if ($('pergunta').value.trim() && !ouvindo) return enviarPergunta();
+  if (ouvindo) return Jarvis.pararDeOuvir();
+  ouvindo = true; atualizarMic();
+  Jarvis.pararDeFalar();
+  chamar('ouvir').then((texto) => { $('pergunta').value = ''; perguntar(texto); })
+    .catch((e) => aviso(e.message, true))
+    .finally(() => { ouvindo = false; $('mic').style.removeProperty('--nivel'); atualizarMic(); });
+}
+window.onOuvindo = (n) => $('mic').style.setProperty('--nivel', n);
+window.onParcial = (t) => { $('pergunta').value = t; };
+
+function enviarPergunta() {
+  const t = $('pergunta').value.trim();
+  if (!t || jarvisOcupado) return;
+  $('pergunta').value = '';
+  perguntar(t);
+}
+
+async function perguntar(texto) {
+  if (jarvisOcupado) return aviso('O Jarvis ainda está respondendo.', true);
+  jarvisOcupado = true;
+  falas.push({ eu: true, texto });
+  const resp = { estado: 'pensando' };
+  falas.push(resp);
+  desenharConversa();
+  try {
+    const { id } = await api('POST', '/jarvis/mensagens', { texto });
+    resp.id = idAtual = id;
+    await acompanhar(resp);
+  } catch (e) { Object.assign(resp, { estado: 'erro', texto: e.message }); }
+  jarvisOcupado = false;
+  desenharConversa();
+}
+
+async function acompanhar(resp) {
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const e = await api('GET', `/jarvis/mensagens/${resp.id}`);
+    const mudou = e.estado !== resp.estado || e.acao !== resp.acao;
+    Object.assign(resp, e);
+    if (mudou) desenharConversa();
+    if (e.estado === 'pronta') { if (e.audio) tocarDeNovo(resp.id); return; }
+    if (e.estado === 'erro') return;
+  }
+}
+
+async function responderJarvis(bt, aprovar) {
+  bt.disabled = true;
+  try {
+    await api('POST', `/jarvis/mensagens/${idAtual}/aprovacao`, { aprovar });
+    const resp = falas.at(-1);
+    resp.estado = 'pensando'; resp.acao = undefined;
+    desenharConversa();
+  } catch (e) { aviso(e.message, true); bt.disabled = false; }
+}
+
+function tocarDeNovo(id) {
+  falando = true; atualizarMic();
+  chamar('tocar', id).catch((e) => aviso(e.message, true)).finally(() => { falando = false; atualizarMic(); });
+}
+
+// Apaga a conversa (tela e histórico no servidor). Confirma com um segundo toque.
+async function novaConversa(bt) {
+  if (jarvisOcupado) return aviso('Espere o Jarvis terminar de responder.', true);
+  if (!bt.dataset.armado) {
+    bt.dataset.armado = '1'; bt.style.color = 'var(--verm)'; aviso('Toque de novo para apagar a conversa.');
+    setTimeout(() => { delete bt.dataset.armado; bt.style.color = ''; }, 4000);
+    return;
+  }
+  delete bt.dataset.armado; bt.style.color = '';
+  Jarvis.pararDeFalar();
+  try { await api('POST', '/jarvis/nova'); falas.length = 0; desenharConversa(); aviso('Conversa apagada.'); } catch (e) { aviso(e.message, true); }
+}
+
+// Chamado pelo voltar do Android: true se tratou aqui.
+window.voltar = () => { if (telaAtual === 'tPedidos') return false; ir('tPedidos'); return true; };
+window.onVoltou = () => { if (telaAtual === 'tPedidos') carregarPedidos(); };
+
+const cfg = JSON.parse(Jarvis.config());
+ir(!cfg.temToken ? 'tConfig' : Jarvis.quantasFotos() ? 'tNovo' : 'tPedidos');
+</script>
+</body>
+</html>

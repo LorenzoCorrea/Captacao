@@ -1,0 +1,3 @@
+#!/bin/sh
+# Consulta do Jarvis (liberada). Passa para o lado lorenzo, que tem as credenciais.
+exec sudo -n -u lorenzo /srv/jarvis-previas/app/bin/jarvis-lorenzo consultar "$@"

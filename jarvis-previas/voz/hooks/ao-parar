@@ -1,0 +1,22 @@
+#!/usr/bin/env node
+// Hook Stop do Claude Code do mordomo: grava a última fala do Jarvis para a ponte do app ler.
+import { readFileSync, writeFileSync, renameSync } from 'node:fs';
+
+const SAIDA = '/srv/jarvis-voz/estado/resposta.json';
+
+function ultimaFala(transcript) {
+  const linhas = readFileSync(transcript, 'utf8').trim().split('\n').reverse();
+  for (const l of linhas) {
+    let e;
+    try { e = JSON.parse(l); } catch { continue; }
+    if (e.type !== 'assistant') continue;
+    const texto = (e.message?.content ?? []).filter((c) => c.type === 'text').map((c) => c.text).join('\n').trim();
+    if (texto) return texto;
+  }
+  return '';
+}
+
+const entrada = JSON.parse(readFileSync(0, 'utf8') || '{}');
+const texto = String(entrada.last_assistant_message ?? '').trim() || (entrada.transcript_path ? ultimaFala(entrada.transcript_path) : '');
+writeFileSync(`${SAIDA}.tmp`, JSON.stringify({ texto, em: Date.now() }));
+renameSync(`${SAIDA}.tmp`, SAIDA);

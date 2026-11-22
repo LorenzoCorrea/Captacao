@@ -34,6 +34,23 @@ Um SaaS estilo **busca imobiliária**: de um lado um mapa interativo, do outro a
 
 ---
 
+
+## Base local de estabelecimentos
+
+A busca usa a tabela `osm_places` quando ela existe, sem depender do Overpass público. Para criar ou atualizar:
+
+```bash
+pip install osmium
+curl -LO https://download.geofabrik.de/south-america/brazil-latest.osm.pbf
+python3 scripts/import_osm.py brazil-latest.osm.pbf | psql "$DATABASE_URL" -v ON_ERROR_STOP=1
+```
+
+Se conectar como superusuário, adicione `--role captacao_app` ao script. A busca continua no ar durante a carga.
+
+## Login
+
+O Docker Compose exige um login antes de subir. Crie ou troque com `sh scripts/create-login.sh USUARIO` e rode `docker compose restart web`. As prévias em `/previa/` continuam abertas para o cliente.
+
 ## 🧱 Stack
 
 | Camada | Tecnologia |

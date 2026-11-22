@@ -9,10 +9,14 @@ import DispatchMode from './components/DispatchMode.jsx';
 import LeadDetails from './components/LeadDetails.jsx';
 import HistoryPanel from './components/HistoryPanel.jsx';
 import TodayPanel from './components/TodayPanel.jsx';
+import ConversationsPanel from './components/ConversationsPanel.jsx';
 import { leadScore } from './lib/score.js';
 import { igHandle } from './lib/instagram.js';
 import { variantOf, telefoneWhats } from './lib/whatsapp.js';
 import { lerJson } from './lib/api.js';
+import { hojeLocal, addDias } from './lib/date.js';
+import { syncSettings, rememberSearch } from './lib/settings.js';
+import { setPreviewBase } from './lib/preview.js';
 import { useEnrichmentStream } from './hooks/useEnrichmentStream.js';
 
 const CENTRO_PADRAO = [-30.0427211, -51.1626625]; // Porto Alegre (bairro Bom Jesus)
@@ -34,23 +38,42 @@ export default function App() {
   const toggleFilter = (k) => setFilters((f) => ({ ...f, [k]: !f[k] }));
   const [searchError, setSearchError] = useState(null); // erro inline (substitui alert)
 
+  // Avisa quando o banco está fora: as alterações ficam na fila do servidor.
+  const [dbState, setDbState] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    const checar = async () => {
+      try {
+        const r = await fetch('/api/status');
+        const s = await lerJson(r);
+        if (vivo) { setDbState(s); setPreviewBase(s.previewBaseUrl); }
+      } catch {
+        if (vivo) setDbState({ apiOffline: true });
+      }
+    };
+    checar();
+    const t = setInterval(checar, 15000);
+    return () => { vivo = false; clearInterval(t); };
+  }, []);
+
   // Persiste o searchId no navegador pra sobreviver a F5: ao montar, tenta
   // reabrir a última busca (ainda em memória do back OU no banco quando ativo).
   // Sem isso, F5 perde tudo — estágios do Kanban, notas, follow-ups, etc.
   useEffect(() => {
-    const sid = localStorage.getItem('captacao.lastSearchId');
-    if (!sid) return;
     (async () => {
+      await syncSettings();
+      const sid = localStorage.getItem('captacao.lastSearchId');
+      if (!sid) return;
       try {
         const r = await fetch(`/api/search/${sid}/leads`);
-        if (!r.ok) { localStorage.removeItem('captacao.lastSearchId'); return; }
+        if (!r.ok) { rememberSearch(null); return; }
         const data = await lerJson(r);
         setSearch(data);
         setLeads(data.leads);
       } catch {
         // Busca antiga não recuperável: limpa e segue em silêncio (é só o
         // restore automático do F5, não uma ação que o usuário pediu).
-        localStorage.removeItem('captacao.lastSearchId');
+        rememberSearch(null);
       }
     })();
   }, []);
@@ -72,7 +95,7 @@ export default function App() {
       const data = await lerJson(r);
       setSearch(data);
       setLeads(data.leads);
-      localStorage.setItem('captacao.lastSearchId', data.searchId);
+      rememberSearch(data.searchId);
     } catch (e) {
       setSearchError(
         e.name === 'TimeoutError'
@@ -147,11 +170,9 @@ export default function App() {
       const patch = { stage };
       if (stage === 'contatado') {
         const l = leads.find((x) => x.id === leadId);
-        const hj = new Date().toISOString().slice(0, 10);
+        const hj = hojeLocal();
         if (!l?.followUpAt || l.followUpAt <= hj) {
-          const d = new Date();
-          d.setDate(d.getDate() + 2);
-          patch.followUpAt = d.toISOString().slice(0, 10);
+          patch.followUpAt = addDias(hj, 2);
         }
       }
       patchLead(leadId, patch);
@@ -169,11 +190,9 @@ export default function App() {
         msgVariant: variantOf(leadId), // registra a variante A/B usada — alimenta o painel
         interactions: [...(l?.interactions ?? []), { at: new Date().toISOString(), type: 'msg', note: canal }],
       };
-      const hj = new Date().toISOString().slice(0, 10);
+      const hj = hojeLocal();
       if (!l?.followUpAt || l.followUpAt <= hj) {
-        const d = new Date();
-        d.setDate(d.getDate() + 2);
-        patch.followUpAt = d.toISOString().slice(0, 10);
+        patch.followUpAt = addDias(hj, 2);
       }
       patchLead(leadId, patch);
     },
@@ -189,7 +208,7 @@ export default function App() {
       setLeads(data.leads);
       setSelectedId(null);
       setHistoryOpen(false);
-      localStorage.setItem('captacao.lastSearchId', searchId);
+      rememberSearch(searchId);
     } catch (err) {
       setSearchError(err.message); // erro inline, consistente com o resto da UI
     }
@@ -216,7 +235,7 @@ export default function App() {
   }, [leads, filters, sortBy]);
 
   return (
-    <div className="app">
+    <div className={`app${view === 'conversas' ? ' app--conversas' : ''}`}>
       <aside className="sidebar">
         <header className="sidebar-header">
           <h1>
@@ -227,6 +246,19 @@ export default function App() {
             <div className="search-error" role="alert">
               <strong>Não consegui buscar agora.</strong> {searchError}
               <button type="button" onClick={() => setSearchError(null)} aria-label="fechar">✕</button>
+            </div>
+          )}
+          {dbState?.apiOffline && (
+            <div className="search-error" role="alert">
+              <strong>Sem conexão com o servidor.</strong> Suas últimas alterações podem não ter sido salvas.
+            </div>
+          )}
+          {dbState && !dbState.apiOffline && (dbState.offline || dbState.pendingWrites > 0) && (
+            <div className="search-error" role="alert">
+              <strong>Banco de dados indisponível.</strong>{' '}
+              {dbState.pendingWrites > 0
+                ? `${dbState.pendingWrites} alteração(ões) aguardando para salvar. Não reinicie o sistema até o banco voltar.`
+                : 'Novas alterações ficam aguardando até ele voltar.'}
             </div>
           )}
           <div className="view-toggle">
@@ -241,6 +273,9 @@ export default function App() {
             </button>
             <button type="button" className={view === 'today' ? 'active' : ''} onClick={() => setView('today')}>
               📅 Hoje
+            </button>
+            <button type="button" className={view === 'conversas' ? 'active' : ''} onClick={() => setView('conversas')}>
+              💬 Conversas
             </button>
           </div>
           <button type="button" className="msg-edit-btn" onClick={() => setMsgOpen(true)}>
@@ -334,6 +369,7 @@ export default function App() {
           <KanbanBoard leads={visibleLeads} selectedId={selectedId} onSelect={selectLead} onMove={moveLead} onDispatch={setDispatchLeads} />
         )}
         {view === 'stats' && <StatsPanel />}
+        {view === 'conversas' && <ConversationsPanel />}
         {view === 'today' && <TodayPanel leads={leads} searchId={search?.searchId} onPatch={patchLead} />}
       </main>
 

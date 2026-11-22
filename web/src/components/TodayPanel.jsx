@@ -2,18 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { waLink, telefoneWhats } from '../lib/whatsapp.js';
 import { igHandle, igUrl } from '../lib/instagram.js';
 import { leadScore } from '../lib/score.js';
+import { hojeLocal as hoje, addDias } from '../lib/date.js';
 
 // Painel "📅 Hoje" — a disciplina do funil: a maioria das vendas B2B fecha
 // entre o 3º e o 5º contato, e a maioria dos vendedores desiste no 1º.
 // Três seções: follow-ups vencidos (todas as buscas, via banco), contatados
 // parados há 3+ dias (banco) e quentes da busca atual ainda não abordados.
 
-const hoje = () => new Date().toISOString().slice(0, 10);
-const addDias = (base, dias) => {
-  const d = new Date(`${base}T12:00:00`);
-  d.setDate(d.getDate() + dias);
-  return d.toISOString().slice(0, 10);
-};
 const fmtBR = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
 
 export default function TodayPanel({ leads, searchId, onPatch }) {
