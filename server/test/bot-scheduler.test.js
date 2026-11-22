@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { tick, digestText, sendDigest, isThirdBusinessDay, monthlyPurge, businessDaysAgo, saturdayWindows } from '../src/bot/scheduler.js';
+import { tick, digestText, sendDigest, isThirdBusinessDay, monthlyPurge, businessDaysAgo, saturdayWindows, isPublicBody } from '../src/bot/scheduler.js';
 import { FIXED, followUpPreview } from '../src/bot/offer.js';
 
 // Quarta-feira, 10h no fuso local.
@@ -456,4 +456,15 @@ test('extra pedido pelo Lorenzo soma ao limite só no dia', async () => {
   assert.equal(await run(9, { date: '2026-11-04', n: 4 }), 0);
   assert.equal(await run(5, { date: '2026-11-03', n: 4 }), 0); // o de ontem não vale
   assert.equal(await run(5, undefined), 0);
+});
+
+test('órgão público não é lead: UPA, UBS, prefeitura, hospital municipal...', () => {
+  for (const name of ['Unidade de Pronto Atendimento', 'UPA 24h Santa Maria', 'UBS Kennedy', 'Posto de Saúde da Vila', 'Prefeitura Municipal de Bagé',
+    'Secretaria de Saúde', 'Hospital Universitário de Santa Maria', 'CAPS AD', 'CRAS Norte', 'Centro de Referência em Saúde do Trabalhador',
+    'SAMU 192', 'Polícia Civil', 'Corpo de Bombeiros', 'Fórum de Pelotas', 'Escola Estadual Cilon Rosa', 'Clínica da Família Municipal']) {
+    assert.equal(isPublicBody(name), true, name);
+  }
+  for (const name of ['Clínica Sorriso', 'Upaon Academia', 'Studio Lais Vargas', 'Hospital Veterinário Pet Care', 'Odonto Federal Plus', 'Capsula Estética']) {
+    assert.equal(isPublicBody(name), false, name);
+  }
 });

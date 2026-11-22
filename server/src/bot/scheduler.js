@@ -68,9 +68,20 @@ async function capture(now, config, state, deps) {
   await deps.saveState({ ...state, lastCaptureDate: today });
 }
 
+// Órgão público não compra site: UPA, UBS, prefeitura, hospital público etc. Casa pelo nome, sem acento.
+const PUBLIC_BODY = new RegExp([
+  '\\b(upa|ubs|ubsf|esf|caps|cras|creas|samu|cerest|detran|inss|sus)\\b',
+  'pronto atendimento', 'unidade basica', 'posto de saude', 'estrategia saude da familia',
+  'prefeitura', 'secretaria', 'camara (municipal|de vereadores)', 'centro de referencia',
+  'hospital (universitario|municipal|estadual|regional|militar|de clinicas)',
+  'policia', 'brigada militar', 'bombeiros', 'forum', 'tribunal', 'ministerio publico', 'defensoria',
+  '(universidade|instituto|receita|justica) federal', '\\b(municipal|estadual)\\b',
+].join('|'));
+export const isPublicBody = (name) => PUBLIC_BODY.test(String(name ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase());
+
 async function enqueueFresh(leads, dddFor, meta, budget, deps) {
   const { db } = deps;
-  const noSite = leads.filter((lead) => !lead.hasWebsite);
+  const noSite = leads.filter((lead) => !lead.hasWebsite && !isPublicBody(lead.name));
   const known = await deps.loadKnown(noSite.map((l) => l.id));
   const fresh = [];
   const toEnrich = [];
