@@ -92,13 +92,15 @@ const accentRegex = (kw) =>
   kw.split('').map((ch) => (ACCENT[ch] ? `(${ACCENT[ch]})` : ch)).join('');
 
 // Devolve as tags OSM do nicho E os radicais que casaram (para a busca por nome).
-function resolveNiche(niche) {
+export function resolveNiche(niche) {
   const n = normalize(niche);
+  // Radical só no começo de uma palavra: "fisioterapia" não pode casar o "terapia" dos psicólogos.
+  const words = ` ${n.replace(/[^a-z0-9 ]/g, ' ')}`;
   const tags = new Set();
   const kws = new Set();
   for (const g of NICHE_GROUPS) {
     for (const k of g.kw) {
-      if (n.includes(k)) {
+      if (words.includes(` ${k}`)) {
         kws.add(k);
         g.tags.forEach((t) => tags.add(t));
       }
