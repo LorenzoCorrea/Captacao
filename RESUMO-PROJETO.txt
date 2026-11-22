@@ -1,0 +1,114 @@
+CAPTAÇÃO — RESUMO DO PROJETO
+============================
+
+O QUE É
+-------
+Projeto pessoal do Lorenzo para gerar renda vendendo sites simples para
+pequenos comércios que ainda não têm site. O sistema encontra esses
+comércios, aborda pelo WhatsApp de forma automática e conduz a conversa
+até o cliente aceitar a proposta. A partir daí, Lorenzo assume.
+
+A OFERTA (fixa no código, server/src/bot/offer.js)
+- Site por R$ 550, entregue em até 4 dias corridos.
+- Sinal de 30% no Pix (R$ 165) e o restante (R$ 385) na entrega.
+- O domínio expira a cada 1 ano; a renovação custa R$ 50 por ano.
+- Inclui hospedagem, domínio, botão de WhatsApp, localização e certificado.
+- Ajustes nos 2 primeiros meses sem custo; refazer o site custa R$ 100.
+
+COMO FUNCIONA, PASSO A PASSO
+----------------------------
+1. Captação (1 vez por dia útil)
+   - Busca comércios por cidade e nicho numa base local do OpenStreetMap
+     (tabela osm_places no Postgres; server/src/data/osmProvider.js).
+   - Fica só com quem NÃO tem site e TEM celular (lead "quente").
+   - Hoje: 6 cidades do interior do RS (Santa Maria, Santo Ângelo, Pelotas,
+     Rio Grande, Caxias do Sul, Passo Fundo), raio de 5 km; nichos salão de
+     beleza, academia e escritório de advocacia.
+
+2. Enriquecimento (achar o celular que o mapa não tem)
+   - workers/enrich.py (Python) procura o comércio na internet e extrai
+     redes sociais, e-mail, CNPJ e celular.
+   - A busca usa um SearXNG próprio (container no compose), porque o
+     DuckDuckGo direto bloqueia e o projeto não usa nenhum serviço pago.
+   - Até 15 comércios por dia, 30 s entre cada um. Só aceita celular com o
+     DDD da cidade e descarta quem tem site próprio.
+
+3. Abordagem pelo WhatsApp (server/src/bot/scheduler.js)
+   - Envio das 09:00 às 18:00, só em dias úteis.
+   - Anti-ban: no máximo 5 leads novos por dia, com pelo menos 8 min entre
+     envios. A primeira mensagem é curta, se identifica como Lorenzo e
+     oferece saída ("não te chamo mais").
+   - Lembretes para quem não respondeu: no dia útil seguinte e 3 dias
+     úteis depois, só à tarde, com cota própria.
+
+4. Conversa (server/src/bot/engine.js, ai.js, offer.js)
+   - A IA NÃO escreve as respostas. Ela só classifica a mensagem do cliente
+     (intenção + tópicos, em JSON). Todo texto enviado é fixo e testado,
+     para nunca errar preço ou condição.
+   - Responde dúvidas: preço, prazo, pagamento, o que está incluso,
+     domínio, manutenção, pagamento único, prévia do site, etc.
+   - Benefício do site adaptado ao nicho; oferece uma prévia do site do
+     próprio comércio por um link público.
+   - Trata menu automático do comércio (fica quieto), recepcionista,
+     "estou ocupado", "outro momento" e pedido de saída (bloqueia o número).
+   - Se perguntarem se é robô, nunca nega.
+   - Quando o cliente aceita, insiste em desconto, pede uma pessoa ou o bot
+     não entende: a conversa pausa e Lorenzo é avisado na hora.
+   - Os textos foram ajustados a partir de conversas reais do Lorenzo.
+
+5. Controle pelo celular do Lorenzo
+   - Resumo no WhatsApp a cada 5 min quando há novidade (quem foi chamado,
+     quem respondeu, quantos ainda faltam).
+   - Se Lorenzo mandar mensagem para um cliente pelo celular, o bot pausa
+     aquela conversa e deixa com ele.
+   - Se o WhatsApp cair ou um envio falhar, o bot se desliga e avisa.
+
+6. Limpeza mensal
+   - No 3º dia útil do mês, apaga os textos de conversas encerradas e as
+     cópias antigas de mensagens do WhatsApp. Quem pediu para sair continua
+     bloqueado.
+
+ARQUITETURA
+-----------
+- server/   API Node.js + Express. Bot, rotas, banco (db.js), prévias de
+            site (preview/), exportação CSV/XLSX/PDF (export/).
+- web/      Painel React (Vite) servido por nginx: busca de leads, mapa,
+            Kanban/CRM, conversas do bot, estatísticas.
+- workers/  Enriquecimento em Python (chamado pelo Node via child_process).
+- searxng/  Configuração do buscador próprio.
+- docker-compose.yml: api, web (nginx), evolution (gateway do WhatsApp,
+  Evolution API), router9 (roteador de modelos de IA), searxng.
+- Postgres roda fora do compose, como container separado no servidor.
+
+ONDE RODA
+---------
+- Tudo roda num servidor caseiro (ZimaOS) com Docker. O notebook Linux é só
+  para desenvolver e administrar; o compose NUNCA deve subir no notebook
+  (o mesmo número de WhatsApp ficaria conectado em dois lugares).
+- Deploy: copiar o código para o servidor (rsync) e rodar
+  docker compose up -d --build.
+- As prévias de site saem para a internet por um túnel (Tailscale Funnel);
+  o resto fica só na rede privada.
+
+TESTES
+------
+- cd server && npm test   (node:test; ~134 testes do bot e da API)
+- Os testes de banco são pulados por padrão: eles apagam as tabelas do bot
+  e nunca devem rodar contra o banco real.
+
+REGRAS DO PROJETO
+-----------------
+- Nenhum serviço pago, nem de centavos.
+- Nunca colocar senhas ou chaves no código ou em commits. Ficam só no .env
+  (não versionado). captacao.md e homeserver.md têm credenciais e nunca
+  devem ser versionados nem compartilhados.
+- O bot nunca pode errar a oferta, vazar dados ou negar que é automático.
+- Aumentar o volume de envios só com autorização do Lorenzo.
+
+ESTADO ATUAL (novembro de 2026)
+-------------------------------
+- Bot em produção, começando a abordar clientes reais.
+- Pendências: testar ao vivo alguns cenários (pausa pelo celular, desconto
+  insistente, parcelamento, pedido de saída) e trocar chaves/senhas que
+  apareceram em conversas.
+- Checklist detalhada em docs/checklist-bot.md.
